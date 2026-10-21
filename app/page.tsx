@@ -50,6 +50,8 @@ import {
   Square,
   Activity,
   Megaphone,
+  Menu,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -140,6 +142,11 @@ export default function Dashboard() {
 
   // Busca global
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Estados Mobile
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Cron
   const [cronRunning, setCronRunning] = useState(false);
@@ -642,12 +649,34 @@ export default function Dashboard() {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   }, [calendarMonth]);
 
+  // Strip horizontal de dias para mobile
+  const mobileDateStrip = useMemo(() => {
+    const days: Date[] = [];
+    for (let i = -3; i <= 6; i++) {
+      const d = new Date(selectedDate);
+      d.setDate(selectedDate.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }, [selectedDate]);
+
+  function getApptCountForDate(targetDate: Date): number {
+    return appointments.filter((a) => {
+      const d = new Date(a.startTime);
+      return (
+        d.getFullYear() === targetDate.getFullYear() &&
+        d.getMonth() === targetDate.getMonth() &&
+        d.getDate() === targetDate.getDate()
+      );
+    }).length;
+  }
+
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[#f4f7fb] text-slate-800 font-sans select-none">
+    <div className="min-h-screen lg:h-screen w-full flex flex-col lg:flex-row overflow-x-hidden lg:overflow-hidden bg-[#f4f7fb] text-slate-800 font-sans select-none pb-16 lg:pb-0">
       {/* =========================================================================
-          1. SIDEBAR DE NAVEGAÇÃO LATERAL (DOCFLOW CLINICAL SUITE)
+          1. SIDEBAR DE NAVEGAÇÃO LATERAL (DESKTOP)
       ========================================================================= */}
-      <aside className="w-64 border-r border-slate-200/80 bg-white flex flex-col justify-between shrink-0 z-30">
+      <aside className="hidden lg:flex w-64 border-r border-slate-200/80 bg-white flex-col justify-between shrink-0 z-30">
         <div>
           {/* LOGO & SUITE */}
           <div className="p-4 flex items-center justify-between border-b border-slate-100">
@@ -759,7 +788,7 @@ export default function Dashboard() {
               }`}
             >
               <Zap className="w-4 h-4 text-slate-500" />
-              <span>Métricas & Recuperação</span>
+              <span>Equipe Médica & Usuários</span>
             </button>
 
             <button
@@ -802,11 +831,338 @@ export default function Dashboard() {
       </aside>
 
       {/* =========================================================================
-          2. ÁREA PRINCIPAL (HEADER SUPERIOR + CONTEÚDO)
+          MOBILE DRAWER (OFF-CANVAS SIDEBAR)
       ========================================================================= */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* HEADER SUPERIOR (BUSCA, MODOS, DATA E BOTAO NOVA CONSULTA) */}
-        <header className="h-16 px-6 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between gap-4 shrink-0 z-20">
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 w-4/5 max-w-xs bg-white shadow-2xl flex flex-col justify-between z-50 p-4 animate-in slide-in-from-left duration-200">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                    <HeartPulse className="w-5 h-5 text-teal-400 stroke-[2.2]" />
+                  </div>
+                  <div>
+                    <h1 className="text-sm font-extrabold tracking-tight text-slate-900 leading-none">CliniDesk</h1>
+                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 block mt-0.5">
+                      CLINICAL SUITE
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 font-bold rounded-lg"
+                  aria-label="Fechar menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* UNIDADE ATUAL CARD */}
+              <div className="my-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Unidade Atual</span>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="font-bold text-slate-800 truncate">
+                    {clinic?.name || 'CliniDesk Jardins'} • Jardins
+                  </span>
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                </div>
+              </div>
+
+              {/* MENU PRINCIPAL */}
+              <nav className="space-y-1.5 mt-2">
+                <button
+                  onClick={() => {
+                    setActiveTab('agenda');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
+                    activeTab === 'agenda'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CalendarIcon className={`w-4 h-4 ${activeTab === 'agenda' ? 'text-teal-400' : 'text-slate-500'}`} />
+                    <span>Agenda Médica</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      activeTab === 'agenda' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-700'
+                    }`}
+                  >
+                    {appointments.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('patients');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                    activeTab === 'patients'
+                      ? 'bg-slate-900 text-white shadow-md font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-slate-500" />
+                  <span>Pacientes & Prontuário</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('fila');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                    activeTab === 'fila'
+                      ? 'bg-slate-900 text-white shadow-md font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Inbox className="w-4 h-4 text-slate-500" />
+                    <span>Fila de Espera & Encaixe</span>
+                  </div>
+                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('whatsapp');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                    activeTab === 'whatsapp'
+                      ? 'bg-slate-900 text-white shadow-md font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-slate-500" />
+                    <span>WhatsApp & Lembretes</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Cloud
+                  </span>
+                </button>
+
+                <div className="pt-3 pb-1 px-3.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Gestão</span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('users');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                    activeTab === 'users'
+                      ? 'bg-slate-900 text-white shadow-md font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 text-slate-500" />
+                  <span>Equipe Médica & Usuários</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('settings');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                    activeTab === 'settings'
+                      ? 'bg-slate-900 text-white shadow-md font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 text-slate-500" />
+                  <span>Configurações</span>
+                </button>
+              </nav>
+            </div>
+
+            <div className="p-3 border-t border-slate-100 rounded-2xl bg-slate-50/70 border flex items-center justify-between mt-4">
+              <div className="flex items-center space-x-2.5 truncate">
+                <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0 border border-teal-200">
+                  {getInitials(activeDoctor.name)}
+                </div>
+                <div className="truncate">
+                  <span className="block text-xs font-bold text-slate-900 truncate leading-tight">
+                    {activeDoctor.name}
+                  </span>
+                  <span className="text-[10px] text-slate-500 truncate block">
+                    {activeDoctor.specialty?.split('•')[0] || 'Cardiologia'} • {activeDoctor.crm || 'CRM 48.910'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* =========================================================================
+          2. ÁREA PRINCIPAL (HEADER + CONTEÚDO)
+      ========================================================================= */}
+      <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+        {/* =========================================================================
+            HEADER MOBILE (lg:hidden)
+        ========================================================================= */}
+        <header className="lg:hidden bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-3 py-2.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                aria-label="Abrir menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-lg bg-slate-900 text-teal-400 flex items-center justify-center">
+                  <HeartPulse className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <div>
+                  <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">CliniDesk</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Clinical Suite</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                className={`p-2 rounded-xl transition ${
+                  mobileSearchOpen ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+                aria-label="Buscar"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+
+              {activeTab === 'agenda' && (
+                <button
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className={`p-2 rounded-xl border flex items-center gap-1 text-xs font-bold transition ${
+                    !filterConfirmed || !filterWaiting || !filterEncaixe || filterCanceled
+                      ? 'bg-teal-50 border-teal-300 text-teal-800'
+                      : 'bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                  title="Filtros & Calendário"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span className="text-[10px]">Filtros</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  setNewApptTime('');
+                  setShowModalNewAppt(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shadow-xs active:scale-95 transition"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Novo</span>
+              </button>
+            </div>
+          </div>
+
+          {/* BUSCA EXPANSÍVEL NO MOBILE */}
+          {mobileSearchOpen && (
+            <div className="mt-2.5 pt-2 border-t border-slate-100">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Buscar paciente, CPF ou procedimento..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-100 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 border border-slate-200 transition"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* BARRA DE DATA HORIZONTAL PARA AGENDA NO MOBILE */}
+          {activeTab === 'agenda' && (
+            <div className="mt-2.5 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-1.5 px-0.5">
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-xs font-extrabold text-slate-900 capitalize">
+                    {selectedDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                  </span>
+                  <button
+                    onClick={() => setSelectedDate(new Date())}
+                    className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 font-bold text-[10px] border border-teal-200"
+                  >
+                    Hoje
+                  </button>
+                </div>
+                <span className="text-[11px] font-medium text-slate-500">
+                  {selectedDayAppointments.length} consultas hoje
+                </span>
+              </div>
+
+              {/* STRIP DE DIAS COM SCROLL TOUCH */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                {mobileDateStrip.map((d, idx) => {
+                  const isSelected = d.toDateString() === selectedDate.toDateString();
+                  const isToday = d.toDateString() === new Date().toDateString();
+                  const dayName = d.toLocaleDateString('pt-BR', { weekday: 'narrow' }).toUpperCase();
+                  const dayNum = d.getDate();
+                  const apptCount = getApptCountForDate(d);
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedDate(d)}
+                      className={`flex flex-col items-center justify-center min-w-[44px] py-2 rounded-xl transition shrink-0 ${
+                        isSelected
+                          ? 'bg-slate-900 text-white font-bold shadow-xs'
+                          : isToday
+                          ? 'bg-teal-50 text-teal-800 border border-teal-200 font-semibold'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
+                      }`}
+                    >
+                      <span className={`text-[9px] font-extrabold ${isSelected ? 'text-teal-400' : 'text-slate-400'}`}>
+                        {dayName}
+                      </span>
+                      <span className="text-sm font-extrabold mt-0.5 leading-none">
+                        {dayNum}
+                      </span>
+                      {apptCount > 0 && (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full mt-1 ${
+                            isSelected ? 'bg-teal-400' : 'bg-teal-600'
+                          }`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </header>
+
+        {/* HEADER SUPERIOR DESKTOP (hidden lg:flex) */}
+        <header className="hidden lg:flex h-16 px-6 bg-white/95 backdrop-blur-md border-b border-slate-200/80 items-center justify-between gap-4 shrink-0 z-20">
           {/* BUSCADOR ESTILO DOCFLOW */}
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -913,7 +1269,7 @@ export default function Dashboard() {
 
         {/* NOTIFICAÇÃO CRON */}
         {cronNotice && (
-          <div className="bg-teal-50 border-b border-teal-200 px-6 py-2 text-xs text-teal-900 flex items-center justify-between font-medium">
+          <div className="bg-teal-50 border-b border-teal-200 px-4 sm:px-6 py-2 text-xs text-teal-900 flex items-center justify-between font-medium">
             <span>{cronNotice}</span>
             <button onClick={() => setCronNotice(null)} className="text-teal-700 hover:text-slate-900 font-bold">
               ✕
@@ -924,14 +1280,14 @@ export default function Dashboard() {
         {/* =========================================================================
             3. CONTEÚDO DINÂMICO CONFORME ABA SELECIONADA
         ========================================================================= */}
-        <main className="flex-1 flex overflow-hidden p-6 gap-6">
+        <main className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3.5 sm:p-4 lg:p-6 gap-4 lg:gap-6">
           {/* ---------------------------------------------------------------------
-              ABA: AGENDA MÉDICA (DUAS COLUNAS: ESQUERDA CALENDÁRIO/FILTROS + DIREITA TIMELINE)
+              ABA: AGENDA MÉDICA (DUAS COLUNAS NO DESKTOP)
           --------------------------------------------------------------------- */}
           {activeTab === 'agenda' && (
             <>
-              {/* SUB-COLUNA ESQUERDA: MINI CALENDÁRIO, FILTROS DA AGENDA & ENCAIXE INTELIGENTE */}
-              <div className="w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1">
+              {/* SUB-COLUNA ESQUERDA (DESKTOP): MINI CALENDÁRIO & FILTROS */}
+              <div className="hidden lg:flex w-80 shrink-0 flex-col gap-4 overflow-y-auto pr-1">
                 {/* 1. MINI CALENDÁRIO MENSAL */}
                 <div className="bg-white rounded-3xl p-5 border border-slate-200/70 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
@@ -1104,9 +1460,9 @@ export default function Dashboard() {
               </div>
 
               {/* SUB-COLUNA DIREITA: TIMELINE DIÁRIA EXATAMENTE NO LAYOUT DOCFLOW */}
-              <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 flex flex-col overflow-hidden">
+              <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-hidden">
                 {/* CABEÇALHO DO PAINEL DIREITO */}
-                <div className="pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
                   <div>
                     <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                       <span>Agenda Médica • {activeDoctor.name}</span>
@@ -1117,16 +1473,16 @@ export default function Dashboard() {
                   </div>
 
                   {/* PILL COUNTERS COLORIDOS */}
-                  <div className="flex items-center space-x-2 text-xs font-semibold">
-                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:space-x-2 text-xs font-semibold">
+                    <span className="px-2.5 sm:px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                       {confirmedCount} Confirmados
                     </span>
-                    <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/80 flex items-center gap-1.5">
+                    <span className="px-2.5 sm:px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/80 flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                      {waitingCount} Aguardando Confirmação
+                      {waitingCount} Aguardando
                     </span>
-                    <span className="px-3 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200/80 flex items-center gap-1.5">
+                    <span className="px-2.5 sm:px-3 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200/80 flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
                       {encaixeCount} Encaixe
                     </span>
@@ -1134,23 +1490,23 @@ export default function Dashboard() {
                 </div>
 
                 {/* SUB-BARRA DA DATA E HORÁRIO ATUAL */}
-                <div className="py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 border-b border-slate-100/80">
-                  <span>{selectedDateHeader} • Turnos Matutino e Vespertino</span>
-                  <span className="text-rose-500 font-medium">— Horário atual: {currentTimeStr}</span>
+                <div className="py-2 sm:py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 border-b border-slate-100/80">
+                  <span className="truncate">{selectedDateHeader} • Turnos Matutino e Vespertino</span>
+                  <span className="text-rose-500 font-medium shrink-0 ml-2 hidden sm:inline">— Horário atual: {currentTimeStr}</span>
                 </div>
 
                 {/* LISTAGEM DE CONSULTAS DA TIMELINE */}
-                <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 mt-3.5">
+                <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-3.5 pr-1 mt-3 sm:mt-3.5">
                   {loading ? (
                     <div className="py-16 text-center text-slate-400 font-medium">Carregando consultas da agenda...</div>
                   ) : selectedDayAppointments.length === 0 ? (
-                    <div className="py-20 flex flex-col items-center justify-center text-center">
+                    <div className="py-16 sm:py-20 flex flex-col items-center justify-center text-center">
                       <CalendarDays className="w-12 h-12 text-slate-300 stroke-1 mb-2" />
                       <p className="text-sm font-bold text-slate-800">Nenhuma consulta agendada para este dia</p>
                       <p className="text-xs text-slate-400 mt-0.5">Clique em "Nova Consulta" para incluir um paciente na grade.</p>
                       <button
                         onClick={() => openNewApptModalWithSlot(selectedDate)}
-                        className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-slate-800 transition"
+                        className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-slate-800 transition active:scale-95"
                       >
                         + Agendar Consulta Agora
                       </button>
@@ -1166,18 +1522,18 @@ export default function Dashboard() {
                       const isCanceled = s === 'CANCELADO' || s === 'CANCELED';
 
                       return (
-                        <div key={appt.id} className="flex items-center gap-4 group">
+                        <div key={appt.id} className="flex items-start sm:items-center gap-2.5 sm:gap-4 group">
                           {/* COLUNA DO HORÁRIO */}
-                          <div className="w-14 text-center shrink-0">
-                            <span className="block font-extrabold text-slate-900 text-sm font-mono leading-tight">
+                          <div className="w-12 sm:w-14 text-center shrink-0 pt-1 sm:pt-0">
+                            <span className="block font-extrabold text-slate-900 text-xs sm:text-sm font-mono leading-tight">
                               {timeStr}
                             </span>
-                            <span className="text-[11px] font-medium text-slate-400">45 min</span>
+                            <span className="text-[10px] sm:text-[11px] font-medium text-slate-400">45 min</span>
                           </div>
 
                           {/* CARD PRINCIPAL DO PACIENTE */}
                           <div
-                            className={`flex-1 rounded-2xl p-4 border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            className={`flex-1 rounded-2xl p-3 sm:p-4 border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                               isConfirmed
                                 ? 'border-emerald-200/90 bg-white hover:border-emerald-300 hover:shadow-xs'
                                 : isWaiting
@@ -1188,10 +1544,10 @@ export default function Dashboard() {
                             }`}
                           >
                             {/* DADOS DO PACIENTE */}
-                            <div className="flex items-center space-x-3.5">
+                            <div className="flex items-start sm:items-center space-x-3 sm:space-x-3.5">
                               {/* AVATAR COM INICIAIS */}
                               <div
-                                className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${
                                   isConfirmed
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : isWaiting
@@ -1204,10 +1560,10 @@ export default function Dashboard() {
                                 {getInitials(appt.patient?.name)}
                               </div>
 
-                              <div className="space-y-1">
+                              <div className="space-y-1 min-w-0">
                                 {/* LINHA 1: NOME + BADGES */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-bold text-slate-900 text-sm">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                  <span className="font-bold text-slate-900 text-xs sm:text-sm truncate">
                                     {appt.patient?.name}
                                   </span>
 
@@ -1219,13 +1575,13 @@ export default function Dashboard() {
                                   {isWaiting && (
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                      Aguardando Confirmação
+                                      Aguardando
                                     </span>
                                   )}
                                   {isEncaixe && (
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1">
                                       <Zap className="w-3 h-3 text-sky-600 fill-sky-600" />
-                                      Encaixe Confirmado
+                                      Encaixe
                                     </span>
                                   )}
                                   {isCanceled && (
@@ -1236,24 +1592,24 @@ export default function Dashboard() {
 
                                   <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                     {appt.notes?.includes('Bradesco')
-                                      ? 'Bradesco Saúde'
+                                      ? 'Bradesco'
                                       : appt.notes?.includes('Unimed')
                                       ? 'Unimed'
                                       : appt.notes?.includes('Amil')
-                                      ? 'Amil 500'
+                                      ? 'Amil'
                                       : 'Particular'}
                                   </span>
                                 </div>
 
                                 {/* LINHA 2: IDADE, CONVÊNIO, TELEFONE */}
-                                <div className="text-[11px] text-slate-500 font-medium">
+                                <div className="text-[11px] text-slate-500 font-medium truncate">
                                   {appt.patient?.birthDate ? calculateAge(appt.patient.birthDate) : '52 anos'} •{' '}
                                   {formatPhoneBR(appt.patient?.phone)}
                                   {appt.patient?.cpf ? ` • CPF: ${applyCPFMask(appt.patient.cpf)}` : ''}
                                 </div>
 
                                 {/* LINHA 3: PROCEDIMENTO / MOTIVO */}
-                                <div className="text-[11px] text-slate-600 font-medium">
+                                <div className="text-[11px] text-slate-600 font-medium line-clamp-1">
                                   {appt.notes || 'Retorno Cardiológico • Acompanhamento Preventivo'}
                                 </div>
 
@@ -1277,10 +1633,10 @@ export default function Dashboard() {
                             </div>
 
                             {/* BOTOES DE ACAO DO CARD DIREITO */}
-                            <div className="flex items-center space-x-2 shrink-0">
+                            <div className="flex items-center space-x-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end w-full sm:w-auto">
                               <button
                                 onClick={() => setSelectedApptDetails(appt)}
-                                className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center gap-1.5 transition"
+                                className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition"
                               >
                                 <FileText className="w-3.5 h-3.5 text-slate-500" />
                                 Prontuário
@@ -1310,23 +1666,86 @@ export default function Dashboard() {
               ABA: PACIENTES & PRONTUÁRIO (DESIGN DOCFLOW)
           --------------------------------------------------------------------- */}
           {activeTab === 'patients' && (
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 flex flex-col overflow-hidden">
-              <div className="pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-hidden">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Pacientes & Prontuário</h2>
-                  <p className="text-xs text-slate-500 font-medium">Fichas cadastrais, telefones e histórico clínico da clínica</p>
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">Pacientes & Prontuário</h2>
+                  <p className="text-xs text-slate-500 font-medium">Fichas cadastrais, telefones e histórico da clínica</p>
                 </div>
                 <button
                   onClick={() => handleOpenPatientModal()}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-900/15 transition"
+                  className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-900/15 transition active:scale-95"
                 >
                   <UserPlus className="w-4 h-4 stroke-[2.5]" />
-                  Cadastrar Paciente
+                  <span>Cadastrar Paciente</span>
                 </button>
               </div>
 
-              {/* TABELA DE PACIENTES */}
-              <div className="flex-1 overflow-y-auto mt-4">
+              {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
+              <div className="md:hidden flex-1 overflow-y-auto space-y-3 mt-3">
+                {patients.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 font-medium">Nenhum paciente cadastrado</div>
+                ) : (
+                  patients.map((p) => (
+                    <div key={p.id} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs shrink-0">
+                            {getInitials(p.name)}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 text-sm leading-tight">{p.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'Sem CPF'} • {p.birthDate ? calculateAge(p.birthDate) : 'Idade N/D'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => handleOpenPatientModal(p)}
+                            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-100"
+                            title="Editar"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePatient(p.id)}
+                            className="p-1.5 rounded-lg bg-white border border-rose-200 text-rose-600 shadow-2xs hover:bg-rose-50"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
+                        <a
+                          href={`https://wa.me/${(p.phone || '').replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-[11px]"
+                        >
+                          <MessageSquare className="w-3 h-3 text-emerald-600" />
+                          {formatPhoneBR(p.phone)}
+                        </a>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200/70 text-slate-700">
+                          {p._count?.appointments ?? 1} consultas
+                        </span>
+                      </div>
+
+                      {p.notes && (
+                        <p className="text-[11px] text-slate-500 bg-white p-2 rounded-lg border border-slate-100">
+                          {p.notes}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* TABELA DE PACIENTES EM DESKTOP (>= md) */}
+              <div className="hidden md:block flex-1 overflow-y-auto mt-4">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
                     <tr>
@@ -1395,9 +1814,9 @@ export default function Dashboard() {
               ABA: FILA DE ESPERA & ENCAIXE
           --------------------------------------------------------------------- */}
           {activeTab === 'fila' && (
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 flex flex-col">
-              <div className="pb-4 border-b border-slate-100">
-                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100">
+                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                   <Inbox className="w-5 h-5 text-sky-600" />
                   Fila de Espera & Encaixes Inteligentes
                 </h2>
@@ -1406,25 +1825,25 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
-                <div className="p-5 rounded-2xl bg-sky-50/60 border border-sky-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 my-4 sm:my-6">
+                <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/60 border border-sky-100">
                   <span className="text-xs font-bold text-sky-900 block">Pacientes na Fila</span>
                   <span className="text-2xl font-extrabold text-sky-950 mt-1 block">4</span>
                   <span className="text-[11px] text-sky-700 mt-1 block">Prioridade por ordem de solicitação</span>
                 </div>
-                <div className="p-5 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/60 border border-emerald-100">
                   <span className="text-xs font-bold text-emerald-900 block">Tempo Médio de Resposta</span>
                   <span className="text-2xl font-extrabold text-emerald-950 mt-1 block">4 min</span>
                   <span className="text-[11px] text-emerald-700 mt-1 block">Aceite instantâneo via botão de WhatsApp</span>
                 </div>
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
                   <span className="text-xs font-bold text-slate-900 block">Vagas Recuperadas este Mês</span>
                   <span className="text-2xl font-extrabold text-slate-950 mt-1 block">18 vagas</span>
                   <span className="text-[11px] text-slate-500 mt-1 block">0% de ociosidade por faltas</span>
                 </div>
               </div>
 
-              <div className="flex-1 p-6 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
+              <div className="flex-1 p-5 sm:p-6 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
                 <Zap className="w-10 h-10 text-sky-500 stroke-1 mb-2" />
                 <h3 className="text-sm font-bold text-slate-800">Motor de Recuperação de Faltas Ativo</h3>
                 <p className="text-xs text-slate-500 max-w-md mt-1">
@@ -1438,10 +1857,10 @@ export default function Dashboard() {
               ABA: WHATSAPP & LEMBRETES
           --------------------------------------------------------------------- */}
           {activeTab === 'whatsapp' && (
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 flex flex-col">
-              <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                     <MessageSquare className="w-5 h-5 text-emerald-600" />
                     WhatsApp & Automação de Lembretes
                   </h2>
@@ -1452,15 +1871,15 @@ export default function Dashboard() {
                 <button
                   onClick={handleTriggerCronReminders}
                   disabled={cronRunning}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5"
+                  className="px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
                 >
                   <Clock className={`w-3.5 h-3.5 ${cronRunning ? 'animate-spin' : ''}`} />
-                  {cronRunning ? 'Disparando...' : 'Testar Disparo 24h'}
+                  <span>{cronRunning ? 'Disparando...' : 'Testar Disparo 24h'}</span>
                 </button>
               </div>
 
-              <div className="my-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/80">
+              <div className="my-4 sm:my-6 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/80">
                   <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs mb-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     Meta WhatsApp Cloud API Ativa
@@ -1470,7 +1889,7 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
                   <span className="text-xs font-bold text-slate-900 block">Lembretes das Próximas 24 Horas</span>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                     Cron automático configurado para checar a cada 30 minutos e notificar pacientes com antecedência mínima de 24 horas.
@@ -1478,19 +1897,19 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="flex-1 p-6 rounded-2xl bg-slate-50/50 border border-slate-200/60 overflow-y-auto">
+              <div className="flex-1 p-4 sm:p-6 rounded-2xl bg-slate-50/50 border border-slate-200/60 overflow-y-auto">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-3">
                   Últimas Notificações Registradas
                 </span>
                 <div className="space-y-2 text-xs">
                   {appointments.slice(0, 5).map((a) => (
                     <div key={a.id} className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="font-bold text-slate-800">{a.patient?.name}</span>
-                        <span className="text-slate-400 font-mono text-[11px]">{formatPhoneBR(a.patient?.phone)}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-slate-800 truncate">{a.patient?.name}</span>
+                        <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">{formatPhoneBR(a.patient?.phone)}</span>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                         Entregue
                       </span>
                     </div>
@@ -1504,21 +1923,60 @@ export default function Dashboard() {
               ABA: USUÁRIOS & MÉDICOS
           --------------------------------------------------------------------- */}
           {activeTab === 'users' && (
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 flex flex-col overflow-hidden">
-              <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-hidden">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Equipe Médica & Usuários</h2>
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">Equipe Médica & Usuários</h2>
                   <p className="text-xs text-slate-500 font-medium">Médicos, recepcionistas e administradores do consultório</p>
                 </div>
                 <button
                   onClick={() => handleOpenUserModal()}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95"
                 >
                   + Cadastrar Usuário
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto mt-4">
+              {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
+              <div className="md:hidden flex-1 overflow-y-auto space-y-3 mt-3">
+                {users.map((u) => (
+                  <div key={u.id} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm block">{u.name}</span>
+                        <span className="text-[11px] text-slate-500 block">{u.role} • {u.specialty || 'Geral'}</span>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          u.status === 'ACTIVE'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-600 truncate">{u.email}</div>
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200/60">
+                      <button
+                        onClick={() => handleOpenUserModal(u)}
+                        className="p-1.5 px-3 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs hover:bg-slate-100"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(u.id)}
+                        className="p-1.5 px-3 rounded-lg bg-white border border-rose-200 text-rose-600 text-xs font-bold shadow-2xs hover:bg-rose-50"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* TABELA DE USUÁRIOS EM DESKTOP (>= md) */}
+              <div className="hidden md:block flex-1 overflow-y-auto mt-4">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
                     <tr>
@@ -1569,9 +2027,9 @@ export default function Dashboard() {
               ABA: CONFIGURAÇÕES & EXPEDIENTE
           --------------------------------------------------------------------- */}
           {activeTab === 'settings' && clinic && (
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200/70 shadow-xs p-6 overflow-y-auto">
-              <div className="pb-4 border-b border-slate-100 mb-6">
-                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 overflow-y-auto">
+              <div className="pb-3 sm:pb-4 border-b border-slate-100 mb-4 sm:mb-6">
+                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                   <Settings className="w-5 h-5 text-teal-600" />
                   Configurações do Consultório & Expediente
                 </h2>
@@ -1580,8 +2038,8 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl text-xs">
-                <div className="space-y-4">
+              <form onSubmit={handleSaveSettings} className="space-y-4 sm:space-y-6 max-w-2xl text-xs">
+                <div className="space-y-3.5 sm:space-y-4">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Nome do Consultório / Clínica</label>
                     <input
@@ -1602,7 +2060,7 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">Duração da Consulta (minutos)</label>
                       <input
@@ -1627,7 +2085,7 @@ export default function Dashboard() {
                 <div className="pt-4 border-t border-slate-100 flex justify-end">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition"
+                    className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition active:scale-95"
                   >
                     Salvar Parâmetros
                   </button>
@@ -1639,17 +2097,257 @@ export default function Dashboard() {
       </div>
 
       {/* =========================================================================
+          BARRA DE NAVEGAÇÃO INFERIOR MOBILE (iOS / Android TabBar)
+      ========================================================================= */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 z-40 px-2 py-1.5 flex items-center justify-around shadow-lg pb-safe">
+        <button
+          onClick={() => setActiveTab('agenda')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
+            activeTab === 'agenda' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <CalendarIcon className="w-5 h-5" />
+            {appointments.length > 0 && (
+              <span className="absolute -top-1 -right-2 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-teal-600 text-white">
+                {appointments.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] mt-0.5">Agenda</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('patients')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
+            activeTab === 'patients' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+          }`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Pacientes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('fila')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
+            activeTab === 'fila' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <Inbox className="w-5 h-5" />
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+          </div>
+          <span className="text-[10px] mt-0.5">Encaixes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('whatsapp')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
+            activeTab === 'whatsapp' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare className="w-5 h-5" />
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
+          </div>
+          <span className="text-[10px] mt-0.5">WhatsApp</span>
+        </button>
+
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex flex-col items-center justify-center flex-1 py-1 transition text-slate-500 hover:text-slate-900 font-medium"
+        >
+          <Settings className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Mais</span>
+        </button>
+      </nav>
+
+      {/* FAB: NOVA CONSULTA (MOBILE) */}
+      <button
+        onClick={() => {
+          setNewApptTime('');
+          setShowModalNewAppt(true);
+        }}
+        className="lg:hidden fixed right-4 bottom-20 z-40 bg-slate-900 hover:bg-slate-800 text-white rounded-full p-3.5 shadow-xl shadow-slate-900/30 flex items-center gap-1.5 font-bold text-xs active:scale-95 transition"
+        aria-label="Nova Consulta"
+      >
+        <Plus className="w-4 h-4 stroke-[2.5]" />
+        <span className="pr-1">Consulta</span>
+      </button>
+
+      {/* MODAL / BOTTOM SHEET MOBILE DE FILTROS & CALENDÁRIO */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex items-end sm:items-center justify-center">
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileFiltersOpen(false)}
+          />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto z-10 animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-teal-600" />
+                Calendário & Filtros da Agenda
+              </h3>
+              <button
+                onClick={() => setMobileFiltersOpen(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* MINI CALENDÁRIO MENSAL */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 text-xs">{monthLabel}</span>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => {
+                      const m = new Date(calendarMonth);
+                      m.setMonth(m.getMonth() - 1);
+                      setCalendarMonth(m);
+                    }}
+                    className="p-1 hover:bg-slate-200 rounded-lg text-slate-600"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const m = new Date(calendarMonth);
+                      m.setMonth(m.getMonth() + 1);
+                      setCalendarMonth(m);
+                    }}
+                    className="p-1 hover:bg-slate-200 rounded-lg text-slate-600"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* GRID DO MÊS */}
+              <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                <span className="text-[10px] font-bold text-slate-400">D</span>
+                <span className="text-[10px] font-bold text-slate-400">S</span>
+                <span className="text-[10px] font-bold text-slate-400">T</span>
+                <span className="text-[10px] font-bold text-slate-400">Q</span>
+                <span className="text-[10px] font-bold text-slate-400">Q</span>
+                <span className="text-[10px] font-bold text-slate-400">S</span>
+                <span className="text-[10px] font-bold text-slate-400">S</span>
+
+                {miniCalendarDays.map((item, idx) => {
+                  const isSelected = item.dateObj.toDateString() === selectedDate.toDateString();
+                  const isToday = item.dateObj.toDateString() === new Date().toDateString();
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setSelectedDate(item.dateObj);
+                        setMobileFiltersOpen(false);
+                      }}
+                      className={`h-7 w-7 mx-auto rounded-xl flex items-center justify-center text-xs font-semibold transition ${
+                        isSelected
+                          ? 'bg-slate-900 text-white font-bold shadow-xs'
+                          : isToday
+                          ? 'border border-teal-500 text-teal-700 font-bold'
+                          : item.inMonth
+                          ? 'text-slate-800 hover:bg-slate-200'
+                          : 'text-slate-300'
+                      }`}
+                    >
+                      {item.dayNumber}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* FILTROS DE STATUS */}
+            <div className="space-y-2 text-xs">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                Filtrar por Status
+              </span>
+              <label className="flex items-center space-x-2.5 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/60">
+                <input
+                  type="checkbox"
+                  checked={filterConfirmed}
+                  onChange={(e) => setFilterConfirmed(e.target.checked)}
+                  className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4 border-slate-300"
+                />
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="font-bold text-slate-800 flex-1">Confirmados ({confirmedCount})</span>
+              </label>
+
+              <label className="flex items-center space-x-2.5 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/60">
+                <input
+                  type="checkbox"
+                  checked={filterWaiting}
+                  onChange={(e) => setFilterWaiting(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-400 h-4 w-4 border-slate-300"
+                />
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span className="font-bold text-slate-800 flex-1">Aguardando ({waitingCount})</span>
+              </label>
+
+              <label className="flex items-center space-x-2.5 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/60">
+                <input
+                  type="checkbox"
+                  checked={filterEncaixe}
+                  onChange={(e) => setFilterEncaixe(e.target.checked)}
+                  className="rounded text-sky-500 focus:ring-sky-400 h-4 w-4 border-slate-300"
+                />
+                <span className="w-2 h-2 rounded-full bg-sky-500" />
+                <span className="font-bold text-slate-800 flex-1">Encaixe Confirmado ({encaixeCount})</span>
+              </label>
+
+              <label className="flex items-center space-x-2.5 cursor-pointer p-2 rounded-xl bg-slate-50 border border-slate-200/60">
+                <input
+                  type="checkbox"
+                  checked={filterCanceled}
+                  onChange={(e) => setFilterCanceled(e.target.checked)}
+                  className="rounded text-rose-500 focus:ring-rose-400 h-4 w-4 border-slate-300"
+                />
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                <span className="font-bold text-slate-800 flex-1">Cancelados</span>
+              </label>
+            </div>
+
+            <div className="pt-2 flex gap-2">
+              <button
+                onClick={() => {
+                  setFilterConfirmed(true);
+                  setFilterWaiting(true);
+                  setFilterEncaixe(true);
+                  setFilterCanceled(false);
+                  setSearchQuery('');
+                }}
+                className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50"
+              >
+                Limpar Filtros
+              </button>
+              <button
+                onClick={() => setMobileFiltersOpen(false)}
+                className="flex-1 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
           4. MODAL: NOVA CONSULTA
       ========================================================================= */}
       {showModalNewAppt && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                 <CalendarPlus className="w-4 h-4 text-teal-600" />
                 Agendar Nova Consulta
               </h3>
-              <button onClick={() => setShowModalNewAppt(false)} className="text-slate-400 hover:text-slate-700 font-bold">
+              <button onClick={() => setShowModalNewAppt(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
                 ✕
               </button>
             </div>
@@ -1730,14 +2428,14 @@ export default function Dashboard() {
           5. MODAL: DETALHES / PRONTUÁRIO RÁPIDO
       ========================================================================= */}
       {selectedApptDetails && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                 <FileText className="w-4 h-4 text-teal-600" />
                 Prontuário & Detalhes da Consulta
               </h3>
-              <button onClick={() => setSelectedApptDetails(null)} className="text-slate-400 hover:text-slate-700 font-bold">
+              <button onClick={() => setSelectedApptDetails(null)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
                 ✕
               </button>
             </div>
@@ -1770,7 +2468,7 @@ export default function Dashboard() {
             <div className="flex justify-end pt-3 border-t border-slate-100">
               <button
                 onClick={() => setSelectedApptDetails(null)}
-                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs"
+                className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs"
               >
                 Fechar
               </button>
@@ -1783,14 +2481,14 @@ export default function Dashboard() {
           6. MODAL: NOVO / EDITAR PACIENTE
       ========================================================================= */}
       {showModalPatient && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                 <Contact className="w-4 h-4 text-teal-600" />
                 {editingPatient ? 'Editar Paciente' : 'Novo Cadastro de Paciente'}
               </h3>
-              <button onClick={() => setShowModalPatient(false)} className="text-slate-400 hover:text-slate-700 font-bold">
+              <button onClick={() => setShowModalPatient(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
                 ✕
               </button>
             </div>
@@ -1807,7 +2505,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Telefone (WhatsApp) *</label>
                   <input
@@ -1873,14 +2571,14 @@ export default function Dashboard() {
           7. MODAL: NOVO / EDITAR USUÁRIO
       ========================================================================= */}
       {showModalUser && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                 <UserCog className="w-4 h-4 text-teal-600" />
                 {editingUser ? 'Editar Usuário' : 'Novo Cadastro de Usuário'}
               </h3>
-              <button onClick={() => setShowModalUser(false)} className="text-slate-400 hover:text-slate-700 font-bold">
+              <button onClick={() => setShowModalUser(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
                 ✕
               </button>
             </div>

@@ -61,3 +61,16 @@ h1, h2, h3, h4, h5, h6 {
   border-color: #0d9488;
   box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
 }
+
+/* Mobile Safe Areas & Utilities */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
