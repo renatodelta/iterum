@@ -684,21 +684,22 @@ export default function Dashboard() {
       <aside className="hidden lg:flex w-72 border-r border-slate-200/80 bg-white flex-col justify-between shrink-0 z-30 shadow-xs">
         <div>
           {/* LOGO & SUITE */}
-          <div className="p-4.5 flex items-center justify-between border-b border-slate-100">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#10b981] via-[#22c55e] to-[#84cc16] text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-                <Activity className="w-5 h-5 text-white stroke-[2.5]" />
+          <div className="p-4.5 flex items-center justify-between border-b border-slate-100 bg-white">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-100 shadow-md shadow-emerald-900/5 p-1 flex items-center justify-center shrink-0">
+                <img
+                  src="/iterum-logo.jpg"
+                  alt="Iterum"
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <div>
-                <h1 className="text-base font-extrabold tracking-tight text-[#1e293b] leading-tight">CareHub</h1>
-                <span className="text-[10px] font-bold text-slate-400 block tracking-wide">
-                  Primary Care • Consultas
+              <div className="min-w-0">
+                <h1 className="text-xl font-black tracking-tight text-[#1e293b] leading-tight">Iterum</h1>
+                <span className="text-[11px] font-bold text-emerald-700/80 block tracking-wide truncate">
+                  Marcação de Consultas
                 </span>
               </div>
             </div>
-            <span className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full">
-              PRO
-            </span>
           </div>
 
           {/* UNIDADE ATUAL CARD */}
@@ -724,7 +725,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-3">
                 <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Appointments (Agenda)</span>
+                <span>Agenda</span>
               </div>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
@@ -744,7 +745,7 @@ export default function Dashboard() {
               }`}
             >
               <Users className={`w-5 h-5 ${activeTab === 'patients' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Patients (Cadastro)</span>
+              <span>Cadastro de Pacientes</span>
             </button>
 
             <button
@@ -757,7 +758,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-3">
                 <Inbox className={`w-5 h-5 ${activeTab === 'fila' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Encaixes & Fila</span>
+                <span>Encaixes</span>
               </div>
               <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
             </button>
@@ -805,7 +806,7 @@ export default function Dashboard() {
               }`}
             >
               <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Settings</span>
+              <span>Configurações</span>
             </button>
           </nav>
         </div>
@@ -848,13 +849,17 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                    <HeartPulse className="w-5 h-5 text-teal-400 stroke-[2.2]" />
+                  <div className="w-11 h-11 rounded-2xl bg-white border border-emerald-100 shadow-sm p-1 flex items-center justify-center shrink-0">
+                    <img
+                      src="/iterum-logo.jpg"
+                      alt="Iterum"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <div>
-                    <h1 className="text-base font-extrabold tracking-tight text-slate-900 leading-tight">CliniDesk</h1>
-                    <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 block mt-0.5">
-                      CLINICAL SUITE
+                    <h1 className="text-base font-extrabold tracking-tight text-slate-900 leading-tight">Iterum</h1>
+                    <span className="text-[10px] font-bold text-emerald-700/80 block mt-0.5">
+                      Marcação de Consultas
                     </span>
                   </div>
                 </div>
@@ -872,7 +877,7 @@ export default function Dashboard() {
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Unidade Atual</span>
                 <div className="flex items-center justify-between mt-1">
                   <span className="font-bold text-slate-800 text-sm truncate">
-                    {clinic?.name || 'CliniDesk Jardins'} • Jardins
+                    {clinic?.name || 'Iterum Jardins'} • Jardins
                   </span>
                   <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
                 </div>
@@ -893,7 +898,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-teal-400' : 'text-slate-500'}`} />
-                    <span>Agenda Médica</span>
+                    <span>Agenda</span>
                   </div>
                   <span
                     className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
@@ -916,7 +921,7 @@ export default function Dashboard() {
                   }`}
                 >
                   <Users className="w-5 h-5 text-slate-500" />
-                  <span>Pacientes & Prontuário</span>
+                  <span>Cadastro de Pacientes</span>
                 </button>
 
                 <button
@@ -932,7 +937,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <Inbox className="w-5 h-5 text-slate-500" />
-                    <span>Fila & Encaixes</span>
+                    <span>Encaixes</span>
                   </div>
                   <span className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse"></span>
                 </button>
@@ -1030,13 +1035,13 @@ export default function Dashboard() {
               >
                 <Menu className="w-5 h-5" />
               </button>
-              <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded-lg bg-slate-900 text-teal-400 flex items-center justify-center">
-                  <HeartPulse className="w-4 h-4 stroke-[2.2]" />
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white border border-emerald-100 p-0.5 flex items-center justify-center shadow-xs">
+                  <img src="/iterum-logo.jpg" alt="Iterum" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">CliniDesk</span>
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Clinical Suite</span>
+                  <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">Iterum</span>
+                  <span className="text-[9px] text-emerald-700/80 font-bold tracking-wider block">Marcação de Consultas</span>
                 </div>
               </div>
             </div>
@@ -1138,7 +1143,7 @@ export default function Dashboard() {
                     {activeDoctor.name}
                   </span>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    {activeDoctor.specialty?.split('•')[0] || 'Primary Care Physician'}
+                    {activeDoctor.specialty?.split('•')[0] || 'Médico Responsável'}
                   </span>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700" />

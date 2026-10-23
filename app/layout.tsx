@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CliniDesk - Gestão & Remarcação Inteligente de Consultas',
-  description: 'Plataforma SaaS B2B com IA Conversacional e Tool Calling para automação de consultas via WhatsApp.',
+  title: 'Iterum - Marcação de Consultas',
+  description: 'Iterum - Plataforma inteligente de gestão e marcação de consultas com IA.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'CliniDesk',
+    title: 'Iterum',
   },
 };
 

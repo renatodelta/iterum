@@ -1,7 +1,7 @@
 {
-  "name": "CliniDesk - Clinical Suite",
-  "short_name": "CliniDesk",
-  "description": "Gestão & Remarcação Inteligente de Consultas Médicas via WhatsApp",
+  "name": "Iterum - Marcação de Consultas",
+  "short_name": "Iterum",
+  "description": "Gestão & Marcação Inteligente de Consultas Médicas via WhatsApp",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -9,14 +9,8 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/logo_opcao_1.jpg",
-      "sizes": "192x192",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/logo_opcao_2.jpg",
-      "sizes": "512x512",
+      "src": "/iterum-logo.jpg",
+      "sizes": "192x192 512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"
     }
