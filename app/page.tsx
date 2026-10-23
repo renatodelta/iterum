@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import GoogleCalendarView, { AgendaViewMode } from '@/components/calendar/GoogleCalendarView';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -120,7 +121,7 @@ const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:0
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings'>('agenda');
-  const [agendaViewMode, setAgendaViewMode] = useState<'dia' | 'semana' | 'mes' | 'lista'>('dia');
+  const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
   const [clinic, setClinic] = useState<any>(null);
@@ -1014,7 +1015,8 @@ export default function Dashboard() {
         {/* =========================================================================
             HEADER MOBILE (lg:hidden)
         ========================================================================= */}
-        <header className="lg:hidden bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-3 py-2.5 shadow-2xs">
+        {activeTab !== 'agenda' && (
+          <header className="lg:hidden bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-3 py-2.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5">
               <button
@@ -1045,21 +1047,6 @@ export default function Dashboard() {
               >
                 <Search className="w-4 h-4" />
               </button>
-
-              {activeTab === 'agenda' && (
-                <button
-                  onClick={() => setMobileFiltersOpen(true)}
-                  className={`p-2 rounded-xl border flex items-center gap-1 text-xs font-bold transition ${
-                    !filterConfirmed || !filterWaiting || !filterEncaixe || filterCanceled
-                      ? 'bg-teal-50 border-teal-300 text-teal-800'
-                      : 'bg-slate-100 border-slate-200 text-slate-700'
-                  }`}
-                  title="Filtros & Calendário"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span className="text-[10px]">Filtros</span>
-                </button>
-              )}
 
               <button
                 onClick={() => {
@@ -1098,71 +1085,12 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-
-          {/* BARRA DE DATA HORIZONTAL PARA AGENDA NO MOBILE */}
-          {activeTab === 'agenda' && (
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-1.5 px-0.5">
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-extrabold text-slate-900 capitalize">
-                    {selectedDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-                  </span>
-                  <button
-                    onClick={() => setSelectedDate(new Date())}
-                    className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 font-bold text-[10px] border border-teal-200"
-                  >
-                    Hoje
-                  </button>
-                </div>
-                <span className="text-[11px] font-medium text-slate-500">
-                  {selectedDayAppointments.length} consultas hoje
-                </span>
-              </div>
-
-              {/* STRIP DE DIAS COM SCROLL TOUCH */}
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-                {mobileDateStrip.map((d, idx) => {
-                  const isSelected = d.toDateString() === selectedDate.toDateString();
-                  const isToday = d.toDateString() === new Date().toDateString();
-                  const dayName = d.toLocaleDateString('pt-BR', { weekday: 'narrow' }).toUpperCase();
-                  const dayNum = d.getDate();
-                  const apptCount = getApptCountForDate(d);
-
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedDate(d)}
-                      className={`flex flex-col items-center justify-center min-w-[44px] py-2 rounded-xl transition shrink-0 ${
-                        isSelected
-                          ? 'bg-slate-900 text-white font-bold shadow-xs'
-                          : isToday
-                          ? 'bg-teal-50 text-teal-800 border border-teal-200 font-semibold'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
-                      }`}
-                    >
-                      <span className={`text-[9px] font-extrabold ${isSelected ? 'text-teal-400' : 'text-slate-400'}`}>
-                        {dayName}
-                      </span>
-                      <span className="text-sm font-extrabold mt-0.5 leading-none">
-                        {dayNum}
-                      </span>
-                      {apptCount > 0 && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full mt-1 ${
-                            isSelected ? 'bg-teal-400' : 'bg-teal-600'
-                          }`}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </header>
+        )}
 
         {/* HEADER SUPERIOR DESKTOP (hidden lg:flex) */}
-        <header className="hidden lg:flex h-[72px] px-6 bg-white/95 backdrop-blur-md border-b border-slate-200/80 items-center justify-between gap-5 shrink-0 z-20">
+        {activeTab !== 'agenda' && (
+          <header className="hidden lg:flex h-[72px] px-6 bg-white/95 backdrop-blur-md border-b border-slate-200/80 items-center justify-between gap-5 shrink-0 z-20">
           {/* BUSCADOR ESTILO DOCFLOW */}
           <div className="relative flex-1 max-w-lg">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1266,6 +1194,7 @@ export default function Dashboard() {
             </button>
           </div>
         </header>
+        )}
 
         {/* NOTIFICAÇÃO CRON */}
         {cronNotice && (
@@ -1280,401 +1209,28 @@ export default function Dashboard() {
         {/* =========================================================================
             3. CONTEÚDO DINÂMICO CONFORME ABA SELECIONADA
         ========================================================================= */}
-        <main className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3.5 sm:p-4 lg:p-6 gap-4 lg:gap-6">
+        <main className={`flex-1 flex flex-col ${activeTab === 'agenda' ? 'p-0' : 'p-3.5 sm:p-4 lg:p-6 lg:flex-row gap-4 lg:gap-6'} overflow-y-auto lg:overflow-hidden`}>
           {/* ---------------------------------------------------------------------
-              ABA: AGENDA MÉDICA (DUAS COLUNAS NO DESKTOP)
+              ABA: AGENDA MÉDICA (EXPERIÊNCIA GOOGLE CALENDAR COMPLETA)
           --------------------------------------------------------------------- */}
           {activeTab === 'agenda' && (
-            <>
-              {/* SUB-COLUNA ESQUERDA (DESKTOP): MINI CALENDÁRIO & FILTROS */}
-              <div className="hidden lg:flex w-[330px] shrink-0 flex-col gap-4 overflow-y-auto pr-1">
-                {/* 1. MINI CALENDÁRIO MENSAL */}
-                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-slate-900 text-sm tracking-tight capitalize">{monthLabel}</span>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => {
-                          const m = new Date(calendarMonth);
-                          m.setMonth(m.getMonth() - 1);
-                          setCalendarMonth(m);
-                        }}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          const m = new Date(calendarMonth);
-                          m.setMonth(m.getMonth() + 1);
-                          setCalendarMonth(m);
-                        }}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* GRID DO MÊS */}
-                  <div className="grid grid-cols-7 gap-1 text-center">
-                    <span className="text-xs font-bold text-slate-400 py-1">D</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">S</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">T</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">Q</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">Q</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">S</span>
-                    <span className="text-xs font-bold text-slate-400 py-1">S</span>
-
-                    {miniCalendarDays.map((item, idx) => {
-                      const isSelected = item.dateObj.toDateString() === selectedDate.toDateString();
-                      const isToday = item.dateObj.toDateString() === new Date().toDateString();
-
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedDate(item.dateObj)}
-                          className={`h-8 w-8 mx-auto rounded-xl flex items-center justify-center text-sm font-semibold transition ${
-                            isSelected
-                              ? 'bg-slate-900 text-white font-bold shadow-xs'
-                              : isToday
-                              ? 'border border-teal-500 text-teal-700 font-bold'
-                              : item.inMonth
-                              ? 'text-slate-800 hover:bg-slate-100'
-                              : 'text-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          {item.dayNumber}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 2. FILTROS DA AGENDA */}
-                <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                    <span className="text-sm font-extrabold text-slate-900">Filtros da Agenda</span>
-                    <button
-                      onClick={() => {
-                        setFilterConfirmed(true);
-                        setFilterWaiting(true);
-                        setFilterEncaixe(true);
-                        setFilterCanceled(false);
-                        setSelectedProcedure(null);
-                        setSearchQuery('');
-                      }}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-900 hover:underline transition"
-                    >
-                      Limpar Filtros
-                    </button>
-                  </div>
-
-                  {/* CHECKBOXES DE STATUS */}
-                  <div className="space-y-2.5 text-sm">
-                    <label className="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-50/70 p-1 rounded-lg transition">
-                      <input
-                        type="checkbox"
-                        checked={filterConfirmed}
-                        onChange={(e) => setFilterConfirmed(e.target.checked)}
-                        className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4 border-slate-300"
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-                      <span className="font-medium text-slate-800">Confirmados</span>
-                      <span className="ml-auto text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        {confirmedCount}
-                      </span>
-                    </label>
-
-                    <label className="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-50/70 p-1 rounded-lg transition">
-                      <input
-                        type="checkbox"
-                        checked={filterWaiting}
-                        onChange={(e) => setFilterWaiting(e.target.checked)}
-                        className="rounded text-amber-500 focus:ring-amber-400 h-4 w-4 border-slate-300"
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
-                      <span className="font-medium text-slate-800">Aguardando</span>
-                      <span className="ml-auto text-xs font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                        {waitingCount}
-                      </span>
-                    </label>
-
-                    <label className="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-50/70 p-1 rounded-lg transition">
-                      <input
-                        type="checkbox"
-                        checked={filterEncaixe}
-                        onChange={(e) => setFilterEncaixe(e.target.checked)}
-                        className="rounded text-sky-500 focus:ring-sky-400 h-4 w-4 border-slate-300"
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0"></span>
-                      <span className="font-medium text-slate-800">Encaixe</span>
-                      <span className="ml-auto text-xs font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
-                        {encaixeCount}
-                      </span>
-                    </label>
-
-                    <label className="flex items-center space-x-2.5 cursor-pointer hover:bg-slate-50/70 p-1 rounded-lg transition">
-                      <input
-                        type="checkbox"
-                        checked={filterCanceled}
-                        onChange={(e) => setFilterCanceled(e.target.checked)}
-                        className="rounded text-rose-500 focus:ring-rose-400 h-4 w-4 border-slate-300"
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
-                      <span className="font-medium text-slate-800">Cancelados</span>
-                    </label>
-                  </div>
-
-                  {/* SEÇÃO PROCEDIMENTO */}
-                  <div className="pt-3 border-t border-slate-100">
-                    <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block mb-2.5">
-                      Procedimento
-                    </span>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between text-slate-800 py-0.5 hover:text-teal-700 transition cursor-pointer">
-                        <span className="font-medium">Consulta Clínica</span>
-                        <span className="font-bold text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">8</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-800 py-0.5 hover:text-teal-700 transition cursor-pointer">
-                        <span className="font-medium">Ecocardiograma</span>
-                        <span className="font-bold text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">3</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-800 py-0.5 hover:text-teal-700 transition cursor-pointer">
-                        <span className="font-medium">Holter 24h</span>
-                        <span className="font-bold text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">3</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. ENCAIXE INTELIGENTE ATIVO (WHATSAPP RECOVERY) */}
-                <div className="bg-gradient-to-br from-sky-50 via-blue-50/60 to-indigo-50/30 border border-sky-100 rounded-3xl p-5 space-y-2.5 text-sm shadow-xs">
-                  <div className="flex items-center gap-2 font-bold text-sky-950 text-sm">
-                    <Zap className="w-4.5 h-4.5 text-sky-600 fill-sky-600" />
-                    <span>Encaixe Inteligente Ativo</span>
-                  </div>
-                  <p className="text-xs text-sky-800 leading-relaxed font-medium">
-                    Se houver cancelamento, pacientes da fila de espera são acionados instantaneamente por WhatsApp.
-                  </p>
-                  <button
-                    onClick={handleTriggerCronReminders}
-                    disabled={cronRunning}
-                    className="w-full mt-2 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
-                  >
-                    <Clock className={`w-4 h-4 ${cronRunning ? 'animate-spin' : ''}`} />
-                    {cronRunning ? 'Enviando Lembretes...' : 'Disparar Lembretes 24h'}
-                  </button>
-                </div>
-              </div>
-
-              {/* SUB-COLUNA DIREITA: TIMELINE DIÁRIA COM DESIGN MODERNO */}
-              <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 flex flex-col overflow-hidden">
-                {/* CABEÇALHO DO PAINEL DIREITO */}
-                <div className="pb-3.5 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                      <span>Agenda Médica • {activeDoctor.name}</span>
-                    </h2>
-                    <p className="text-sm text-slate-500 font-medium mt-0.5">
-                      {activeDoctor.specialty} • {activeDoctor.room || 'Sala 402'}
-                    </p>
-                  </div>
-
-                  {/* PILL COUNTERS COLORIDOS */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                    <span className="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80 flex items-center gap-1.5 text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      {confirmedCount} Confirmados
-                    </span>
-                    <span className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80 flex items-center gap-1.5 text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                      {waitingCount} Aguardando
-                    </span>
-                    <span className="px-3 py-1.5 rounded-full bg-sky-50 text-sky-800 border border-sky-200/80 flex items-center gap-1.5 text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-sky-500"></span>
-                      {encaixeCount} Encaixe
-                    </span>
-                  </div>
-                </div>
-
-                {/* SUB-BARRA DA DATA E HORÁRIO ATUAL */}
-                <div className="py-2.5 flex items-center justify-between text-sm font-semibold text-slate-700 border-b border-slate-100/90">
-                  <span className="truncate">{selectedDateHeader} • Turnos Matutino e Vespertino</span>
-                  <span className="text-rose-600 font-bold shrink-0 ml-2 hidden sm:inline text-xs">— Horário atual: {currentTimeStr}</span>
-                </div>
-
-                {/* LISTAGEM DE CONSULTAS DA TIMELINE */}
-                <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-3.5 pr-1 mt-3.5">
-                  {loading ? (
-                    <div className="py-20 text-center text-slate-400 font-medium text-sm">Carregando consultas da agenda...</div>
-                  ) : selectedDayAppointments.length === 0 ? (
-                    <div className="py-16 sm:py-24 flex flex-col items-center justify-center text-center">
-                      <CalendarDays className="w-14 h-14 text-slate-300 stroke-1 mb-2.5" />
-                      <p className="text-base font-bold text-slate-800">Nenhuma consulta agendada para este dia</p>
-                      <p className="text-sm text-slate-400 mt-1 max-w-sm">Clique em "Nova Consulta" para incluir um paciente na grade de atendimentos.</p>
-                      <button
-                        onClick={() => openNewApptModalWithSlot(selectedDate)}
-                        className="mt-5 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-xs hover:bg-slate-800 transition active:scale-95"
-                      >
-                        + Agendar Consulta Agora
-                      </button>
-                    </div>
-                  ) : (
-                    selectedDayAppointments.map((appt) => {
-                      const start = new Date(appt.startTime);
-                      const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      const s = (appt.status || '').toUpperCase();
-                      const isConfirmed = s === 'CONFIRMADO' || s === 'CONFIRMED';
-                      const isWaiting = s === 'AGENDADO' || s === 'SCHEDULED';
-                      const isEncaixe = s === 'REMARCADO' || s === 'RESCHEDULED';
-                      const isCanceled = s === 'CANCELADO' || s === 'CANCELED';
-
-                      return (
-                        <div key={appt.id} className="flex items-start sm:items-center gap-3 sm:gap-4 group">
-                          {/* COLUNA DO HORÁRIO */}
-                          <div className="w-14 sm:w-16 text-center shrink-0 pt-1.5 sm:pt-0">
-                            <span className="block font-black text-slate-900 text-sm sm:text-base font-mono leading-tight tracking-tight">
-                              {timeStr}
-                            </span>
-                            <span className="text-xs font-semibold text-slate-400">45 min</span>
-                          </div>
-
-                          {/* CARD PRINCIPAL DO PACIENTE COM BARRA LATERAL MODERNA */}
-                          <div
-                            className={`flex-1 rounded-2xl p-3.5 sm:p-4.5 border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 ${
-                              isConfirmed
-                                ? 'border-emerald-200 bg-white hover:border-emerald-300 hover:shadow-md border-l-[5px] border-l-emerald-500'
-                                : isWaiting
-                                ? 'border-amber-200 bg-white hover:border-amber-300 hover:shadow-md border-l-[5px] border-l-amber-400'
-                                : isEncaixe
-                                ? 'border-sky-200 bg-white hover:border-sky-300 hover:shadow-md border-l-[5px] border-l-sky-500'
-                                : 'border-rose-200 bg-white opacity-60 border-l-[5px] border-l-rose-400'
-                            }`}
-                          >
-                            {/* DADOS DO PACIENTE */}
-                            <div className="flex items-start sm:items-center space-x-3 sm:space-x-4 min-w-0">
-                              {/* AVATAR COM INICIAIS */}
-                              <div
-                                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center font-extrabold text-sm shrink-0 shadow-2xs ${
-                                  isConfirmed
-                                    ? 'bg-emerald-100 text-emerald-900'
-                                    : isWaiting
-                                    ? 'bg-amber-100 text-amber-900'
-                                    : isEncaixe
-                                    ? 'bg-sky-100 text-sky-900'
-                                    : 'bg-rose-100 text-rose-900'
-                                }`}
-                              >
-                                {getInitials(appt.patient?.name)}
-                              </div>
-
-                              <div className="space-y-1 min-w-0">
-                                {/* LINHA 1: NOME + BADGES */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-extrabold text-slate-900 text-sm sm:text-base truncate">
-                                    {appt.patient?.name}
-                                  </span>
-
-                                  {isConfirmed && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                      Confirmado
-                                    </span>
-                                  )}
-                                  {isWaiting && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1.5">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                      Aguardando
-                                    </span>
-                                  )}
-                                  {isEncaixe && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-200 flex items-center gap-1.5">
-                                      <Zap className="w-3.5 h-3.5 text-sky-600 fill-sky-600" />
-                                      Encaixe
-                                    </span>
-                                  )}
-                                  {isCanceled && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200">
-                                      Cancelado
-                                    </span>
-                                  )}
-
-                                  <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                    {appt.notes?.includes('Bradesco')
-                                      ? 'Bradesco Saúde'
-                                      : appt.notes?.includes('Unimed')
-                                      ? 'Unimed'
-                                      : appt.notes?.includes('Amil')
-                                      ? 'Amil'
-                                      : 'Particular'}
-                                  </span>
-                                </div>
-
-                                {/* LINHA 2: IDADE, CONVÊNIO, TELEFONE */}
-                                <div className="text-xs text-slate-500 font-medium truncate flex items-center gap-2">
-                                  <span>{appt.patient?.birthDate ? calculateAge(appt.patient.birthDate) : '52 anos'}</span>
-                                  <span>•</span>
-                                  <span className="font-mono text-slate-700">{formatPhoneBR(appt.patient?.phone)}</span>
-                                  {appt.patient?.cpf && (
-                                    <>
-                                      <span>•</span>
-                                      <span className="font-mono">CPF: {applyCPFMask(appt.patient.cpf)}</span>
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* LINHA 3: PROCEDIMENTO / MOTIVO */}
-                                <div className="text-xs sm:text-sm text-slate-600 font-medium line-clamp-1">
-                                  {appt.notes || 'Retorno Cardiológico • Acompanhamento Preventivo'}
-                                </div>
-
-                                {/* BOTAO REFORCAR AVISO (PARA AGUARDANDO) */}
-                                {isWaiting && (
-                                  <div className="pt-1.5">
-                                    <a
-                                      href={`https://wa.me/${(appt.patient?.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(
-                                        `Olá ${appt.patient?.name}, confirmamos sua consulta com ${activeDoctor.name} para o dia ${selectedDate.toLocaleDateString('pt-BR')} às ${timeStr}?`
-                                      )}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition shadow-2xs"
-                                    >
-                                      <Megaphone className="w-3.5 h-3.5 text-amber-600" />
-                                      Reforçar Aviso WhatsApp
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* BOTOES DE ACAO DO CARD DIREITO */}
-                            <div className="flex items-center space-x-2.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end w-full sm:w-auto">
-                              <button
-                                onClick={() => setSelectedApptDetails(appt)}
-                                className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs sm:text-sm font-bold shadow-2xs flex items-center justify-center gap-2 transition hover:border-slate-300"
-                              >
-                                <FileText className="w-4 h-4 text-slate-500" />
-                                Prontuário
-                              </button>
-
-                              <a
-                                href={`https://wa.me/${(appt.patient?.phone || '').replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="p-2 sm:p-2.5 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 text-emerald-600 hover:border-emerald-300 transition shadow-2xs"
-                                title="Abrir conversa no WhatsApp"
-                              >
-                                <MessageSquare className="w-4.5 h-4.5" />
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </>
+            <div className="flex-1 flex flex-col h-full min-h-0 bg-white overflow-hidden">
+              <GoogleCalendarView
+                appointments={appointments}
+                clinic={clinic}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                agendaViewMode={agendaViewMode}
+                setAgendaViewMode={setAgendaViewMode}
+                currentTimeStr={currentTimeStr}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onOpenNewAppt={openNewApptModalWithSlot}
+                onOpenApptDetails={(appt) => setSelectedApptDetails(appt)}
+                onSwitchTab={(tab) => setActiveTab(tab)}
+                activeDoctor={activeDoctor}
+              />
+            </div>
           )}
 
           {/* ---------------------------------------------------------------------
@@ -2178,6 +1734,7 @@ export default function Dashboard() {
       </nav>
 
       {/* FAB: NOVA CONSULTA (MOBILE) */}
+      {activeTab !== 'agenda' && (
       <button
         onClick={() => {
           setNewApptTime('');
@@ -2189,6 +1746,7 @@ export default function Dashboard() {
         <Plus className="w-4 h-4 stroke-[2.5]" />
         <span className="pr-1">Consulta</span>
       </button>
+      )}
 
       {/* MODAL / BOTTOM SHEET MOBILE DE FILTROS & CALENDÁRIO */}
       {mobileFiltersOpen && (
