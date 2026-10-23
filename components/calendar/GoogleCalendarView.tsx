@@ -520,25 +520,58 @@ export default function GoogleCalendarView({
 
             {menuMoreOpen && (
               <div className="absolute right-0 mt-1 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Visualização
+                </div>
                 <button
                   onClick={() => {
-                    handleNavigate('prev');
+                    setAgendaViewMode('dia');
                     setMenuMoreOpen(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
+                    agendaViewMode === 'dia' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <ChevronLeft className="w-4 h-4 text-slate-400" />
-                  <span>Período anterior</span>
+                  <CalendarIcon className="w-4 h-4 text-[#1a73e8]" />
+                  <span>Dia</span>
                 </button>
                 <button
                   onClick={() => {
-                    handleNavigate('next');
+                    setAgendaViewMode('3dias');
                     setMenuMoreOpen(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
+                    agendaViewMode === '3dias' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
-                  <span>Próximo período</span>
+                  <CalendarRange className="w-4 h-4 text-[#1a73e8]" />
+                  <span>3 dias</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAgendaViewMode('semana');
+                    setMenuMoreOpen(false);
+                  }}
+                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
+                    agendaViewMode === 'semana' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <CalendarDays className="w-4 h-4 text-[#1a73e8]" />
+                  <span>Semana</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAgendaViewMode('mes');
+                    setMenuMoreOpen(false);
+                  }}
+                  className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
+                    agendaViewMode === 'mes' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded border-2 border-[#1a73e8] flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8]"></span>
+                  </div>
+                  <span>Mês</span>
                 </button>
                 <div className="my-1 border-t border-slate-100"></div>
                 <button
@@ -580,99 +613,29 @@ export default function GoogleCalendarView({
       )}
 
       {/* =========================================================================
-          BARRA RÁPIDA DE PERSPECTIVA (DIA | 3 DIAS | SEMANA | MÊS)
-      ========================================================================= */}
-      <div className="bg-[#f8fafd] border-b border-[#dadce0] px-2 py-1.5 flex items-center justify-between text-xs font-semibold z-20">
-        <div className="flex items-center space-x-1 bg-slate-200/70 p-0.5 rounded-full">
-          <button
-            onClick={() => setAgendaViewMode('dia')}
-            className={`px-3 py-1 rounded-full transition ${
-              agendaViewMode === 'dia'
-                ? 'bg-white text-[#1a73e8] font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Dia
-          </button>
-          <button
-            onClick={() => setAgendaViewMode('3dias')}
-            className={`px-3 py-1 rounded-full transition ${
-              agendaViewMode === '3dias'
-                ? 'bg-white text-[#1a73e8] font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            3 dias
-          </button>
-          <button
-            onClick={() => setAgendaViewMode('semana')}
-            className={`px-3 py-1 rounded-full transition ${
-              agendaViewMode === 'semana'
-                ? 'bg-white text-[#1a73e8] font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Semana
-          </button>
-          <button
-            onClick={() => setAgendaViewMode('mes')}
-            className={`px-3 py-1 rounded-full transition ${
-              agendaViewMode === 'mes'
-                ? 'bg-white text-[#1a73e8] font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Mês
-          </button>
-        </div>
-
-        {/* CONTROLES DE SETA PARA NAVEGAÇÃO RÁPIDA */}
-        <div className="flex items-center space-x-1">
-          <button
-            onClick={() => handleNavigate('prev')}
-            className="p-1 rounded-full hover:bg-slate-200 text-slate-600 active:scale-95 transition"
-            title="Anterior"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleGoToday}
-            className="px-2 py-0.5 rounded-full text-[11px] font-bold text-[#1a73e8] hover:bg-blue-50 transition"
-          >
-            Hoje
-          </button>
-          <button
-            onClick={() => handleNavigate('next')}
-            className="p-1 rounded-full hover:bg-slate-200 text-slate-600 active:scale-95 transition"
-            title="Próximo"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          2. CONTEÚDO PRINCIPAL: PERSPECTIVAS
+          2. CONTEÚDO PRINCIPAL: PERSPECTIVAS (ESTILO GOOGLE CALENDAR)
       ========================================================================= */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         {/* =======================================================================
-            PERSPECTIVA 1: MÊS (MONTH VIEW) - FIEL À IMAGEM 4
+            PERSPECTIVA 1: MÊS (MONTH VIEW) - IDÊNTICA AO GOOGLE CALENDAR
         ======================================================================= */}
         {agendaViewMode === 'mes' && (
           <div className="flex-1 flex flex-col h-full bg-white overflow-y-auto">
             {/* CABEÇALHO DOS DIAS DA SEMANA (D, S, T, Q, Q, S, S) */}
-            <div className="grid grid-cols-7 border-b border-[#dadce0] bg-white sticky top-0 z-10 text-center py-2 text-[11px] font-bold text-[#70757a]">
-              {WEEKDAYS_SINGLE.map((d, idx) => (
-                <div key={idx} className={idx === new Date().getDay() ? 'text-[#1a73e8] font-extrabold' : ''}>
-                  {d}
-                </div>
-              ))}
+            <div className="grid grid-cols-7 border-b border-[#dadce0] bg-white sticky top-0 z-10 text-center py-2 text-[12px] font-normal text-[#70757a]">
+              {WEEKDAYS_SINGLE.map((d, idx) => {
+                const isTodayCol = idx === new Date().getDay();
+                return (
+                  <div key={idx} className={isTodayCol ? 'text-[#1a73e8] font-bold' : ''}>
+                    {d}
+                  </div>
+                );
+              })}
             </div>
 
             {/* GRADE DO MÊS */}
-            <div className="flex-1 grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[#edf0f2] border-b border-[#dadce0]">
+            <div className="flex-1 grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[#dadce0] border-b border-[#dadce0]">
               {monthGridDays.map((cell, idx) => {
-                const isSelected = isSameDay(cell.date, selectedDate);
                 const isCurToday = isToday(cell.date);
                 const { bookedCount, vacantCount } = cell.slotsInfo;
 
@@ -683,62 +646,46 @@ export default function GoogleCalendarView({
                       setSelectedDate(cell.date);
                       setAgendaViewMode('dia'); // Ao clicar no dia do mês, abre o dia!
                     }}
-                    className={`min-h-[75px] sm:min-h-[100px] p-1.5 flex flex-col justify-between items-center text-left transition-colors relative group hover:bg-blue-50/40 ${
-                      !cell.inCurrentMonth ? 'bg-slate-50/50' : 'bg-white'
-                    } ${isSelected ? 'ring-2 ring-inset ring-[#1a73e8] z-10' : ''}`}
+                    className={`min-h-[70px] sm:min-h-[95px] p-1 pt-1.5 flex flex-col items-center text-center transition-colors relative hover:bg-slate-50/60 active:bg-blue-50/30 ${
+                      !cell.inCurrentMonth ? 'bg-slate-50/30' : 'bg-white'
+                    }`}
                   >
                     {/* NÚMERO DO DIA */}
-                    <div className="w-full flex justify-center mb-1">
+                    <div className="flex justify-center mb-1">
                       <span
-                        className={`text-xs sm:text-sm font-semibold rounded-full flex items-center justify-center transition ${
+                        className={`text-xs sm:text-sm rounded-full flex items-center justify-center transition ${
                           isCurToday
-                            ? 'w-6 h-6 sm:w-7 sm:h-7 bg-[#1a73e8] text-white font-bold shadow-xs'
+                            ? 'w-7 h-7 bg-[#1a73e8] text-white font-bold'
                             : !cell.inCurrentMonth
-                            ? 'text-[#9aa0a6]'
-                            : 'text-[#3c4043]'
+                            ? 'text-[#9aa0a6] font-normal'
+                            : 'text-[#3c4043] font-normal'
                         }`}
                       >
                         {cell.dayNumber}
                       </span>
                     </div>
 
-                    {/* PONTINHOS / BADGES ESPECIFICADOS PELO USUÁRIO:
-                        "um pontinho azul com o número de consultadas agendadas
-                         e um pontinho laranja mostrando quantos horários vagos" */}
-                    <div className="w-full flex flex-col gap-1 items-center justify-center my-auto">
-                      {/* PONTINHO AZUL COM CONSULTAS AGENDADAS */}
+                    {/* SINALIZAÇÃO POR CORES EM BOLINHA COM O NÚMERO (SEM TEXTO) */}
+                    <div className="flex items-center justify-center gap-1 mt-0.5 flex-wrap">
+                      {/* BOLINHA AZUL COM O NÚMERO DE CONSULTAS */}
                       {bookedCount > 0 && (
-                        <div
-                          className="w-full flex items-center justify-center gap-1 py-0.5 px-1 rounded-md bg-blue-50 text-[#1a73e8] border border-blue-200/80 text-[10px] sm:text-[11px] font-bold leading-none truncate"
+                        <span
+                          className="w-5 h-5 rounded-full bg-[#1a73e8] text-white text-[11px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
                           title={`${bookedCount} consulta(s) agendada(s)`}
                         >
-                          <span className="w-2 h-2 rounded-full bg-[#1a73e8] shrink-0"></span>
-                          <span>{bookedCount} {bookedCount === 1 ? 'consulta' : 'consultas'}</span>
-                        </div>
-                      )}
-
-                      {/* PONTINHO LARANJA COM HORÁRIOS VAGOS */}
-                      {vacantCount > 0 && cell.slotsInfo.isActive && (
-                        <div
-                          className="w-full flex items-center justify-center gap-1 py-0.5 px-1 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 text-[10px] sm:text-[11px] font-bold leading-none truncate"
-                          title={`${vacantCount} horário(s) vago(s)`}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                          <span>{vacantCount} {vacantCount === 1 ? 'vaga' : 'vagas'}</span>
-                        </div>
-                      )}
-
-                      {/* DIA INATIVO / FECHADO */}
-                      {!cell.slotsInfo.isActive && cell.inCurrentMonth && bookedCount === 0 && (
-                        <span className="text-[10px] text-slate-400 font-medium italic">
-                          Fechado
+                          {bookedCount}
                         </span>
                       )}
-                    </div>
 
-                    {/* DICA DE TOQUE */}
-                    <div className="w-full text-center text-[9px] text-slate-300 group-hover:text-slate-500 transition">
-                      Ver dia
+                      {/* BOLINHA LARANJA COM O NÚMERO DE VAGAS */}
+                      {vacantCount > 0 && cell.slotsInfo.isActive && (
+                        <span
+                          className="w-5 h-5 rounded-full bg-[#f29900] text-white text-[11px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                          title={`${vacantCount} horário(s) vago(s)`}
+                        >
+                          {vacantCount}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -1119,7 +1066,7 @@ export default function GoogleCalendarView({
       ========================================================================= */}
       <button
         onClick={() => onOpenNewAppt(selectedDate)}
-        className="fixed bottom-5 right-5 sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
+        className="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
         aria-label="Criar nova consulta"
         title="Criar nova consulta"
       >
