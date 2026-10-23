@@ -42,7 +42,7 @@ interface GoogleCalendarViewProps {
   setSearchQuery: (q: string) => void;
   onOpenNewAppt: (date: Date, hourStr?: string) => void;
   onOpenApptDetails: (appt: any) => void;
-  onSwitchTab?: (tab: 'overview' | 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings') => void;
+  onSwitchTab?: (tab: 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings') => void;
   activeDoctor?: {
     name: string;
     specialty: string;
@@ -57,6 +57,46 @@ const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
+
+function cleanDigits(str?: string | null): string {
+  return str ? str.replace(/\D/g, '') : '';
+}
+
+function applyCPFMask(v?: string | null): string {
+  if (!v) return '';
+  const digits = cleanDigits(v).slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+function matchesSearch(appt: any, query: string): boolean {
+  if (!query || !query.trim()) return true;
+  const q = query.trim().toLowerCase();
+  const qDigits = cleanDigits(query);
+
+  const patName = appt.patient?.name?.toLowerCase() || '';
+  const patPhone = appt.patient?.phone || '';
+  const patCpf = appt.patient?.cpf || '';
+  const notes = appt.notes?.toLowerCase() || '';
+
+  // 1. Nome do paciente
+  if (patName.includes(q)) return true;
+
+  // 2. CPF do paciente (com ou sem formatação)
+  if (patCpf.toLowerCase().includes(q)) return true;
+  if (qDigits.length >= 3 && cleanDigits(patCpf).includes(qDigits)) return true;
+
+  // 3. Telefone do paciente (com ou sem formatação)
+  if (patPhone.toLowerCase().includes(q)) return true;
+  if (qDigits.length >= 3 && cleanDigits(patPhone).includes(qDigits)) return true;
+
+  // 4. Observações
+  if (notes.includes(q)) return true;
+
+  return false;
+}
 
 export default function GoogleCalendarView({
   appointments,
@@ -88,6 +128,18 @@ export default function GoogleCalendarView({
 
   // Mês de navegação do calendário
   const [viewMonthDate, setViewMonthDate] = useState<Date>(() => new Date(selectedDate));
+
+  // Todas as consultas correspondentes à busca por nome, CPF ou telefone
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return appointments
+      .filter((a) => {
+        const isNotCanceled = a.status !== 'CANCELADO' && a.status !== 'CANCELED';
+        if (!isNotCanceled) return false;
+        return matchesSearch(a, searchQuery);
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments, searchQuery]);
 
   // Sincronizar viewMonthDate quando selectedDate muda
   useEffect(() => {
@@ -187,15 +239,7 @@ export default function GoogleCalendarView({
       const isNotCanceled = a.status !== 'CANCELADO' && a.status !== 'CANCELED';
       if (!isDay || !isNotCanceled) return false;
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return (
-          a.patient?.name?.toLowerCase().includes(q) ||
-          a.patient?.phone?.includes(q) ||
-          (a.notes && a.notes.toLowerCase().includes(q))
-        );
-      }
-      return true;
+      return matchesSearch(a, searchQuery);
     });
 
     if (!dayActive) {
@@ -592,23 +636,131 @@ export default function GoogleCalendarView({
       </header>
 
       {/* =========================================================================
-          BARRA DE PESQUISA EXPANSÍVEL
+          BARRA DE PESQUISA EXPANSÍVEL (LUPA) + RESULTADOS DE CONSULTAS DO PACIENTE
       ========================================================================= */}
       {searchOpen && (
-        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2 animate-in slide-in-from-top-2">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Buscar por paciente, telefone, notas..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            autoFocus
-            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="p-1 text-slate-400 hover:text-slate-600">
-              <X className="w-4 h-4" />
-            </button>
+        <div className="relative z-30">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2 animate-in slide-in-from-top-2">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Digite o nome, CPF ou telefone do paciente..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-1 text-slate-400 hover:text-slate-600 transition"
+                title="Limpar texto"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* PAINEL DE RESULTADOS COM TODAS AS CONSULTAS DO PACIENTE */}
+          {searchQuery.trim().length > 0 && (
+            <div className="absolute left-0 right-0 top-full max-h-[70vh] bg-white border-b border-slate-200 shadow-2xl overflow-y-auto z-50">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700">
+                  {searchResults.length === 0
+                    ? `Nenhuma consulta encontrada para "${searchQuery}"`
+                    : `${searchResults.length} consulta${searchResults.length === 1 ? '' : 's'} encontrada${searchResults.length === 1 ? '' : 's'}`}
+                </span>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs text-[#1a73e8] hover:text-blue-800 font-bold"
+                >
+                  Limpar filtro
+                </button>
+              </div>
+
+              {searchResults.length === 0 ? (
+                <div className="p-8 text-center text-slate-400">
+                  <User className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-[1.5]" />
+                  <p className="text-sm font-semibold text-slate-600">Nenhuma consulta encontrada</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                    Verifique se o nome, CPF ou telefone do paciente foram digitados corretamente.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 p-2 space-y-1">
+                  {searchResults.map((appt) => {
+                    const start = new Date(appt.startTime);
+                    const end = new Date(appt.endTime || appt.startTime);
+                    const badge = getAppointmentBadge(appt);
+                    const formattedDate = start.toLocaleDateString('pt-BR', {
+                      weekday: 'short',
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    });
+                    const startTimeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const endTimeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <div
+                        key={appt.id}
+                        onClick={() => {
+                          setSelectedDate(start);
+                          setAgendaViewMode('dia');
+                          onOpenApptDetails(appt);
+                          setSearchOpen(false);
+                        }}
+                        className="p-3 rounded-2xl hover:bg-blue-50/60 cursor-pointer transition flex items-center justify-between gap-3 group border border-transparent hover:border-blue-100 active:scale-[0.99]"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-[#1a73e8] font-bold flex items-center justify-center text-sm shrink-0 shadow-2xs group-hover:bg-[#1a73e8] group-hover:text-white transition">
+                            {appt.patient?.name ? appt.patient.name.slice(0, 2).toUpperCase() : 'PC'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-slate-900 truncate">
+                                {appt.patient?.name || 'Paciente sem nome'}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.bg} text-white shrink-0`}>
+                                {badge.tag}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-slate-500 mt-0.5">
+                              {appt.patient?.cpf && (
+                                <span className="font-mono text-[11px] text-slate-600">
+                                  CPF: {applyCPFMask(appt.patient.cpf)}
+                                </span>
+                              )}
+                              {appt.patient?.phone && (
+                                <span className="text-slate-600 font-medium flex items-center gap-1">
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  {appt.patient.phone}
+                                </span>
+                              )}
+                              <span className="text-[#1a73e8] font-bold flex items-center gap-1">
+                                <CalendarIcon className="w-3 h-3 text-[#1a73e8]" />
+                                {formattedDate} às {startTimeStr} - {endTimeStr}
+                              </span>
+                            </div>
+                            {appt.notes && (
+                              <p className="text-[11px] text-slate-400 italic truncate mt-0.5">
+                                Nota: {appt.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <span className="text-xs font-bold text-[#1a73e8] group-hover:underline flex items-center gap-1">
+                            Ver detalhes →
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1064,24 +1216,27 @@ export default function GoogleCalendarView({
 
       {/* =========================================================================
           3. FLOATING ACTION BUTTON (FAB DO GOOGLE CALENDAR COM O ÍCONE + COLORIDO)
+          Oculto na visualização de mês conforme solicitação do usuário.
       ========================================================================= */}
-      <button
-        onClick={() => onOpenNewAppt(selectedDate)}
-        className="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
-        aria-label="Criar nova consulta"
-        title="Criar nova consulta"
-      >
-        {/* Ícone + com as 4 cores características do Google */}
-        <svg viewBox="0 0 36 36" className="w-8 h-8 drop-shadow-xs">
-          <path fill="#4285F4" d="M16 16v14h4V16h14v-4H20V2h-4v10H2v4h14z" />
-          <path fill="#FBBC05" d="M16 16H2v4h14v10h4V20z" opacity="0" />
-          {/* Versão estilizada do Google Plus SVG */}
-          <path fill="#EA4335" d="M16 2h4v14h-4z" />
-          <path fill="#4285F4" d="M20 16h14v4H20z" />
-          <path fill="#FBBC05" d="M16 20h4v14h-4z" />
-          <path fill="#34A853" d="M2 16h14v4H2z" />
-        </svg>
-      </button>
+      {agendaViewMode !== 'mes' && (
+        <button
+          onClick={() => onOpenNewAppt(selectedDate)}
+          className="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
+          aria-label="Criar nova consulta"
+          title="Criar nova consulta"
+        >
+          {/* Ícone + com as 4 cores características do Google */}
+          <svg viewBox="0 0 36 36" className="w-8 h-8 drop-shadow-xs">
+            <path fill="#4285F4" d="M16 16v14h4V16h14v-4H20V2h-4v10H2v4h14z" />
+            <path fill="#FBBC05" d="M16 16H2v4h14v10h4V20z" opacity="0" />
+            {/* Versão estilizada do Google Plus SVG */}
+            <path fill="#EA4335" d="M16 2h4v14h-4z" />
+            <path fill="#4285F4" d="M20 16h14v4H20z" />
+            <path fill="#FBBC05" d="M16 20h4v14h-4z" />
+            <path fill="#34A853" d="M2 16h14v4H2z" />
+          </svg>
+        </button>
+      )}
 
       {/* =========================================================================
           4. GOOGLE CALENDAR SIDE DRAWER (MENU LATERAL DESLIZANTE)
@@ -1186,16 +1341,6 @@ export default function GoogleCalendarView({
                   <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Módulos CliniDesk
                   </div>
-                  <button
-                    onClick={() => {
-                      onSwitchTab('overview');
-                      setDrawerOpen(false);
-                    }}
-                    className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
-                  >
-                    <Activity className="w-4 h-4 text-[#059669]" />
-                    <span>Visão Geral (Dashboard)</span>
-                  </button>
                   <button
                     onClick={() => {
                       onSwitchTab('patients');

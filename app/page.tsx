@@ -124,7 +124,7 @@ const WEEKDAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábad
 const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:00', '13:45', '14:30', '15:15', '16:00', '16:45', '17:30'];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings'>('agenda');
   const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
@@ -714,20 +714,6 @@ export default function Dashboard() {
 
           {/* MENU PRINCIPAL */}
           <nav className="px-3 space-y-1.5 mt-2">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'overview'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <LayoutDashboard className={`w-5 h-5 ${activeTab === 'overview' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Overview</span>
-              </div>
-            </button>
-
             <button
               onClick={() => setActiveTab('agenda')}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
@@ -1637,16 +1623,6 @@ export default function Dashboard() {
       ========================================================================= */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#e5efe9] z-40 px-2 py-1.5 flex items-center justify-around shadow-lg pb-safe">
         <button
-          onClick={() => setActiveTab('overview')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
-            activeTab === 'overview' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
-          }`}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5">Início</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('agenda')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
             activeTab === 'agenda' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
@@ -1697,14 +1673,6 @@ export default function Dashboard() {
             <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
           </div>
           <span className="text-[10px] mt-0.5">WhatsApp</span>
-        </button>
-
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center justify-center flex-1 py-1 transition text-slate-500 hover:text-slate-900 font-medium"
-        >
-          <Settings className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5">Mais</span>
         </button>
       </nav>
 
