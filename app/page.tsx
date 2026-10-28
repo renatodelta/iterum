@@ -824,10 +824,10 @@ export default function Dashboard() {
       ========================================================================= */}
       <aside className="hidden lg:flex w-72 border-r border-slate-200/80 bg-white flex-col justify-between shrink-0 z-30 shadow-xs">
         <div>
-          {/* LOGO & SUITE */}
+          {/* LOGO & MARCA */}
           <div className="p-4.5 flex items-center justify-between border-b border-slate-100 bg-white">
             <div className="flex items-center space-x-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-100 shadow-md shadow-emerald-900/5 p-1 flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-emerald-100 shadow-md shadow-emerald-900/5 p-1.5 flex items-center justify-center shrink-0">
                 <img
                   src="/iterum-logo.jpg"
                   alt="Iterum"
@@ -835,13 +835,7 @@ export default function Dashboard() {
                 />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-black tracking-tight text-[#1e293b] leading-tight">Iterum</h1>
-                <span className="text-[11px] font-extrabold text-[#005a43] block tracking-wide truncate">
-                  Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium block truncate">
-                  {activeDoctor.specialty}
-                </span>
+                <h1 className="text-2xl font-black tracking-tight text-[#1e293b] leading-tight">Iterum</h1>
               </div>
             </div>
           </div>
@@ -910,7 +904,7 @@ export default function Dashboard() {
 
             {/* SEÇÃO GESTÃO */}
             <div className="pt-4 pb-1 px-4">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Acesso & Consultório</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Gestão</span>
             </div>
 
             <button
@@ -922,7 +916,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-3">
                 <UserCheck className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Usuários & Acessos</span>
+                <span>Usuários e Acessos</span>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                 {users.length}
@@ -937,7 +931,7 @@ export default function Dashboard() {
                 }`}
             >
               <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Perfil & Expediente</span>
+              <span>Perfil e Expediente</span>
             </button>
           </nav>
         </div>
@@ -964,13 +958,7 @@ export default function Dashboard() {
                     />
                   </div>
                   <div>
-                    <h1 className="text-base font-extrabold tracking-tight text-slate-900 leading-tight">Iterum</h1>
-                    <span className="text-[11px] font-extrabold text-[#005a43] block mt-0.5 truncate">
-                      Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-medium block truncate">
-                      {activeDoctor.specialty}
-                    </span>
+                    <h1 className="text-xl font-black tracking-tight text-slate-900 leading-tight">Iterum</h1>
                   </div>
                 </div>
                 <button
@@ -1057,7 +1045,7 @@ export default function Dashboard() {
                 </button>
 
                 <div className="pt-4 pb-1 px-4">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Acesso & Consultório</span>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Gestão</span>
                 </div>
 
                 <button
@@ -1121,10 +1109,7 @@ export default function Dashboard() {
                     <img src="/iterum-logo.jpg" alt="Iterum" className="w-full h-full object-contain" />
                   </div>
                   <div>
-                    <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">Iterum</span>
-                    <span className="text-[10px] text-[#005a43] font-bold tracking-tight block truncate max-w-[160px]">
-                      Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
-                    </span>
+                    <span className="font-black text-sm text-slate-900 tracking-tight leading-none block">Iterum</span>
                   </div>
                 </div>
               </div>
@@ -1471,7 +1456,7 @@ export default function Dashboard() {
                 <div>
                   <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                     <MessageSquare className="w-5 h-5 text-emerald-600" />
-                    WhatsApp & Automação de Lembretes
+                    WhatsApp e Automação de Lembretes
                   </h2>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
                     Integração Oficial Meta Cloud API (v26.0) • Disparos automáticos e interativos
@@ -1729,9 +1714,9 @@ export default function Dashboard() {
                 <table className="w-full text-left text-sm border-separate border-spacing-0">
                   <thead className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-200 sticky top-0 z-10">
                     <tr>
-                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Usuário & Login</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Usuário e Login</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Especialidade / Função</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Contato & CPF</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Contato e CPF</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Permissões de Acesso</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Status</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs text-right border-b border-slate-200">Ações</th>
@@ -2505,7 +2490,7 @@ export default function Dashboard() {
               {/* BLOCO 1: DADOS PESSOAIS E PROFISSIONAIS */}
               <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                 <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
-                  1. Perfil & Identificação do Usuário
+                  1. Perfil e Identificação do Usuário
                 </span>
 
                 {/* SELETOR DE FUNÇÃO / PAPEL */}
