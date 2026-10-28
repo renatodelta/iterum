@@ -192,12 +192,6 @@ export default function AgendamentoOnlinePage() {
       return;
     }
 
-    const cleanCpf = patientCpf.replace(/\D/g, '');
-    if (!cleanCpf || cleanCpf.length !== 11) {
-      setSubmitError('Por favor, informe o CPF completo do paciente (11 dígitos) para o cadastro no sistema.');
-      return;
-    }
-
     if (!patientPhone.replace(/\D/g, '')) {
       setSubmitError('Por favor, informe o telefone de contato do paciente.');
       return;
@@ -577,16 +571,15 @@ export default function AgendamentoOnlinePage() {
               {/* CPF */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  CPF do Paciente * <span className="text-[11px] font-normal text-slate-500">(Obrigatório para o cadastro)</span>
+                  CPF do Paciente <span className="text-[11px] font-normal text-slate-500">(opcional)</span>
                 </label>
                 <div className="relative">
                   <CreditCard className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
-                    required
                     value={patientCpf}
                     onChange={(e) => setPatientCpf(formatCpfMask(e.target.value))}
-                    placeholder="000.000.000-00"
+                    placeholder="000.000.000-00 (opcional)"
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
                   />
                 </div>

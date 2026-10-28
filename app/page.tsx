@@ -67,6 +67,9 @@ import {
   EyeOff,
   KeyRound,
   Lock,
+  Cake,
+  MapPin,
+  Gift,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -98,6 +101,33 @@ function applyCPFMask(value: string): string {
   if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
   if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+function applyCepMask(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (!digits) return '';
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function isPatientBirthdayToday(birthDateStr?: string | null): boolean {
+  if (!birthDateStr) return false;
+  const now = new Date();
+  const tm = String(now.getMonth() + 1).padStart(2, '0');
+  const td = String(now.getDate()).padStart(2, '0');
+  if (birthDateStr.includes('-')) {
+    const parts = birthDateStr.split('-');
+    if (parts.length >= 3) {
+      return parts[1] === tm && parts[2]?.slice(0, 2) === td;
+    }
+  }
+  if (birthDateStr.includes('/')) {
+    const parts = birthDateStr.split('/');
+    if (parts.length >= 2) {
+      return parts[1] === tm && parts[0] === td;
+    }
+  }
+  return false;
 }
 
 function calculateAge(birthDateStr?: string | null): string {
@@ -191,7 +221,18 @@ export default function Dashboard() {
   const [patCpf, setPatCpf] = useState('');
   const [patEmail, setPatEmail] = useState('');
   const [patBirthDate, setPatBirthDate] = useState('');
+  const [patCep, setPatCep] = useState('');
+  const [patStreet, setPatStreet] = useState('');
+  const [patNumber, setPatNumber] = useState('');
+  const [patNeighborhood, setPatNeighborhood] = useState('');
+  const [patCity, setPatCity] = useState('');
   const [patNotes, setPatNotes] = useState('');
+  const [loadingCep, setLoadingCep] = useState(false);
+
+  // Aniversariantes do Dia
+  const [birthdayCount, setBirthdayCount] = useState<number>(0);
+  const [birthdaySending, setBirthdaySending] = useState(false);
+  const [birthdayNotice, setBirthdayNotice] = useState<string | null>(null);
 
   // Cadastro de Usuários & Controle de Permissões State
   const [users, setUsers] = useState<any[]>([]);
@@ -269,6 +310,13 @@ export default function Dashboard() {
       if (data.patients) {
         setPatients(data.patients);
       }
+      // Consultar contagem de aniversariantes de hoje
+      fetch('/api/patients/cron-birthday')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) setBirthdayCount(d.totalBirthdayCount || 0);
+        })
+        .catch(() => {});
     } catch (err) {
       console.error('Erro ao carregar pacientes:', err);
     } finally {
@@ -358,6 +406,51 @@ export default function Dashboard() {
     setShowModalNewAppt(true);
   }
 
+  // Consulta automática de CEP via ViaCEP
+  async function handleCepChange(value: string) {
+    const formatted = applyCepMask(value);
+    setPatCep(formatted);
+    const clean = value.replace(/\D/g, '');
+    if (clean.length === 8) {
+      setLoadingCep(true);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          if (data.logradouro) setPatStreet(data.logradouro);
+          if (data.bairro) setPatNeighborhood(data.bairro);
+          if (data.localidade) setPatCity(`${data.localidade} - ${data.uf}`);
+        } else {
+          alert('CEP não localizado nos Correios. Por favor, preencha o endereço manualmente.');
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar ViaCEP:', err);
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  }
+
+  // Disparo manual de felicitações de aniversário via WhatsApp
+  async function handleTriggerBirthdayMessages() {
+    setBirthdaySending(true);
+    setBirthdayNotice(null);
+    try {
+      const res = await fetch('/api/patients/cron-birthday', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setBirthdayNotice(data.message || 'Mensagens de aniversário enviadas com sucesso!');
+        fetchPatients();
+      } else {
+        alert(data.error || 'Erro ao enviar mensagens de aniversário.');
+      }
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    } finally {
+      setBirthdaySending(false);
+    }
+  }
+
   // Ações de Pacientes
   function handleOpenPatientModal(patToEdit?: any) {
     if (patToEdit) {
@@ -367,6 +460,11 @@ export default function Dashboard() {
       setPatCpf(patToEdit.cpf || '');
       setPatEmail(patToEdit.email || '');
       setPatBirthDate(patToEdit.birthDate || '');
+      setPatCep(patToEdit.cep || '');
+      setPatStreet(patToEdit.street || '');
+      setPatNumber(patToEdit.number || '');
+      setPatNeighborhood(patToEdit.neighborhood || '');
+      setPatCity(patToEdit.city || '');
       setPatNotes(patToEdit.notes || '');
     } else {
       setEditingPatient(null);
@@ -375,6 +473,11 @@ export default function Dashboard() {
       setPatCpf('');
       setPatEmail('');
       setPatBirthDate('');
+      setPatCep('');
+      setPatStreet('');
+      setPatNumber('');
+      setPatNeighborhood('');
+      setPatCity('');
       setPatNotes('');
     }
     setShowModalPatient(true);
@@ -382,15 +485,29 @@ export default function Dashboard() {
 
   async function handleSavePatient(e: React.FormEvent) {
     e.preventDefault();
+    if (!patName.trim()) {
+      alert('Por favor, informe o Nome Completo do paciente.');
+      return;
+    }
+    if (!patPhone.trim()) {
+      alert('Por favor, informe o Telefone (WhatsApp) do paciente.');
+      return;
+    }
+
     try {
       const payload = {
         id: editingPatient?.id,
-        name: patName,
-        phone: patPhone,
-        cpf: patCpf,
-        email: patEmail,
-        birthDate: patBirthDate,
-        notes: patNotes,
+        name: patName.trim(),
+        phone: patPhone.trim(),
+        cpf: patCpf.trim() || null,
+        email: patEmail.trim().toLowerCase() || null,
+        birthDate: patBirthDate.trim() || null,
+        cep: patCep.trim() || null,
+        street: patStreet.trim() || null,
+        number: patNumber.trim() || null,
+        neighborhood: patNeighborhood.trim() || null,
+        city: patCity.trim() || null,
+        notes: patNotes.trim() || null,
       };
 
       const method = editingPatient ? 'PUT' : 'POST';
@@ -1275,6 +1392,67 @@ export default function Dashboard() {
                 </button>
               </div>
 
+              {/* CARD / BANNER DE ANIVERSARIANTES DO DIA */}
+              <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-rose-50/50 to-orange-50 border border-amber-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                    <Cake className="w-5 h-5 animate-bounce" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 text-sm">Aniversariantes do Dia</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-black ${birthdayCount > 0 ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-200 text-slate-600'}`}>
+                        {birthdayCount} {birthdayCount === 1 ? 'paciente' : 'pacientes'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {birthdayCount > 0
+                        ? 'Parabenize seus pacientes hoje e reforce o cuidado com a saúde deles via WhatsApp.'
+                        : 'Nenhum paciente fazendo aniversário na data de hoje.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTriggerBirthdayMessages}
+                  disabled={birthdaySending || birthdayCount === 0}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-sm shrink-0 ${
+                    birthdayCount > 0
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-95'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  {birthdaySending ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Enviando mensagens...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Enviar Parabéns no WhatsApp</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {birthdayNotice && (
+                <div className="mt-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{birthdayNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBirthdayNotice(null)}
+                    className="text-emerald-700 hover:text-emerald-900 p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
               <div className="md:hidden flex-1 overflow-y-auto space-y-3 mt-3.5">
                 {patients.length === 0 ? (
@@ -1288,9 +1466,17 @@ export default function Dashboard() {
                             {getInitials(p.name)}
                           </div>
                           <div>
-                            <div className="font-extrabold text-slate-900 text-base leading-tight">{p.name}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-slate-900 text-base leading-tight">{p.name}</span>
+                              {isPatientBirthdayToday(p.birthDate) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                  <Cake className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  Hoje! 🎉
+                                </span>
+                              )}
+                            </div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">
-                              {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'Sem CPF'} • {p.birthDate ? calculateAge(p.birthDate) : 'Idade N/D'}
+                              {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'Sem CPF'} • {p.birthDate ? `${p.birthDate.split('-').reverse().join('/')} (${calculateAge(p.birthDate)})` : 'Idade N/D'}
                             </div>
                           </div>
                         </div>
@@ -1312,6 +1498,22 @@ export default function Dashboard() {
                           </button>
                         </div>
                       </div>
+
+                      {/* ENDEREÇO NO MOBILE */}
+                      {(p.street || p.neighborhood || p.city || p.cep) && (
+                        <div className="flex items-start gap-1.5 text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200/70">
+                          <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                          <div className="leading-snug">
+                            <span className="font-semibold text-slate-800">
+                              {p.street ? `${p.street}${p.number ? `, ${p.number}` : ''}` : ''}
+                            </span>
+                            <span className="text-slate-500">
+                              {[p.neighborhood, p.city].filter(Boolean).length > 0 && ` • ${[p.neighborhood, p.city].filter(Boolean).join(' - ')}`}
+                              {p.cep && ` (CEP: ${p.cep})`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
                         <a
@@ -1345,7 +1547,8 @@ export default function Dashboard() {
                     <tr>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Paciente / CPF</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Contato</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Idade</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs">Nascimento / Idade</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs">Endereço</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Consultas</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Observações</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs text-right">Ações</th>
@@ -1360,7 +1563,15 @@ export default function Dashboard() {
                               {getInitials(p.name)}
                             </div>
                             <div>
-                              <div className="font-bold text-slate-900 text-sm">{p.name}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 text-sm">{p.name}</span>
+                                {isPatientBirthdayToday(p.birthDate) && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                    <Cake className="w-3 h-3 text-amber-600 animate-pulse" />
+                                    Hoje! 🎉
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-xs text-slate-400 font-mono mt-0.5">
                                 {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'CPF não informado'}
                               </div>
@@ -1372,7 +1583,33 @@ export default function Dashboard() {
                           {p.email && <div className="text-xs text-slate-400 mt-0.5">{p.email}</div>}
                         </td>
                         <td className="p-3.5 font-medium text-slate-700 text-sm">
-                          {p.birthDate ? calculateAge(p.birthDate) : '—'}
+                          {p.birthDate ? (
+                            <div>
+                              <div className="font-bold text-slate-800 text-sm">
+                                {p.birthDate.split('-').reverse().join('/')}
+                              </div>
+                              <div className="text-xs text-slate-400 font-medium">
+                                {calculateAge(p.birthDate)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          {p.street || p.city || p.cep ? (
+                            <div className="max-w-[220px] text-xs leading-snug">
+                              <div className="font-semibold text-slate-800 truncate" title={`${p.street || ''}${p.number ? `, ${p.number}` : ''}`}>
+                                {p.street ? `${p.street}${p.number ? `, ${p.number}` : ''}` : 'Endereço s/ rua'}
+                              </div>
+                              <div className="text-slate-500 truncate" title={`${[p.neighborhood, p.city].filter(Boolean).join(' - ')} ${p.cep ? `CEP: ${p.cep}` : ''}`}>
+                                {[p.neighborhood, p.city].filter(Boolean).join(' - ')}
+                                {p.cep ? ` • CEP ${p.cep}` : ''}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-300">Não informado</span>
+                          )}
                         </td>
                         <td className="p-3.5">
                           <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -2369,69 +2606,197 @@ export default function Dashboard() {
           6. MODAL: NOVO / EDITAR PACIENTE
       ========================================================================= */}
       {showModalPatient && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <Contact className="w-4 h-4 text-teal-600" />
-                {editingPatient ? 'Editar Paciente' : 'Novo Cadastro de Paciente'}
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <Contact className="w-5 h-5 text-[#005a43]" />
+                {editingPatient ? 'Editar Ficha do Paciente' : 'Novo Cadastro de Paciente'}
               </h3>
-              <button onClick={() => setShowModalPatient(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+              <button
+                onClick={() => setShowModalPatient(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSavePatient} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Nome Completo *</label>
-                <input
-                  type="text"
-                  required
-                  value={patName}
-                  onChange={(e) => setPatName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                />
-              </div>
+            <form onSubmit={handleSavePatient} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+              {/* BLOCO 1: DADOS OBRIGATÓRIOS E PESSOAIS */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
+                  1. Identificação do Paciente
+                </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Telefone (WhatsApp) *</label>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Nome Completo <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
-                    value={patPhone}
-                    onChange={(e) => setPatPhone(applyPhoneMask(e.target.value))}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-mono font-medium"
+                    value={patName}
+                    onChange={(e) => setPatName(e.target.value)}
+                    placeholder="Ex: Carlos Eduardo de Oliveira"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                   />
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">CPF</label>
-                  <input
-                    type="text"
-                    value={patCpf}
-                    onChange={(e) => setPatCpf(applyCPFMask(e.target.value))}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-mono font-medium"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Telefone (WhatsApp) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={patPhone}
+                      onChange={(e) => setPatPhone(applyPhoneMask(e.target.value))}
+                      placeholder="(11) 99999-9999"
+                      maxLength={15}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Recebe confirmações e lembretes automáticos.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Data de Nascimento 🎂
+                    </label>
+                    <input
+                      type="date"
+                      value={patBirthDate}
+                      onChange={(e) => setPatBirthDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                    <span className="text-[10px] text-emerald-700 font-medium mt-0.5 block">
+                      Usado para disparo de parabéns no WhatsApp.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      CPF <span className="text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={patCpf}
+                      onChange={(e) => setPatCpf(applyCPFMask(e.target.value))}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      E-mail <span className="text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={patEmail}
+                      onChange={(e) => setPatEmail(e.target.value)}
+                      placeholder="paciente@email.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">E-mail</label>
-                <input
-                  type="email"
-                  value={patEmail}
-                  onChange={(e) => setPatEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                />
+              {/* BLOCO 2: ENDEREÇO COM CONSULTA AUTOMÁTICA DE CEP */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
+                    2. Endereço Residencial
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Busca Automática via CEP
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">CEP</label>
+                      {loadingCep && (
+                        <span className="text-[10px] font-bold text-[#005a43] animate-pulse">
+                          Buscando...
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={patCep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      placeholder="00000-000"
+                      maxLength={9}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Rua / Logradouro</label>
+                    <input
+                      type="text"
+                      value={patStreet}
+                      onChange={(e) => setPatStreet(e.target.value)}
+                      placeholder="Ex: Av. Paulista ou Rua das Flores"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Número</label>
+                    <input
+                      type="text"
+                      value={patNumber}
+                      onChange={(e) => setPatNumber(e.target.value)}
+                      placeholder="Ex: 120 ou S/N"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bairro</label>
+                    <input
+                      type="text"
+                      value={patNeighborhood}
+                      onChange={(e) => setPatNeighborhood(e.target.value)}
+                      placeholder="Ex: Jardins, Centro..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Cidade / UF</label>
+                    <input
+                      type="text"
+                      value={patCity}
+                      onChange={(e) => setPatCity(e.target.value)}
+                      placeholder="Ex: São Paulo - SP"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+                </div>
               </div>
 
+              {/* BLOCO 3: OBSERVAÇÕES */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Observações / Alergias</label>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Observações Clínicas / Preferências <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
                 <textarea
                   rows={2}
                   value={patNotes}
                   onChange={(e) => setPatNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
+                  placeholder="Ex: Alergias, histórico familiar ou observações relevantes..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                 />
               </div>
 
@@ -2439,15 +2804,16 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setShowModalPatient(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs"
+                  className="px-5 py-2.5 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl font-bold shadow-md shadow-[#005a43]/20 transition active:scale-95 flex items-center gap-2"
                 >
-                  Salvar Paciente
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Paciente</span>
                 </button>
               </div>
             </form>
