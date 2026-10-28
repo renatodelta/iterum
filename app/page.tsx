@@ -575,7 +575,7 @@ export default function Dashboard() {
               email: userEmail.trim().toLowerCase(),
               phone: userPhone.trim(),
             }),
-          }).then(() => fetchData()).catch(() => {});
+          }).then(() => fetchData()).catch(() => { });
         }
       } else {
         alert(data.error || 'Erro ao salvar usuário.');
@@ -850,20 +850,18 @@ export default function Dashboard() {
           <nav className="px-3 space-y-1.5 mt-3">
             <button
               onClick={() => setActiveTab('agenda')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'agenda'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'agenda'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-[#059669]' : 'text-slate-400'}`} />
                 <span>Agenda</span>
               </div>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                  activeTab === 'agenda' ? 'bg-[#005a43] text-white' : 'bg-[#e8f7f0] text-[#00875a]'
-                }`}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${activeTab === 'agenda' ? 'bg-[#005a43] text-white' : 'bg-[#e8f7f0] text-[#00875a]'
+                  }`}
               >
                 {appointments.length}
               </span>
@@ -871,11 +869,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('patients')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'patients'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'patients'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <Users className={`w-5 h-5 ${activeTab === 'patients' ? 'text-[#059669]' : 'text-slate-400'}`} />
               <span>Cadastro de Pacientes</span>
@@ -883,11 +880,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('fila')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'fila'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'fila'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <Inbox className={`w-5 h-5 ${activeTab === 'fila' ? 'text-[#059669]' : 'text-slate-400'}`} />
@@ -898,11 +894,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('whatsapp')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'whatsapp'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'whatsapp'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <MessageSquare className={`w-5 h-5 ${activeTab === 'whatsapp' ? 'text-[#059669]' : 'text-slate-400'}`} />
@@ -920,11 +915,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('users')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'users'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'users'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <UserCheck className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
@@ -937,11 +931,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'settings'
-                  ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'settings'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
             >
               <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
               <span>Perfil & Expediente</span>
@@ -996,20 +989,18 @@ export default function Dashboard() {
                     setActiveTab('agenda');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition ${
-                    activeTab === 'agenda'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition ${activeTab === 'agenda'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-teal-400' : 'text-slate-500'}`} />
                     <span>Agenda</span>
                   </div>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
-                      activeTab === 'agenda' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-700'
-                    }`}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${activeTab === 'agenda' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-700'
+                      }`}
                   >
                     {appointments.length}
                   </span>
@@ -1020,11 +1011,10 @@ export default function Dashboard() {
                     setActiveTab('patients');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${
-                    activeTab === 'patients'
-                      ? 'bg-slate-900 text-white shadow-md font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'patients'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <Users className="w-5 h-5 text-slate-500" />
                   <span>Cadastro de Pacientes</span>
@@ -1035,11 +1025,10 @@ export default function Dashboard() {
                     setActiveTab('fila');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${
-                    activeTab === 'fila'
-                      ? 'bg-slate-900 text-white shadow-md font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'fila'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <Inbox className="w-5 h-5 text-slate-500" />
@@ -1053,11 +1042,10 @@ export default function Dashboard() {
                     setActiveTab('whatsapp');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${
-                    activeTab === 'whatsapp'
-                      ? 'bg-slate-900 text-white shadow-md font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'whatsapp'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <MessageSquare className="w-5 h-5 text-slate-500" />
@@ -1077,15 +1065,14 @@ export default function Dashboard() {
                     setActiveTab('users');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${
-                    activeTab === 'users'
-                      ? 'bg-slate-900 text-white shadow-md font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'users'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <UserCheck className="w-5 h-5 text-slate-500" />
-                    <span>Usuários & Acessos</span>
+                    <span>Usuários e Acessos</span>
                   </div>
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                     {users.length}
@@ -1097,11 +1084,10 @@ export default function Dashboard() {
                     setActiveTab('settings');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${
-                    activeTab === 'settings'
-                      ? 'bg-slate-900 text-white shadow-md font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'settings'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                 >
                   <Settings className="w-5 h-5 text-slate-500" />
                   <span>Perfil & Expediente</span>
@@ -1121,77 +1107,76 @@ export default function Dashboard() {
         ========================================================================= */}
         {activeTab !== 'agenda' && (
           <header className="lg:hidden bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-3 py-2.5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <button
-                onClick={() => setMobileMenuOpen(true)}
-                className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
-                aria-label="Abrir menu"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-white border border-emerald-100 p-0.5 flex items-center justify-center shadow-xs">
-                  <img src="/iterum-logo.jpg" alt="Iterum" className="w-full h-full object-contain" />
+                <button
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                  aria-label="Abrir menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white border border-emerald-100 p-0.5 flex items-center justify-center shadow-xs">
+                    <img src="/iterum-logo.jpg" alt="Iterum" className="w-full h-full object-contain" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">Iterum</span>
+                    <span className="text-[10px] text-[#005a43] font-bold tracking-tight block truncate max-w-[160px]">
+                      Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">Iterum</span>
-                  <span className="text-[10px] text-[#005a43] font-bold tracking-tight block truncate max-w-[160px]">
-                    Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
-                  </span>
-                </div>
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+                  className={`p-2 rounded-xl transition ${mobileSearchOpen ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  aria-label="Buscar"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setNewApptTime('');
+                    setShowModalNewAppt(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shadow-xs active:scale-95 transition"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Novo</span>
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5">
-              <button
-                onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                className={`p-2 rounded-xl transition ${
-                  mobileSearchOpen ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-                aria-label="Buscar"
-              >
-                <Search className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setNewApptTime('');
-                  setShowModalNewAppt(true);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shadow-xs active:scale-95 transition"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Novo</span>
-              </button>
-            </div>
-          </div>
-
-          {/* BUSCA EXPANSÍVEL NO MOBILE */}
-          {mobileSearchOpen && (
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Buscar paciente, CPF ou procedimento..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-100 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 border border-slate-200 transition"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+            {/* BUSCA EXPANSÍVEL NO MOBILE */}
+            {mobileSearchOpen && (
+              <div className="mt-2.5 pt-2 border-t border-slate-100">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar paciente, CPF ou procedimento..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoFocus
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-100 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 border border-slate-200 transition"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </header>
+            )}
+          </header>
         )}
 
         {/* HEADER SUPERIOR DESKTOP (ESTILO CAREHUB) */}
@@ -1442,7 +1427,7 @@ export default function Dashboard() {
               <div className="pb-3 sm:pb-4 border-b border-slate-100">
                 <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                   <Inbox className="w-5 h-5 text-sky-600" />
-                  Fila de Espera & Encaixes Inteligentes
+                  Fila de Espera e Encaixes Inteligentes
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
                   Pacientes aguardando antecipação de horário com disparo automático via WhatsApp
@@ -1552,7 +1537,7 @@ export default function Dashboard() {
               <div className="pb-3.5 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Cadastro de Usuários & Acessos</h2>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Cadastro de Usuários e Acessos</h2>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-[#005a43] uppercase tracking-wide">
                       Perfil Único
                     </span>
@@ -1650,11 +1635,10 @@ export default function Dashboard() {
                     return (
                       <div
                         key={u.id}
-                        className={`p-4 rounded-2xl border space-y-3 transition ${
-                          isDoctor
-                            ? 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white border-emerald-300 shadow-xs ring-1 ring-emerald-300/50'
-                            : 'bg-slate-50/80 border-slate-200/80'
-                        }`}
+                        className={`p-4 rounded-2xl border space-y-3 transition ${isDoctor
+                          ? 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white border-emerald-300 shadow-xs ring-1 ring-emerald-300/50'
+                          : 'bg-slate-50/80 border-slate-200/80'
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -1682,11 +1666,10 @@ export default function Dashboard() {
                           </div>
                           <button
                             onClick={() => handleToggleUserStatus(u)}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
-                              u.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${u.status === 'ACTIVE'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-200 text-slate-600'
+                              }`}
                           >
                             {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
                           </button>
@@ -1773,9 +1756,8 @@ export default function Dashboard() {
                         return (
                           <tr
                             key={u.id}
-                            className={`transition ${
-                              isDoctor ? 'bg-emerald-50/50 hover:bg-emerald-50/80 font-medium' : 'hover:bg-slate-50/80'
-                            }`}
+                            className={`transition ${isDoctor ? 'bg-emerald-50/50 hover:bg-emerald-50/80 font-medium' : 'hover:bg-slate-50/80'
+                              }`}
                           >
                             <td className="p-3.5">
                               <div className="flex items-center gap-2">
@@ -1835,11 +1817,10 @@ export default function Dashboard() {
                             <td className="p-3.5">
                               <button
                                 onClick={() => handleToggleUserStatus(u)}
-                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition ${
-                                  u.status === 'ACTIVE'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                                }`}
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition ${u.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                                  }`}
                               >
                                 {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
                               </button>
@@ -1878,7 +1859,7 @@ export default function Dashboard() {
                 <div>
                   <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                     <Stethoscope className="w-5 h-5 text-[#005a43]" />
-                    Perfil Único do Médico & Configurações
+                    Perfil Único do Médico e Configurações
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
                     Defina o médico responsável pela agenda, especialidade, CRM e regras de expediente
@@ -2035,9 +2016,8 @@ export default function Dashboard() {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#e5efe9] z-40 px-2 py-1.5 flex items-center justify-around shadow-lg pb-safe">
         <button
           onClick={() => setActiveTab('agenda')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
-            activeTab === 'agenda' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${activeTab === 'agenda' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
+            }`}
         >
           <div className="relative">
             <CalendarIcon className="w-5 h-5" />
@@ -2052,9 +2032,8 @@ export default function Dashboard() {
 
         <button
           onClick={() => setActiveTab('patients')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
-            activeTab === 'patients' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${activeTab === 'patients' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
+            }`}
         >
           <Users className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Pacientes</span>
@@ -2062,9 +2041,8 @@ export default function Dashboard() {
 
         <button
           onClick={() => setActiveTab('fila')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
-            activeTab === 'fila' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${activeTab === 'fila' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+            }`}
         >
           <div className="relative">
             <Inbox className="w-5 h-5" />
@@ -2075,9 +2053,8 @@ export default function Dashboard() {
 
         <button
           onClick={() => setActiveTab('whatsapp')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
-            activeTab === 'whatsapp' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${activeTab === 'whatsapp' ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-900 font-medium'
+            }`}
         >
           <div className="relative">
             <MessageSquare className="w-5 h-5" />
@@ -2089,17 +2066,17 @@ export default function Dashboard() {
 
       {/* FAB: NOVA CONSULTA (MOBILE) */}
       {activeTab !== 'agenda' && (
-      <button
-        onClick={() => {
-          setNewApptTime('');
-          setShowModalNewAppt(true);
-        }}
-        className="lg:hidden fixed right-4 bottom-20 z-40 bg-slate-900 hover:bg-slate-800 text-white rounded-full p-3.5 shadow-xl shadow-slate-900/30 flex items-center gap-1.5 font-bold text-xs active:scale-95 transition"
-        aria-label="Nova Consulta"
-      >
-        <Plus className="w-4 h-4 stroke-[2.5]" />
-        <span className="pr-1">Consulta</span>
-      </button>
+        <button
+          onClick={() => {
+            setNewApptTime('');
+            setShowModalNewAppt(true);
+          }}
+          className="lg:hidden fixed right-4 bottom-20 z-40 bg-slate-900 hover:bg-slate-800 text-white rounded-full p-3.5 shadow-xl shadow-slate-900/30 flex items-center gap-1.5 font-bold text-xs active:scale-95 transition"
+          aria-label="Nova Consulta"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <span className="pr-1">Consulta</span>
+        </button>
       )}
 
       {/* MODAL / BOTTOM SHEET MOBILE DE FILTROS & CALENDÁRIO */}
@@ -2172,15 +2149,14 @@ export default function Dashboard() {
                         setSelectedDate(item.dateObj);
                         setMobileFiltersOpen(false);
                       }}
-                      className={`h-7 w-7 mx-auto rounded-xl flex items-center justify-center text-xs font-semibold transition ${
-                        isSelected
-                          ? 'bg-slate-900 text-white font-bold shadow-xs'
-                          : isToday
+                      className={`h-7 w-7 mx-auto rounded-xl flex items-center justify-center text-xs font-semibold transition ${isSelected
+                        ? 'bg-slate-900 text-white font-bold shadow-xs'
+                        : isToday
                           ? 'border border-teal-500 text-teal-700 font-bold'
                           : item.inMonth
-                          ? 'text-slate-800 hover:bg-slate-200'
-                          : 'text-slate-300'
-                      }`}
+                            ? 'text-slate-800 hover:bg-slate-200'
+                            : 'text-slate-300'
+                        }`}
                     >
                       {item.dayNumber}
                     </button>
@@ -2508,7 +2484,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base leading-tight">
-                    {editingUser ? 'Editar Usuário & Permissões' : 'Cadastrar Novo Usuário'}
+                    {editingUser ? 'Editar Usuário e Permissões' : 'Cadastrar Novo Usuário'}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
                     Preencha os dados e defina o que o operador poderá fazer no aplicativo do médico
@@ -2546,11 +2522,10 @@ export default function Dashboard() {
                         if (!userCrm) setUserCrm('CRM/SP 148.910');
                         applyPermissionPreset('all');
                       }}
-                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
-                        userRole === 'MEDICO'
-                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${userRole === 'MEDICO'
+                        ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 font-black text-xs">
                         <span>⭐</span>
@@ -2568,11 +2543,10 @@ export default function Dashboard() {
                         if (userSpecialty === 'Pediatria') setUserSpecialty('Secretária Executiva');
                         applyPermissionPreset('secretary');
                       }}
-                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
-                        userRole === 'SECRETARIA'
-                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${userRole === 'SECRETARIA'
+                        ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 font-bold text-xs">
                         <span>📋</span>
@@ -2589,11 +2563,10 @@ export default function Dashboard() {
                         setUserRole('ADMIN');
                         applyPermissionPreset('all');
                       }}
-                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
-                        userRole === 'ADMIN'
-                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${userRole === 'ADMIN'
+                        ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 font-bold text-xs">
                         <span>🛡️</span>
@@ -2825,22 +2798,20 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setUserStatus('ACTIVE')}
-                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
-                        userStatus === 'ACTIVE'
-                          ? 'bg-emerald-100 text-[#005a43] border border-emerald-300'
-                          : 'bg-white border border-slate-200 text-slate-600'
-                      }`}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${userStatus === 'ACTIVE'
+                        ? 'bg-emerald-100 text-[#005a43] border border-emerald-300'
+                        : 'bg-white border border-slate-200 text-slate-600'
+                        }`}
                     >
                       ✓ Ativo
                     </button>
                     <button
                       type="button"
                       onClick={() => setUserStatus('INACTIVE')}
-                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
-                        userStatus === 'INACTIVE'
-                          ? 'bg-slate-200 text-slate-800 border border-slate-300'
-                          : 'bg-white border border-slate-200 text-slate-500'
-                      }`}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${userStatus === 'INACTIVE'
+                        ? 'bg-slate-200 text-slate-800 border border-slate-300'
+                        : 'bg-white border border-slate-200 text-slate-500'
+                        }`}
                     >
                       Inativo
                     </button>
@@ -2905,23 +2876,21 @@ export default function Dashboard() {
                       <div
                         key={perm.id}
                         onClick={() => togglePermission(perm.id)}
-                        className={`p-3 rounded-xl border cursor-pointer transition select-none flex items-start gap-2.5 ${
-                          isChecked
-                            ? 'bg-white border-[#005a43] shadow-xs'
-                            : 'bg-white/60 border-slate-200 hover:border-slate-300 opacity-80'
-                        }`}
+                        className={`p-3 rounded-xl border cursor-pointer transition select-none flex items-start gap-2.5 ${isChecked
+                          ? 'bg-white border-[#005a43] shadow-xs'
+                          : 'bg-white/60 border-slate-200 hover:border-slate-300 opacity-80'
+                          }`}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => {}}
+                          onChange={() => { }}
                           className="mt-0.5 w-4 h-4 rounded text-[#005a43] focus:ring-[#005a43] border-slate-300"
                         />
                         <div className="flex-1 min-w-0">
                           <span
-                            className={`font-bold text-xs block ${
-                              isChecked ? 'text-slate-900' : 'text-slate-700'
-                            }`}
+                            className={`font-bold text-xs block ${isChecked ? 'text-slate-900' : 'text-slate-700'
+                              }`}
                           >
                             {perm.label}
                           </span>
