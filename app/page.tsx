@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import CareHubDashboard from '@/components/dashboard/CareHubDashboard';
 import GoogleCalendarView, { AgendaViewMode } from '@/components/calendar/GoogleCalendarView';
 import {
+  USER_PERMISSIONS,
+  generateAutoLogin,
+  formatCPF,
+  formatPhone,
+} from '@/lib/userPermissions';
+import {
   Calendar as CalendarIcon,
   LayoutDashboard,
   Bell,
@@ -57,6 +63,10 @@ import {
   Megaphone,
   Menu,
   SlidersHorizontal,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -183,7 +193,7 @@ export default function Dashboard() {
   const [patBirthDate, setPatBirthDate] = useState('');
   const [patNotes, setPatNotes] = useState('');
 
-  // Cadastro de Usuários State
+  // Cadastro de Usuários & Controle de Permissões State
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [userSearch, setUserSearch] = useState('');
@@ -191,13 +201,19 @@ export default function Dashboard() {
   const [showModalUser, setShowModalUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
 
-  // Form de Usuário
+  // Form de Usuário (Perfil Único do Médico: Usuários são a equipe de apoio e secretárias)
   const [userName, setUserName] = useState('');
+  const [userSpecialty, setUserSpecialty] = useState('');
+  const [userCpf, setUserCpf] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
-  const [userRole, setUserRole] = useState<'MEDICO' | 'RECEPCIONISTA' | 'ADMIN'>('MEDICO');
-  const [userSpecialty, setUserSpecialty] = useState('');
+  const [userLogin, setUserLogin] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<'SECRETARIA' | 'ADMIN' | 'RECEPCIONISTA'>('SECRETARIA');
   const [userStatus, setUserStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isAutoLogin, setIsAutoLogin] = useState(true);
 
   // Atualizar relógio em tempo real
   useEffect(() => {
@@ -410,38 +426,119 @@ export default function Dashboard() {
     }
   }
 
-  // Ações de Usuário
+  // Ações de Usuário (Perfil Único do Médico: Gestão de Secretárias & Colaboradores)
   function handleOpenUserModal(userToEdit?: any) {
     if (userToEdit) {
       setEditingUser(userToEdit);
-      setUserName(userToEdit.name);
-      setUserEmail(userToEdit.email);
-      setUserPhone(userToEdit.phone || '');
-      setUserRole(userToEdit.role || 'MEDICO');
+      setUserName(userToEdit.name || '');
       setUserSpecialty(userToEdit.specialty || '');
+      setUserCpf(userToEdit.cpf || '');
+      setUserEmail(userToEdit.email || '');
+      setUserPhone(userToEdit.phone || '');
+      setUserLogin(userToEdit.login || '');
+      setUserPassword(userToEdit.password || '');
+      setUserRole(userToEdit.role || 'SECRETARIA');
+      setUserPermissions(Array.isArray(userToEdit.permissions) ? userToEdit.permissions : []);
       setUserStatus(userToEdit.status || 'ACTIVE');
+      setIsAutoLogin(false);
     } else {
       setEditingUser(null);
       setUserName('');
+      setUserSpecialty('Secretária / Recepção');
+      setUserCpf('');
       setUserEmail('');
       setUserPhone('');
-      setUserRole('MEDICO');
-      setUserSpecialty('');
+      setUserLogin('');
+      setUserPassword('Acesso@2026');
+      setUserRole('SECRETARIA');
+      // Preset padrão inicial: Secretária
+      setUserPermissions([
+        'visualizar_agenda',
+        'bloquear_horario',
+        'agendamento',
+        'desmarcacao',
+        'remarcacao',
+        'agendamento_extra',
+        'dados_paciente',
+      ]);
       setUserStatus('ACTIVE');
+      setIsAutoLogin(true);
     }
+    setShowPassword(false);
     setShowModalUser(true);
+  }
+
+  function handleNameChange(newName: string) {
+    setUserName(newName);
+    if (isAutoLogin || !editingUser) {
+      const generated = generateAutoLogin(newName, users, editingUser?.id);
+      setUserLogin(generated);
+    }
+  }
+
+  function handleRegenerateLogin() {
+    const generated = generateAutoLogin(userName, users, editingUser?.id);
+    setUserLogin(generated);
+    setIsAutoLogin(true);
+  }
+
+  function handleGeneratePassword() {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    setUserPassword(`Med@${randomNum}!`);
+    setShowPassword(true);
+  }
+
+  function applyPermissionPreset(preset: 'all' | 'secretary' | 'view_only' | 'none') {
+    if (preset === 'all') {
+      setUserPermissions(USER_PERMISSIONS.map((p) => p.id));
+    } else if (preset === 'secretary') {
+      setUserPermissions([
+        'visualizar_agenda',
+        'bloquear_horario',
+        'agendamento',
+        'desmarcacao',
+        'remarcacao',
+        'agendamento_extra',
+        'dados_paciente',
+      ]);
+    } else if (preset === 'view_only') {
+      setUserPermissions(['visualizar_agenda', 'dados_paciente']);
+    } else {
+      setUserPermissions([]);
+    }
+  }
+
+  function togglePermission(permId: string) {
+    setUserPermissions((prev) =>
+      prev.includes(permId) ? prev.filter((id) => id !== permId) : [...prev, permId]
+    );
   }
 
   async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
+    if (!userName.trim()) {
+      alert('Informe o Nome Completo.');
+      return;
+    }
+    if (!userEmail.trim()) {
+      alert('Informe o E-mail.');
+      return;
+    }
+
     try {
+      const finalLogin = userLogin.trim() || generateAutoLogin(userName, users, editingUser?.id);
+
       const payload = {
         id: editingUser?.id,
-        name: userName,
-        email: userEmail,
-        phone: userPhone,
+        name: userName.trim(),
+        specialty: userSpecialty.trim(),
+        cpf: userCpf.trim(),
+        email: userEmail.trim().toLowerCase(),
+        phone: userPhone.trim(),
+        login: finalLogin,
+        password: userPassword,
+        permissions: userPermissions,
         role: userRole,
-        specialty: userSpecialty,
         status: userStatus,
       };
 
@@ -465,7 +562,7 @@ export default function Dashboard() {
   }
 
   async function handleDeleteUser(id: string) {
-    if (!confirm('Deseja realmente remover este usuário?')) return;
+    if (!confirm('Deseja realmente remover o acesso deste usuário?')) return;
     try {
       const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -504,7 +601,12 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: clinic.name,
+          doctorName: clinic.doctorName,
           specialty: clinic.specialty,
+          crm: clinic.crm,
+          email: clinic.email,
+          phone: clinic.phone,
+          address: clinic.address,
           slotDurationMinutes: clinic.slotDurationMinutes,
           minCancelHours: clinic.minCancelHours,
           workingHours: clinic.workingHours,
@@ -512,7 +614,7 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Configurações salvas com sucesso!');
+        alert('Perfil do Médico e configurações do consultório salvos com sucesso!');
         setClinic(data.clinic);
       }
     } catch (e: any) {
@@ -520,17 +622,18 @@ export default function Dashboard() {
     }
   }
 
-  // Doctor Info para o Cabeçalho & Sidebar
+  // PERFIL ÚNICO DO MÉDICO RESPONSÁVEL (A agenda gerencia exclusivamente este médico)
   const activeDoctor = useMemo(() => {
-    const med = users.find((u) => u.role === 'MEDICO' && u.status === 'ACTIVE');
-    if (med) return med;
     return {
-      name: 'Dra. Beatriz Silva',
-      specialty: 'Cardiologia Geral e Exames Diagnósticos',
-      crm: 'CRM 48.910',
-      room: 'Sala 402',
+      name: clinic?.doctorName || clinic?.name || 'Dr. Renato Silva',
+      specialty: clinic?.specialty || 'Cardiologia e Clínica Geral',
+      crm: clinic?.crm || 'CRM/SP 148.910',
+      email: clinic?.email || 'contato@drrenatosilva.med.br',
+      phone: clinic?.phone || '(11) 98888-7777',
+      room: clinic?.address || 'Sala 402 • Bloco B',
+      address: clinic?.address || 'Av. Paulista, 1000 - Bela Vista, São Paulo - SP',
     };
-  }, [users]);
+  }, [clinic]);
 
   // Consultas do Dia Selecionado
   const selectedDayAppointments = useMemo(() => {
@@ -782,19 +885,24 @@ export default function Dashboard() {
 
             {/* SEÇÃO GESTÃO */}
             <div className="pt-4 pb-1 px-4">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Gestão Clínica</span>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Acesso & Consultório</span>
             </div>
 
             <button
               onClick={() => setActiveTab('users')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
                 activeTab === 'users'
                   ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
               }`}
             >
-              <Zap className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Equipe & Médicos</span>
+              <div className="flex items-center gap-3">
+                <UserCheck className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
+                <span>Usuários & Acessos</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {users.length}
+              </span>
             </button>
 
             <button
@@ -806,32 +914,39 @@ export default function Dashboard() {
               }`}
             >
               <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Configurações</span>
+              <span>Perfil & Expediente</span>
             </button>
           </nav>
         </div>
 
-        {/* PROFILE CARD INFERIOR */}
-        <div className="p-3.5 border-t border-slate-100 m-2.5 rounded-2xl bg-slate-50/80 border flex items-center justify-between">
+        {/* PROFILE CARD INFERIOR: PERFIL ÚNICO DO MÉDICO */}
+        <div className="p-3.5 border-t border-slate-100 m-2.5 rounded-2xl bg-gradient-to-br from-emerald-50/50 to-slate-50/90 border border-emerald-100/60 flex items-center justify-between shadow-2xs">
           <div className="flex items-center space-x-3 truncate">
-            <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-sm shrink-0 border border-teal-200">
+            <div className="w-10 h-10 rounded-2xl bg-[#005a43] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
               {getInitials(activeDoctor.name)}
             </div>
             <div className="truncate">
-              <span className="block text-sm font-bold text-slate-900 truncate leading-tight">
-                {activeDoctor.name}
-              </span>
-              <span className="text-xs text-slate-500 truncate block mt-0.5">
-                {activeDoctor.specialty?.split('•')[0] || 'Cardiologia'} • {activeDoctor.crm || 'CRM 48.910'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="block text-sm font-extrabold text-slate-900 truncate leading-tight">
+                  {activeDoctor.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded-md">
+                  Perfil Único
+                </span>
+                <span className="text-xs text-slate-500 truncate">
+                  {activeDoctor.crm || 'CRM Ativo'}
+                </span>
+              </div>
             </div>
           </div>
           <button
-            onClick={() => setActiveTab('users')}
-            className="p-1.5 text-slate-400 hover:text-slate-700 transition rounded-lg hover:bg-slate-200/50"
-            title="Alternar Profissional"
+            onClick={() => setActiveTab('settings')}
+            className="p-2 text-slate-400 hover:text-[#005a43] transition rounded-xl hover:bg-emerald-100/60"
+            title="Configurar Perfil do Médico"
           >
-            <ArrowUpDown className="w-4 h-4" />
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </aside>
@@ -963,7 +1078,7 @@ export default function Dashboard() {
                 </button>
 
                 <div className="pt-4 pb-1 px-4">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Gestão</span>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Acesso & Consultório</span>
                 </div>
 
                 <button
@@ -971,14 +1086,19 @@ export default function Dashboard() {
                     setActiveTab('users');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${
                     activeTab === 'users'
                       ? 'bg-slate-900 text-white shadow-md font-bold'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <Zap className="w-5 h-5 text-slate-500" />
-                  <span>Equipe Médica & Usuários</span>
+                  <div className="flex items-center gap-3">
+                    <UserCheck className="w-5 h-5 text-slate-500" />
+                    <span>Usuários & Acessos</span>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    {users.length}
+                  </span>
                 </button>
 
                 <button
@@ -993,25 +1113,37 @@ export default function Dashboard() {
                   }`}
                 >
                   <Settings className="w-5 h-5 text-slate-500" />
-                  <span>Configurações</span>
+                  <span>Perfil & Expediente</span>
                 </button>
               </nav>
             </div>
 
-            <div className="p-3.5 border-t border-slate-100 rounded-2xl bg-slate-50/80 border flex items-center justify-between mt-4">
+            <div
+              onClick={() => {
+                setActiveTab('settings');
+                setMobileMenuOpen(false);
+              }}
+              className="p-3.5 border-t border-slate-100 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-slate-50/90 border border-emerald-100/70 flex items-center justify-between mt-4 cursor-pointer"
+            >
               <div className="flex items-center space-x-3 truncate">
-                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-sm shrink-0 border border-teal-200">
+                <div className="w-10 h-10 rounded-2xl bg-[#005a43] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                   {getInitials(activeDoctor.name)}
                 </div>
                 <div className="truncate">
-                  <span className="block text-sm font-bold text-slate-900 truncate leading-tight">
+                  <span className="block text-sm font-extrabold text-slate-900 truncate leading-tight">
                     {activeDoctor.name}
                   </span>
-                  <span className="text-xs text-slate-500 truncate block mt-0.5">
-                    {activeDoctor.specialty?.split('•')[0] || 'Cardiologia'} • {activeDoctor.crm || 'CRM 48.910'}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
+                      Perfil Único
+                    </span>
+                    <span className="text-xs text-slate-500 truncate">
+                      {activeDoctor.crm || 'CRM Ativo'}
+                    </span>
+                  </div>
                 </div>
               </div>
+              <Settings className="w-4 h-4 text-emerald-800" />
             </div>
           </aside>
         </div>
@@ -1447,103 +1579,285 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
-              ABA: USUÁRIOS & MÉDICOS
+              ABA: USUÁRIOS & PERMISSÕES DE ACESSO (PERFIL ÚNICO DO MÉDICO)
           --------------------------------------------------------------------- */}
           {activeTab === 'users' && (
             <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 flex flex-col overflow-hidden">
+              {/* CABEÇALHO DA ABA */}
               <div className="pb-3.5 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Equipe Médica & Usuários</h2>
-                  <p className="text-sm text-slate-500 font-medium mt-0.5">Médicos, recepcionistas e administradores do consultório</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Cadastro de Usuários & Acessos</h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-[#005a43] uppercase tracking-wide">
+                      Perfil Único
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                    Cadastre secretárias, recepcionistas e colaboradores que gerenciam a agenda do médico
+                  </p>
                 </div>
                 <button
                   onClick={() => handleOpenUserModal()}
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-xs transition active:scale-95"
+                  className="px-4.5 py-2.5 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#005a43]/15 transition active:scale-95 flex items-center gap-2"
                 >
-                  + Cadastrar Usuário
+                  <UserPlus className="w-4 h-4" />
+                  <span>+ Cadastrar Usuário</span>
                 </button>
               </div>
 
-              {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
-              <div className="md:hidden flex-1 overflow-y-auto space-y-3 mt-3.5">
-                {users.map((u) => (
-                  <div key={u.id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-extrabold text-slate-900 text-base block">{u.name}</span>
-                        <span className="text-xs text-slate-500 font-medium block mt-0.5">{u.role} • {u.specialty || 'Geral'}</span>
-                      </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          u.status === 'ACTIVE'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-slate-200 text-slate-600'
-                        }`}
-                      >
-                        {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </div>
-                    <div className="text-xs font-mono text-slate-600 truncate">{u.email}</div>
-                    <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200/60">
-                      <button
-                        onClick={() => handleOpenUserModal(u)}
-                        className="py-1.5 px-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs hover:bg-slate-100"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="py-1.5 px-3.5 rounded-xl bg-white border border-rose-200 text-rose-600 text-xs font-bold shadow-2xs hover:bg-rose-50"
-                      >
-                        Excluir
-                      </button>
-                    </div>
+              {/* BANNER INFORMATIVO: CONTEXTO PERFIL ÚNICO */}
+              <div className="my-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-slate-50 border border-emerald-100/80 flex items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#005a43] text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Stethoscope className="w-5 h-5" />
                   </div>
-                ))}
+                  <div className="text-xs leading-relaxed text-slate-700">
+                    <span className="font-extrabold text-slate-900 block sm:inline">
+                      Agenda exclusiva do médico:{' '}
+                    </span>
+                    <strong className="text-[#005a43]">{activeDoctor.name}</strong> ({activeDoctor.specialty} • {activeDoctor.crm}).
+                    <span className="text-slate-500 block sm:inline sm:ml-1">
+                      Os usuários abaixo são operadores que possuem acesso ao sistema conforme as permissões concedidas.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-[#005a43] hover:bg-emerald-50 text-xs font-bold transition shadow-2xs"
+                >
+                  Ver Perfil do Médico
+                </button>
               </div>
 
-              {/* TABELA DE USUÁRIOS EM DESKTOP (>= md) */}
-              <div className="hidden md:block flex-1 overflow-y-auto mt-4">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-200 sticky top-0">
-                    <tr>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Profissional</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Função / Especialidade</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Contato</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Status</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-3.5 font-bold text-slate-900 text-sm">{u.name}</td>
-                        <td className="p-3.5">
-                          <span className="font-semibold text-slate-800 block text-sm">{u.role}</span>
-                          <span className="text-xs text-slate-400">{u.specialty || 'Geral'}</span>
-                        </td>
-                        <td className="p-3.5 font-mono text-slate-600 text-sm">{u.email}</td>
-                        <td className="p-3.5">
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {u.status}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right space-x-2">
+              {/* BARRA DE PESQUISA & ESTATÍSTICAS */}
+              <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative flex-1 min-w-[240px] max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Buscar por nome, login, CPF ou e-mail..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                  />
+                  {userSearch && (
+                    <button
+                      onClick={() => setUserSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-medium">Total cadastrados:</span>
+                  <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">
+                    {users.length} usuários
+                  </span>
+                </div>
+              </div>
+
+              {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
+              <div className="md:hidden flex-1 overflow-y-auto space-y-3">
+                {users
+                  .filter((u) => {
+                    if (!userSearch.trim()) return true;
+                    const q = userSearch.toLowerCase();
+                    return (
+                      u.name?.toLowerCase().includes(q) ||
+                      u.login?.toLowerCase().includes(q) ||
+                      u.email?.toLowerCase().includes(q) ||
+                      u.cpf?.includes(q) ||
+                      u.phone?.includes(q)
+                    );
+                  })
+                  .map((u) => {
+                    const perms: string[] = Array.isArray(u.permissions) ? u.permissions : [];
+                    return (
+                      <div key={u.id} className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="font-extrabold text-slate-900 text-base block">{u.name}</span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-mono text-xs font-bold text-[#005a43] bg-emerald-100/60 px-2 py-0.5 rounded-md">
+                                @{u.login || 'sem_login'}
+                              </span>
+                              <span className="text-xs text-slate-500 font-medium">
+                                {u.specialty || u.role}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleToggleUserStatus(u)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition ${
+                              u.status === 'ACTIVE'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-1 text-xs text-slate-600">
+                          {u.cpf && <div><strong>CPF:</strong> {u.cpf}</div>}
+                          <div><strong>E-mail:</strong> <span className="font-mono">{u.email}</span></div>
+                          {u.phone && <div><strong>Celular:</strong> {u.phone}</div>}
+                        </div>
+
+                        {/* PERMISSÕES RESUMO */}
+                        <div className="pt-2 border-t border-slate-200/60">
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="font-bold text-slate-700">Permissões de Acesso:</span>
+                            <span className="font-bold text-[#005a43]">{perms.length} de 9 ativas</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {perms.map((pId) => {
+                              const permObj = USER_PERMISSIONS.find((p) => p.id === pId);
+                              return (
+                                <span
+                                  key={pId}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700"
+                                >
+                                  {permObj?.label || pId}
+                                </span>
+                              );
+                            })}
+                            {perms.length === 0 && (
+                              <span className="text-xs text-amber-600 italic">Nenhuma permissão concedida</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200/60">
                           <button
                             onClick={() => handleOpenUserModal(u)}
-                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                            className="py-1.5 px-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold shadow-2xs hover:bg-slate-100"
                           >
-                            <Edit3 className="w-4 h-4" />
+                            Editar
                           </button>
                           <button
                             onClick={() => handleDeleteUser(u.id)}
-                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition"
+                            className="py-1.5 px-3.5 rounded-xl bg-white border border-rose-200 text-rose-600 text-xs font-bold shadow-2xs hover:bg-rose-50"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Excluir
                           </button>
-                        </td>
-                      </tr>
-                    ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* TABELA DE USUÁRIOS EM DESKTOP (>= md) */}
+              <div className="hidden md:block flex-1 overflow-y-auto">
+                <table className="w-full text-left text-sm border-separate border-spacing-0">
+                  <thead className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Usuário & Login</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Especialidade / Função</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Contato & CPF</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Permissões de Acesso</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs border-b border-slate-200">Status</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs text-right border-b border-slate-200">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {users
+                      .filter((u) => {
+                        if (!userSearch.trim()) return true;
+                        const q = userSearch.toLowerCase();
+                        return (
+                          u.name?.toLowerCase().includes(q) ||
+                          u.login?.toLowerCase().includes(q) ||
+                          u.email?.toLowerCase().includes(q) ||
+                          u.cpf?.includes(q) ||
+                          u.phone?.includes(q)
+                        );
+                      })
+                      .map((u) => {
+                        const perms: string[] = Array.isArray(u.permissions) ? u.permissions : [];
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                            <td className="p-3.5">
+                              <span className="font-bold text-slate-900 block text-sm">{u.name}</span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="font-mono text-xs font-extrabold text-[#005a43] bg-emerald-50 border border-emerald-200/80 px-2 py-0.2 rounded-md">
+                                  @{u.login || 'sem_login'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3.5">
+                              <span className="font-semibold text-slate-800 block text-xs">
+                                {u.specialty || 'Secretária'}
+                              </span>
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                Operador do sistema
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-xs">
+                              <span className="font-mono text-slate-700 block">{u.email}</span>
+                              <span className="text-slate-500 font-medium block">
+                                {u.phone ? formatPhone(u.phone) : 'Sem celular'} {u.cpf ? `• CPF: ${u.cpf}` : ''}
+                              </span>
+                            </td>
+                            <td className="p-3.5 max-w-xs">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-xs font-bold text-slate-800">
+                                  {perms.length} de 9 liberadas
+                                </span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {perms.slice(0, 3).map((pId) => {
+                                  const p = USER_PERMISSIONS.find((item) => item.id === pId);
+                                  return (
+                                    <span
+                                      key={pId}
+                                      className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 truncate max-w-[120px]"
+                                    >
+                                      {p?.label || pId}
+                                    </span>
+                                  );
+                                })}
+                                {perms.length > 3 && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-[#005a43] border border-emerald-200">
+                                    +{perms.length - 3} mais
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3.5">
+                              <button
+                                onClick={() => handleToggleUserStatus(u)}
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition ${
+                                  u.status === 'ACTIVE'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                                }`}
+                              >
+                                {u.status === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+                              </button>
+                            </td>
+                            <td className="p-3.5 text-right space-x-1.5">
+                              <button
+                                onClick={() => handleOpenUserModal(u)}
+                                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                                title="Editar Usuário e Permissões"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition"
+                                title="Excluir Usuário"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -1551,70 +1865,157 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
-              ABA: CONFIGURAÇÕES & EXPEDIENTE
+              ABA: CONFIGURAÇÕES & PERFIL DO MÉDICO (PERFIL ÚNICO)
           --------------------------------------------------------------------- */}
           {activeTab === 'settings' && clinic && (
             <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 overflow-y-auto">
-              <div className="pb-3.5 sm:pb-4 border-b border-slate-100 mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-teal-600" />
-                  Configurações do Consultório & Expediente
-                </h2>
-                <p className="text-sm text-slate-500 font-medium mt-0.5">
-                  Parâmetros de atendimento, duração das consultas e regras de cancelamento
-                </p>
+              <div className="pb-3.5 sm:pb-4 border-b border-slate-100 mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                    <Stethoscope className="w-5 h-5 text-[#005a43]" />
+                    Perfil Único do Médico & Configurações
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                    Defina o médico responsável pela agenda, especialidade, CRM e regras de expediente
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-[#005a43] border border-emerald-200">
+                  Sistema de Médico Único
+                </span>
               </div>
 
-              <form onSubmit={handleSaveSettings} className="space-y-4 sm:space-y-6 max-w-2xl text-sm">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block font-bold text-slate-800 mb-1.5 text-sm">Nome do Consultório / Clínica</label>
-                    <input
-                      type="text"
-                      value={clinic.name || ''}
-                      onChange={(e) => setClinic({ ...clinic, name: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-800 mb-1.5 text-sm">Especialidade Principal</label>
-                    <input
-                      type="text"
-                      value={clinic.specialty || ''}
-                      onChange={(e) => setClinic({ ...clinic, specialty: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
+              <form onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl text-sm">
+                {/* SEÇÃO 1: PERFIL DO MÉDICO RESPONSÁVEL */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/40 to-slate-50/70 border border-emerald-100 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-emerald-200/60">
+                    <Stethoscope className="w-4.5 h-4.5 text-[#005a43]" />
+                    <h3 className="font-extrabold text-slate-900 text-sm">Dados do Médico Titular</h3>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-bold text-slate-800 mb-1.5 text-sm">Duração da Consulta (minutos)</label>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">Nome Completo do Médico</label>
                       <input
-                        type="number"
-                        value={clinic.slotDurationMinutes || 30}
-                        onChange={(e) => setClinic({ ...clinic, slotDurationMinutes: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                        type="text"
+                        required
+                        value={clinic.doctorName || clinic.name || ''}
+                        onChange={(e) => setClinic({ ...clinic, doctorName: e.target.value, name: e.target.value })}
+                        placeholder="Ex: Dr. Renato Silva"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">CRM / Registro Profissional</label>
+                      <input
+                        type="text"
+                        value={clinic.crm || ''}
+                        onChange={(e) => setClinic({ ...clinic, crm: e.target.value })}
+                        placeholder="Ex: CRM/SP 148.910"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">Especialidade Médica</label>
+                    <input
+                      type="text"
+                      required
+                      value={clinic.specialty || ''}
+                      onChange={(e) => setClinic({ ...clinic, specialty: e.target.value })}
+                      placeholder="Ex: Cardiologia, Pediatria, Dermatologia..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                    />
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[11px] font-bold text-slate-400">Sugestões rápidas:</span>
+                      {['Cardiologia', 'Pediatria', 'Dermatologia', 'Clínica Geral', 'Ginecologia', 'Ortopedia', 'Oftalmologia'].map((esp) => (
+                        <button
+                          key={esp}
+                          type="button"
+                          onClick={() => setClinic({ ...clinic, specialty: esp })}
+                          className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#005a43] text-slate-600 transition"
+                        >
+                          {esp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">E-mail Profissional</label>
+                      <input
+                        type="email"
+                        value={clinic.email || ''}
+                        onChange={(e) => setClinic({ ...clinic, email: e.target.value })}
+                        placeholder="contato@medico.med.br"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
                       />
                     </div>
                     <div>
-                      <label className="block font-bold text-slate-800 mb-1.5 text-sm">Antecedência Mínima Cancelamento (horas)</label>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">Celular / WhatsApp do Consultório</label>
+                      <input
+                        type="text"
+                        value={clinic.phone || ''}
+                        onChange={(e) => setClinic({ ...clinic, phone: e.target.value })}
+                        placeholder="(11) 98888-7777"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">Consultório / Sala / Endereço</label>
+                    <input
+                      type="text"
+                      value={clinic.address || ''}
+                      onChange={(e) => setClinic({ ...clinic, address: e.target.value })}
+                      placeholder="Ex: Av. Paulista, 1000 - Conjunto 402 - Bela Vista, SP"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* SEÇÃO 2: PARÂMETROS DA AGENDA */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <Clock className="w-4.5 h-4.5 text-[#005a43]" />
+                    <h3 className="font-extrabold text-slate-900 text-sm">Parâmetros das Consultas</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">Duração Padrão da Consulta (minutos)</label>
                       <input
                         type="number"
+                        min="10"
+                        step="5"
+                        value={clinic.slotDurationMinutes || 30}
+                        onChange={(e) => setClinic({ ...clinic, slotDurationMinutes: parseInt(e.target.value) || 30 })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">Antecedência Mínima para Cancelamento (horas)</label>
+                      <input
+                        type="number"
+                        min="1"
                         value={clinic.minCancelHours || 2}
-                        onChange={(e) => setClinic({ ...clinic, minCancelHours: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                        onChange={(e) => setClinic({ ...clinic, minCancelHours: parseInt(e.target.value) || 2 })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <div className="pt-2 flex justify-end">
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition active:scale-95 text-sm"
+                    className="w-full sm:w-auto px-7 py-3 bg-[#005a43] hover:bg-[#004735] text-white font-bold rounded-xl shadow-md shadow-[#005a43]/15 transition active:scale-95 text-sm flex items-center justify-center gap-2"
                   >
-                    Salvar Parâmetros
+                    <Check className="w-4 h-4" />
+                    <span>Salvar Perfil do Médico & Parâmetros</span>
                   </button>
                 </div>
               </form>
@@ -2089,95 +2490,341 @@ export default function Dashboard() {
       )}
 
       {/* =========================================================================
-          7. MODAL: NOVO / EDITAR USUÁRIO
+          7. MODAL: NOVO / EDITAR USUÁRIO & CONTROLE DE PERMISSÕES
       ========================================================================= */}
       {showModalUser && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <UserCog className="w-4 h-4 text-teal-600" />
-                {editingUser ? 'Editar Usuário' : 'Novo Cadastro de Usuário'}
-              </h3>
-              <button onClick={() => setShowModalUser(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-5 my-auto max-h-[92vh] flex flex-col">
+            {/* CABEÇALHO DO MODAL */}
+            <div className="flex items-start justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-[#005a43] flex items-center justify-center font-bold">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+                    {editingUser ? 'Editar Usuário & Permissões' : 'Cadastrar Novo Usuário'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Preencha os dados e defina o que o operador poderá fazer no aplicativo do médico
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowModalUser(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveUser} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Nome Completo</label>
-                <input
-                  type="text"
-                  required
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                />
-              </div>
+            {/* FORMULÁRIO COM SCROLL INTERNO */}
+            <form onSubmit={handleSaveUser} className="space-y-5 overflow-y-auto flex-1 pr-1 text-xs">
+              {/* BLOCO 1: DADOS PESSOAIS E PROFISSIONAIS */}
+              <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
+                  1. Dados do Usuário
+                </span>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">E-mail</label>
-                <input
-                  type="email"
-                  required
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Cargo</label>
-                  <select
-                    value={userRole}
-                    onChange={(e: any) => setUserRole(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                  >
-                    <option value="MEDICO">Médico(a)</option>
-                    <option value="RECEPCIONISTA">Recepcionista</option>
-                    <option value="ADMIN">Administrador</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Status</label>
-                  <select
-                    value={userStatus}
-                    onChange={(e: any) => setUserStatus(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
-                  >
-                    <option value="ACTIVE">Ativo</option>
-                    <option value="INACTIVE">Inativo</option>
-                  </select>
-                </div>
-              </div>
-
-              {userRole === 'MEDICO' && (
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Especialidade / CRM</label>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Nome Completo <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
-                    value={userSpecialty}
-                    onChange={(e) => setUserSpecialty(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium"
+                    required
+                    value={userName}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    placeholder="Ex: Juliana Rocha Santos"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                   />
                 </div>
-              )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Especialidade / Função <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={userSpecialty}
+                      onChange={(e) => setUserSpecialty(e.target.value)}
+                      placeholder="Ex: Secretária Executiva, Recepção..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {['Secretária Executiva', 'Recepção', 'Atendimento', 'Gestão'].map((esp) => (
+                        <button
+                          key={esp}
+                          type="button"
+                          onClick={() => setUserSpecialty(esp)}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white border border-slate-200 hover:border-[#005a43] text-slate-600 transition"
+                        >
+                          {esp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      CPF <span className="text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={userCpf}
+                      onChange={(e) => setUserCpf(formatCPF(e.target.value))}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      E-mail <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
+                      placeholder="usuario@consultorio.med.br"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Celular / WhatsApp <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={userPhone}
+                      onChange={(e) => setUserPhone(formatPhone(e.target.value))}
+                      placeholder="(11) 98888-8888"
+                      maxLength={15}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* BLOCO 2: CREDENCIAIS DE ACESSO (LOGIN GERADO AUTOMATICAMENTE E SENHA) */}
+              <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
+                  2. Acesso ao Sistema
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* CAMPO LOGIN */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">
+                        Login (Nome + iniciais sobrenome) <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateLogin}
+                        className="text-[10px] font-bold text-[#005a43] hover:underline flex items-center gap-1"
+                        title="Recalcular login a partir do nome"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Gerar</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono font-bold">@</span>
+                      <input
+                        type="text"
+                        required
+                        value={userLogin}
+                        onChange={(e) => {
+                          setUserLogin(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                          setIsAutoLogin(false);
+                        }}
+                        placeholder="login_unico"
+                        className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 font-mono font-bold text-xs bg-white text-[#005a43] focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Gerado automaticamente com nome e iniciais do sobrenome (único).
+                    </p>
+                  </div>
+
+                  {/* CAMPO SENHA */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">
+                        Senha <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGeneratePassword}
+                        className="text-[10px] font-bold text-teal-700 hover:underline flex items-center gap-1"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Gerar Senha</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={userPassword}
+                        onChange={(e) => setUserPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Senha provisória de acesso ao aplicativo.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <label className="font-bold text-slate-700 text-xs">Status da Conta:</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUserStatus('ACTIVE')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                        userStatus === 'ACTIVE'
+                          ? 'bg-emerald-100 text-[#005a43] border border-emerald-300'
+                          : 'bg-white border border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      ✓ Ativo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserStatus('INACTIVE')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                        userStatus === 'INACTIVE'
+                          ? 'bg-slate-200 text-slate-800 border border-slate-300'
+                          : 'bg-white border border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      Inativo
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* BLOCO 3: PERMISSÕES DE ACESSO (AS 9 OPÇÕES) */}
+              <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-br from-emerald-50/40 via-teal-50/20 to-slate-50 border border-emerald-100">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-emerald-200/60">
+                  <div>
+                    <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
+                      3. Permissões de Acesso no Perfil
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      Escolha exatamente o que este usuário poderá fazer no aplicativo:
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-[#005a43] bg-emerald-100 px-2 py-0.5 rounded-md">
+                    {userPermissions.length} de 9 selecionadas
+                  </span>
+                </div>
+
+                {/* BOTÕES DE PRESETS RÁPIDOS */}
+                <div className="flex flex-wrap items-center gap-1.5 pb-2">
+                  <span className="text-[10px] font-bold text-slate-400">Atalhos rápidos:</span>
+                  <button
+                    type="button"
+                    onClick={() => applyPermissionPreset('secretary')}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-emerald-100/80 hover:bg-emerald-200 text-[#005a43] transition"
+                  >
+                    ⚡ Perfil Secretária (Recepção)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPermissionPreset('all')}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition"
+                  >
+                    👑 Acesso Total
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPermissionPreset('view_only')}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 transition"
+                  >
+                    👁️ Somente Consulta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPermissionPreset('none')}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-slate-200 hover:bg-rose-50 hover:text-rose-700 text-slate-500 transition"
+                  >
+                    🧹 Limpar
+                  </button>
+                </div>
+
+                {/* GRID COM AS 9 OPÇÕES */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  {USER_PERMISSIONS.map((perm) => {
+                    const isChecked = userPermissions.includes(perm.id);
+                    return (
+                      <div
+                        key={perm.id}
+                        onClick={() => togglePermission(perm.id)}
+                        className={`p-3 rounded-xl border cursor-pointer transition select-none flex items-start gap-2.5 ${
+                          isChecked
+                            ? 'bg-white border-[#005a43] shadow-xs'
+                            : 'bg-white/60 border-slate-200 hover:border-slate-300 opacity-80'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="mt-0.5 w-4 h-4 rounded text-[#005a43] focus:ring-[#005a43] border-slate-300"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span
+                            className={`font-bold text-xs block ${
+                              isChecked ? 'text-slate-900' : 'text-slate-700'
+                            }`}
+                          >
+                            {perm.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500 leading-snug block mt-0.5">
+                            {perm.description}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* BOTÕES DE AÇÃO */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowModalUser(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition text-xs"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs"
+                  className="px-6 py-2.5 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl font-bold shadow-md shadow-[#005a43]/15 transition active:scale-95 text-xs flex items-center gap-2"
                 >
-                  Salvar Usuário
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Usuário & Permissões</span>
                 </button>
               </div>
             </form>

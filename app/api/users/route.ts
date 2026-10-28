@@ -1,48 +1,80 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { generateAutoLogin } from '@/lib/userPermissions';
 
-// Mock in-memory state in case DB user table is not created yet or fallback needed
-let memoryUsers = [
+export const dynamic = 'force-dynamic';
+
+// Usuários iniciais com controle de acesso para a gestão do consultório (Perfil Único)
+let memoryUsers: any[] = [
   {
-    id: 'user-1',
-    name: 'Dra. Amanda Silva',
-    email: 'amanda.silva@clinidesk.com.br',
+    id: 'user-sec-1',
+    name: 'Juliana Rocha Santos',
+    specialty: 'Secretária Executiva & Atendimento',
+    cpf: '123.456.789-01',
+    email: 'juliana.santos@consultorio.med.br',
     phone: '(11) 98765-4321',
-    role: 'MEDICO',
-    specialty: 'Cardiologia',
+    login: 'julianars',
+    password: 'password123',
+    role: 'SECRETARIA',
+    permissions: [
+      'visualizar_agenda',
+      'bloquear_horario',
+      'agendamento',
+      'desmarcacao',
+      'remarcacao',
+      'agendamento_extra',
+      'dados_paciente',
+    ],
     status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'user-2',
-    name: 'Dr. Roberto Santos',
-    email: 'roberto.santos@clinidesk.com.br',
+    id: 'user-sec-2',
+    name: 'Mariana Costa Lima',
+    specialty: 'Recepção & Triagem',
+    cpf: '234.567.890-12',
+    email: 'mariana.costa@consultorio.med.br',
     phone: '(11) 97654-3210',
-    role: 'MEDICO',
-    specialty: 'Dermatologia',
+    login: 'marianacl',
+    password: 'password123',
+    role: 'SECRETARIA',
+    permissions: [
+      'visualizar_agenda',
+      'agendamento',
+      'desmarcacao',
+      'remarcacao',
+      'dados_paciente',
+    ],
     status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'user-3',
-    name: 'Mariana Costa',
-    email: 'mariana.costa@clinidesk.com.br',
+    id: 'user-adm-3',
+    name: 'Carlos Eduardo Ferreira',
+    specialty: 'Gestão Administrativa',
+    cpf: '345.678.901-23',
+    email: 'carlos.ferreira@consultorio.med.br',
     phone: '(11) 96543-2109',
-    role: 'RECEPCIONISTA',
-    specialty: null,
-    status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'user-4',
-    name: 'Carlos Eduardo',
-    email: 'carlos.eduardo@clinidesk.com.br',
-    phone: '(11) 95432-1098',
+    login: 'carlosef',
+    password: 'password123',
     role: 'ADMIN',
-    specialty: null,
+    permissions: [
+      'visualizar_agenda',
+      'configurar_perfil',
+      'bloquear_horario',
+      'agendamento',
+      'desmarcacao',
+      'remarcacao',
+      'agendamento_extra',
+      'dados_paciente',
+      'gerar_agenda',
+    ],
     status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
-  }
+    createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 export async function GET() {
@@ -51,12 +83,26 @@ export async function GET() {
       const dbUsers = await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
       });
+
       if (dbUsers && dbUsers.length > 0) {
-        return NextResponse.json({ users: dbUsers });
+        const formatted = dbUsers.map((u) => {
+          let perms: string[] = [];
+          try {
+            perms = typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions;
+          } catch {
+            perms = [];
+          }
+          return {
+            ...u,
+            permissions: Array.isArray(perms) ? perms : [],
+          };
+        });
+        return NextResponse.json({ users: formatted });
       }
     } catch (dbErr) {
-      console.warn('⚠️ [Users API] DB query error, using memory fallback:', dbErr);
+      console.warn('⚠️ [Users API] Falha no banco, utilizando lista em memória:', dbErr);
     }
+
     return NextResponse.json({ users: memoryUsers });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -66,36 +112,71 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, phone, role, specialty, status } = body;
+    const {
+      name,
+      specialty,
+      cpf,
+      email,
+      phone,
+      login: customLogin,
+      password,
+      permissions,
+      role,
+      status,
+    } = body;
 
     if (!name || !email) {
-      return NextResponse.json({ error: 'Nome e E-mail são obrigatórios' }, { status: 400 });
+      return NextResponse.json({ error: 'Nome Completo e E-mail são obrigatórios' }, { status: 400 });
     }
+
+    // Gerar ou validar login automático
+    const generatedLogin = customLogin?.trim() || generateAutoLogin(name, memoryUsers);
+    const parsedPermissions = Array.isArray(permissions) ? permissions : [];
 
     try {
       const newUser = await prisma.user.create({
         data: {
           name,
+          specialty: specialty || 'Secretária',
+          cpf: cpf || null,
           email,
           phone: phone || null,
-          role: role || 'RECEPCIONISTA',
-          specialty: specialty || null,
+          login: generatedLogin,
+          password: password || '123456',
+          role: role || 'SECRETARIA',
+          permissions: JSON.stringify(parsedPermissions),
           status: status || 'ACTIVE',
         },
       });
-      return NextResponse.json({ success: true, user: newUser });
+
+      const userReturn = {
+        ...newUser,
+        permissions: parsedPermissions,
+      };
+
+      // Manter memória sincronizada
+      memoryUsers.unshift(userReturn);
+
+      return NextResponse.json({ success: true, user: userReturn });
     } catch (dbErr) {
-      console.warn('⚠️ [Users API DB Create Error] Fallback to in-memory:', dbErr);
+      console.warn('⚠️ [Users API DB Create Error] Fallback para memória:', dbErr);
+
       const newUser = {
         id: `user-${Date.now()}`,
         name,
+        specialty: specialty || 'Secretária',
+        cpf: cpf || null,
         email,
         phone: phone || null,
-        role: role || 'RECEPCIONISTA',
-        specialty: specialty || null,
+        login: generatedLogin,
+        password: password || '123456',
+        role: role || 'SECRETARIA',
+        permissions: parsedPermissions,
         status: status || 'ACTIVE',
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
+
       memoryUsers.unshift(newUser);
       return NextResponse.json({ success: true, user: newUser });
     }
@@ -107,37 +188,82 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, name, email, phone, role, specialty, status } = body;
+    const {
+      id,
+      name,
+      specialty,
+      cpf,
+      email,
+      phone,
+      login,
+      password,
+      permissions,
+      role,
+      status,
+    } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
+      return NextResponse.json({ error: 'ID do usuário é obrigatório' }, { status: 400 });
     }
 
+    const parsedPermissions = Array.isArray(permissions) ? permissions : undefined;
+
     try {
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (specialty !== undefined) updateData.specialty = specialty;
+      if (cpf !== undefined) updateData.cpf = cpf;
+      if (email !== undefined) updateData.email = email;
+      if (phone !== undefined) updateData.phone = phone;
+      if (login !== undefined) updateData.login = login;
+      if (password !== undefined) updateData.password = password;
+      if (parsedPermissions !== undefined) updateData.permissions = JSON.stringify(parsedPermissions);
+      if (role !== undefined) updateData.role = role;
+      if (status !== undefined) updateData.status = status;
+
       const updatedUser = await prisma.user.update({
         where: { id },
-        data: {
-          name,
-          email,
-          phone: phone || null,
-          role: role || 'RECEPCIONISTA',
-          specialty: specialty || null,
-          status: status || 'ACTIVE',
-        },
+        data: updateData,
       });
-      return NextResponse.json({ success: true, user: updatedUser });
+
+      let retPerms = parsedPermissions;
+      if (!retPerms) {
+        try {
+          retPerms = JSON.parse(updatedUser.permissions);
+        } catch {
+          retPerms = [];
+        }
+      }
+
+      const userReturn = {
+        ...updatedUser,
+        permissions: retPerms,
+      };
+
+      // Atualizar também na memória
+      const memIdx = memoryUsers.findIndex((u) => u.id === id);
+      if (memIdx !== -1) {
+        memoryUsers[memIdx] = userReturn;
+      }
+
+      return NextResponse.json({ success: true, user: userReturn });
     } catch (dbErr) {
-      console.warn('⚠️ [Users API DB Update Error] Fallback to in-memory:', dbErr);
+      console.warn('⚠️ [Users API DB Update Error] Fallback para memória:', dbErr);
       const index = memoryUsers.findIndex((u) => u.id === id);
       if (index !== -1) {
         memoryUsers[index] = {
           ...memoryUsers[index],
-          name: name ?? memoryUsers[index].name,
-          email: email ?? memoryUsers[index].email,
-          phone: phone ?? memoryUsers[index].phone,
-          role: role ?? memoryUsers[index].role,
-          specialty: specialty ?? memoryUsers[index].specialty,
-          status: status ?? memoryUsers[index].status,
+          name: name !== undefined ? name : memoryUsers[index].name,
+          specialty: specialty !== undefined ? specialty : memoryUsers[index].specialty,
+          cpf: cpf !== undefined ? cpf : memoryUsers[index].cpf,
+          email: email !== undefined ? email : memoryUsers[index].email,
+          phone: phone !== undefined ? phone : memoryUsers[index].phone,
+          login: login !== undefined ? login : memoryUsers[index].login,
+          password: password !== undefined ? password : memoryUsers[index].password,
+          permissions: parsedPermissions !== undefined ? parsedPermissions : memoryUsers[index].permissions,
+          role: role !== undefined ? role : memoryUsers[index].role,
+          status: status !== undefined ? status : memoryUsers[index].status,
+          updatedAt: new Date().toISOString(),
         };
         return NextResponse.json({ success: true, user: memoryUsers[index] });
       }
@@ -154,17 +280,17 @@ export async function DELETE(req: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'ID é obrigatório' }, { status: 400 });
+      return NextResponse.json({ error: 'ID do usuário é obrigatório' }, { status: 400 });
     }
 
     try {
       await prisma.user.delete({ where: { id } });
-      return NextResponse.json({ success: true });
     } catch (dbErr) {
-      console.warn('⚠️ [Users API DB Delete Error] Fallback to in-memory:', dbErr);
-      memoryUsers = memoryUsers.filter((u) => u.id !== id);
-      return NextResponse.json({ success: true });
+      console.warn('⚠️ [Users API DB Delete Error] Fallback para memória:', dbErr);
     }
+
+    memoryUsers = memoryUsers.filter((u) => u.id !== id);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

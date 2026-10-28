@@ -5,17 +5,21 @@ async function main() {
   console.log('🌱 Iniciando popular banco de dados (seed JS)...');
 
   // Limpar tabelas existentes em dev
+  await prisma.user.deleteMany({});
   await prisma.message.deleteMany({});
   await prisma.appointment.deleteMany({});
   await prisma.patient.deleteMany({});
   await prisma.clinic.deleteMany({});
 
-  // 1. Criar Clínica / Médico Principal
+  // 1. Criar Consultório / Médico Principal (Perfil Único)
   const clinic = await prisma.clinic.create({
     data: {
-      name: 'Clínica Vida & Saúde - Dr. Renato Silva',
-      email: 'contato@vidae-saude.com.br',
+      name: 'Consultório Dr. Renato Silva',
+      doctorName: 'Dr. Renato Silva',
+      crm: 'CRM/SP 148.910',
+      email: 'contato@drrenatosilva.med.br',
       phone: '+5511988887777',
+      address: 'Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP',
       specialty: 'Cardiologia e Clínica Geral',
       slotDurationMinutes: 30,
       minCancelHours: 2,
@@ -31,7 +35,57 @@ async function main() {
     },
   });
 
-  console.log('✅ Clínica criada:', clinic.name, `[ID: ${clinic.id}]`);
+  console.log('✅ Consultório (Perfil Único do Médico) criado:', clinic.name, `[ID: ${clinic.id}]`);
+
+  // 1.1 Criar Usuários com Acesso (Secretárias e Gestores)
+  await prisma.user.createMany({
+    data: [
+      {
+        name: 'Juliana Rocha Santos',
+        specialty: 'Secretária Executiva',
+        cpf: '123.456.789-01',
+        email: 'juliana.santos@consultorio.med.br',
+        phone: '(11) 98765-4321',
+        login: 'julianars',
+        password: 'password123',
+        role: 'SECRETARIA',
+        permissions: JSON.stringify([
+          'visualizar_agenda',
+          'bloquear_horario',
+          'agendamento',
+          'desmarcacao',
+          'remarcacao',
+          'agendamento_extra',
+          'dados_paciente',
+        ]),
+        status: 'ACTIVE',
+      },
+      {
+        name: 'Carlos Eduardo Ferreira',
+        specialty: 'Gestão Administrativa',
+        cpf: '345.678.901-23',
+        email: 'carlos.ferreira@consultorio.med.br',
+        phone: '(11) 96543-2109',
+        login: 'carlosef',
+        password: 'password123',
+        role: 'ADMIN',
+        permissions: JSON.stringify([
+          'visualizar_agenda',
+          'configurar_perfil',
+          'bloquear_horario',
+          'agendamento',
+          'desmarcacao',
+          'remarcacao',
+          'agendamento_extra',
+          'dados_paciente',
+          'gerar_agenda',
+        ]),
+        status: 'ACTIVE',
+      },
+    ],
+  });
+
+  console.log('✅ Usuários de gestão e secretária criados');
 
   // 2. Criar Pacientes
   const patient1 = await prisma.patient.create({
