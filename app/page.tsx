@@ -201,16 +201,17 @@ export default function Dashboard() {
   const [showModalUser, setShowModalUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
 
-  // Form de Usuário (Perfil Único do Médico: Usuários são a equipe de apoio e secretárias)
+  // Form de Usuário (Médico Titular da Agenda ou Equipe de Apoio)
   const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState<'MEDICO' | 'SECRETARIA' | 'ADMIN' | 'RECEPCIONISTA'>('MEDICO');
   const [userSpecialty, setUserSpecialty] = useState('');
+  const [userCrm, setUserCrm] = useState('');
   const [userCpf, setUserCpf] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userLogin, setUserLogin] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [userRole, setUserRole] = useState<'SECRETARIA' | 'ADMIN' | 'RECEPCIONISTA'>('SECRETARIA');
   const [userStatus, setUserStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [showPassword, setShowPassword] = useState(false);
   const [isAutoLogin, setIsAutoLogin] = useState(true);
@@ -426,41 +427,50 @@ export default function Dashboard() {
     }
   }
 
-  // Ações de Usuário (Perfil Único do Médico: Gestão de Secretárias & Colaboradores)
+  // Ações de Usuário (Médico Titular da Agenda & Colaboradores)
   function handleOpenUserModal(userToEdit?: any) {
     if (userToEdit) {
       setEditingUser(userToEdit);
       setUserName(userToEdit.name || '');
+      setUserRole(userToEdit.role || 'SECRETARIA');
       setUserSpecialty(userToEdit.specialty || '');
+      setUserCrm(userToEdit.crm || '');
       setUserCpf(userToEdit.cpf || '');
       setUserEmail(userToEdit.email || '');
       setUserPhone(userToEdit.phone || '');
       setUserLogin(userToEdit.login || '');
       setUserPassword(userToEdit.password || '');
-      setUserRole(userToEdit.role || 'SECRETARIA');
       setUserPermissions(Array.isArray(userToEdit.permissions) ? userToEdit.permissions : []);
       setUserStatus(userToEdit.status || 'ACTIVE');
       setIsAutoLogin(false);
     } else {
       setEditingUser(null);
       setUserName('');
-      setUserSpecialty('Secretária / Recepção');
+      const hasDoctor = users.some((u) => u.role === 'MEDICO');
+      if (!hasDoctor) {
+        setUserRole('MEDICO');
+        setUserSpecialty('Pediatria');
+        setUserCrm('CRM/SP 148.910');
+        setUserPermissions(USER_PERMISSIONS.map((p) => p.id));
+      } else {
+        setUserRole('SECRETARIA');
+        setUserSpecialty('Secretária Executiva');
+        setUserCrm('');
+        setUserPermissions([
+          'visualizar_agenda',
+          'bloquear_horario',
+          'agendamento',
+          'desmarcacao',
+          'remarcacao',
+          'agendamento_extra',
+          'dados_paciente',
+        ]);
+      }
       setUserCpf('');
       setUserEmail('');
       setUserPhone('');
       setUserLogin('');
       setUserPassword('Acesso@2026');
-      setUserRole('SECRETARIA');
-      // Preset padrão inicial: Secretária
-      setUserPermissions([
-        'visualizar_agenda',
-        'bloquear_horario',
-        'agendamento',
-        'desmarcacao',
-        'remarcacao',
-        'agendamento_extra',
-        'dados_paciente',
-      ]);
       setUserStatus('ACTIVE');
       setIsAutoLogin(true);
     }
@@ -531,14 +541,15 @@ export default function Dashboard() {
       const payload = {
         id: editingUser?.id,
         name: userName.trim(),
+        role: userRole,
         specialty: userSpecialty.trim(),
+        crm: userCrm.trim(),
         cpf: userCpf.trim(),
         email: userEmail.trim().toLowerCase(),
         phone: userPhone.trim(),
         login: finalLogin,
         password: userPassword,
         permissions: userPermissions,
-        role: userRole,
         status: userStatus,
       };
 
@@ -553,6 +564,19 @@ export default function Dashboard() {
       if (data.success) {
         setShowModalUser(false);
         fetchUsers();
+        if (userRole === 'MEDICO') {
+          fetch('/api/clinic/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              doctorName: userName.trim(),
+              crm: userCrm.trim(),
+              specialty: userSpecialty.trim(),
+              email: userEmail.trim().toLowerCase(),
+              phone: userPhone.trim(),
+            }),
+          }).then(() => fetchData()).catch(() => {});
+        }
       } else {
         alert(data.error || 'Erro ao salvar usuário.');
       }
@@ -622,18 +646,32 @@ export default function Dashboard() {
     }
   }
 
-  // PERFIL ÚNICO DO MÉDICO RESPONSÁVEL (A agenda gerencia exclusivamente este médico)
+  // PERFIL DO MÉDICO RESPONSÁVEL DA AGENDA (Extraído do médico cadastrado em Usuários)
   const activeDoctor = useMemo(() => {
+    // 1º Prioridade: O médico cadastrado na lista de usuários
+    const doctorUser = users.find((u) => u.role === 'MEDICO');
+    if (doctorUser) {
+      return {
+        name: doctorUser.name,
+        specialty: doctorUser.specialty || 'Pediatria',
+        crm: doctorUser.crm || clinic?.crm || 'CRM/SP 148.910',
+        email: doctorUser.email,
+        phone: doctorUser.phone || clinic?.phone || '(11) 98888-7777',
+        room: 'Consultório Principal',
+        address: clinic?.address || 'Av. Paulista, 1000',
+      };
+    }
+    // Fallback: perfil das configurações da clínica
     return {
-      name: clinic?.doctorName || clinic?.name || 'Dr. Renato Silva',
-      specialty: clinic?.specialty || 'Cardiologia e Clínica Geral',
+      name: clinic?.doctorName || 'Dra. Mariana Souza',
+      specialty: clinic?.specialty || 'Pediatria',
       crm: clinic?.crm || 'CRM/SP 148.910',
-      email: clinic?.email || 'contato@drrenatosilva.med.br',
+      email: clinic?.email || 'dra.mariana@iterum.med.br',
       phone: clinic?.phone || '(11) 98888-7777',
-      room: clinic?.address || 'Sala 402 • Bloco B',
-      address: clinic?.address || 'Av. Paulista, 1000 - Bela Vista, São Paulo - SP',
+      room: 'Consultório Principal',
+      address: clinic?.address || 'Av. Paulista, 1000',
     };
-  }, [clinic]);
+  }, [users, clinic]);
 
   // Consultas do Dia Selecionado
   const selectedDayAppointments = useMemo(() => {
@@ -798,26 +836,18 @@ export default function Dashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="text-xl font-black tracking-tight text-[#1e293b] leading-tight">Iterum</h1>
-                <span className="text-[11px] font-bold text-emerald-700/80 block tracking-wide truncate">
-                  Marcação de Consultas
+                <span className="text-[11px] font-extrabold text-[#005a43] block tracking-wide truncate">
+                  Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium block truncate">
+                  {activeDoctor.specialty}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* UNIDADE ATUAL CARD */}
-          <div className="mx-3.5 my-3.5 p-3 rounded-2xl bg-slate-50/80 border border-slate-200/70 text-xs">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Unidade Atual</span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="font-bold text-slate-800 text-sm truncate">
-                {clinic?.name || 'CliniDesk Jardins'} • Jardins
-              </span>
-              <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
-            </div>
-          </div>
-
           {/* MENU PRINCIPAL */}
-          <nav className="px-3 space-y-1.5 mt-2">
+          <nav className="px-3 space-y-1.5 mt-3">
             <button
               onClick={() => setActiveTab('agenda')}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${
@@ -918,37 +948,6 @@ export default function Dashboard() {
             </button>
           </nav>
         </div>
-
-        {/* PROFILE CARD INFERIOR: PERFIL ÚNICO DO MÉDICO */}
-        <div className="p-3.5 border-t border-slate-100 m-2.5 rounded-2xl bg-gradient-to-br from-emerald-50/50 to-slate-50/90 border border-emerald-100/60 flex items-center justify-between shadow-2xs">
-          <div className="flex items-center space-x-3 truncate">
-            <div className="w-10 h-10 rounded-2xl bg-[#005a43] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
-              {getInitials(activeDoctor.name)}
-            </div>
-            <div className="truncate">
-              <div className="flex items-center gap-1.5">
-                <span className="block text-sm font-extrabold text-slate-900 truncate leading-tight">
-                  {activeDoctor.name}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded-md">
-                  Perfil Único
-                </span>
-                <span className="text-xs text-slate-500 truncate">
-                  {activeDoctor.crm || 'CRM Ativo'}
-                </span>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className="p-2 text-slate-400 hover:text-[#005a43] transition rounded-xl hover:bg-emerald-100/60"
-            title="Configurar Perfil do Médico"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
       </aside>
 
       {/* =========================================================================
@@ -973,8 +972,11 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h1 className="text-base font-extrabold tracking-tight text-slate-900 leading-tight">Iterum</h1>
-                    <span className="text-[10px] font-bold text-emerald-700/80 block mt-0.5">
-                      Marcação de Consultas
+                    <span className="text-[11px] font-extrabold text-[#005a43] block mt-0.5 truncate">
+                      Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-medium block truncate">
+                      {activeDoctor.specialty}
                     </span>
                   </div>
                 </div>
@@ -987,19 +989,8 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {/* UNIDADE ATUAL CARD */}
-              <div className="my-3.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/70 text-xs">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Unidade Atual</span>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="font-bold text-slate-800 text-sm truncate">
-                    {clinic?.name || 'Iterum Jardins'} • Jardins
-                  </span>
-                  <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
-                </div>
-              </div>
-
               {/* MENU PRINCIPAL */}
-              <nav className="space-y-1.5 mt-2">
+              <nav className="space-y-1.5 mt-4">
                 <button
                   onClick={() => {
                     setActiveTab('agenda');
@@ -1117,34 +1108,6 @@ export default function Dashboard() {
                 </button>
               </nav>
             </div>
-
-            <div
-              onClick={() => {
-                setActiveTab('settings');
-                setMobileMenuOpen(false);
-              }}
-              className="p-3.5 border-t border-slate-100 rounded-2xl bg-gradient-to-br from-emerald-50/60 to-slate-50/90 border border-emerald-100/70 flex items-center justify-between mt-4 cursor-pointer"
-            >
-              <div className="flex items-center space-x-3 truncate">
-                <div className="w-10 h-10 rounded-2xl bg-[#005a43] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
-                  {getInitials(activeDoctor.name)}
-                </div>
-                <div className="truncate">
-                  <span className="block text-sm font-extrabold text-slate-900 truncate leading-tight">
-                    {activeDoctor.name}
-                  </span>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
-                      Perfil Único
-                    </span>
-                    <span className="text-xs text-slate-500 truncate">
-                      {activeDoctor.crm || 'CRM Ativo'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <Settings className="w-4 h-4 text-emerald-800" />
-            </div>
           </aside>
         </div>
       )}
@@ -1173,7 +1136,9 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <span className="font-extrabold text-xs text-slate-900 tracking-tight leading-none block">Iterum</span>
-                  <span className="text-[9px] text-emerald-700/80 font-bold tracking-wider block">Marcação de Consultas</span>
+                  <span className="text-[10px] text-[#005a43] font-bold tracking-tight block truncate max-w-[160px]">
+                    Agenda {activeDoctor.name.toLowerCase().startsWith('dra') ? 'da ' : activeDoctor.name.toLowerCase().startsWith('dr') ? 'do ' : 'de '}{activeDoctor.name}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1593,7 +1558,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                    Cadastre secretárias, recepcionistas e colaboradores que gerenciam a agenda do médico
+                    Cadastre o(a) médico(a) titular da agenda e os colaboradores de apoio (secretárias, recepção)
                   </p>
                 </div>
                 <button
@@ -1606,26 +1571,33 @@ export default function Dashboard() {
               </div>
 
               {/* BANNER INFORMATIVO: CONTEXTO PERFIL ÚNICO */}
-              <div className="my-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-slate-50 border border-emerald-100/80 flex items-start sm:items-center justify-between gap-3">
+              <div className="my-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 border border-emerald-200 flex items-start sm:items-center justify-between gap-3">
                 <div className="flex items-start sm:items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#005a43] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <div className="w-10 h-10 rounded-2xl bg-[#005a43] text-white flex items-center justify-center shrink-0 shadow-xs">
                     <Stethoscope className="w-5 h-5" />
                   </div>
                   <div className="text-xs leading-relaxed text-slate-700">
-                    <span className="font-extrabold text-slate-900 block sm:inline">
-                      Agenda exclusiva do médico:{' '}
-                    </span>
-                    <strong className="text-[#005a43]">{activeDoctor.name}</strong> ({activeDoctor.specialty} • {activeDoctor.crm}).
-                    <span className="text-slate-500 block sm:inline sm:ml-1">
-                      Os usuários abaixo são operadores que possuem acesso ao sistema conforme as permissões concedidas.
+                    <div className="flex items-center gap-1.5 font-extrabold text-slate-900 mb-0.5">
+                      <span>Titular Atual da Agenda:</span>
+                      <span className="text-[#005a43]">{activeDoctor.name}</span>
+                      <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-100 text-[#005a43] font-bold">
+                        {activeDoctor.specialty} • {activeDoctor.crm}
+                      </span>
+                    </div>
+                    <span className="text-slate-500 block">
+                      O sistema identifica o dono da agenda através do usuário com o perfil <strong>Médico(a) Titular</strong>. Ao cadastrar ou editar esse usuário, o nome de toda a agenda (Ex: <em>Agenda da Dra. Mariana - Pediatra</em>) atualiza automaticamente.
                     </span>
                   </div>
                 </div>
                 <button
-                  onClick={() => setActiveTab('settings')}
-                  className="shrink-0 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-[#005a43] hover:bg-emerald-50 text-xs font-bold transition shadow-2xs"
+                  onClick={() => {
+                    const doc = users.find((u) => u.role === 'MEDICO');
+                    if (doc) handleOpenUserModal(doc);
+                    else handleOpenUserModal();
+                  }}
+                  className="shrink-0 px-3.5 py-1.5 rounded-xl bg-white border border-emerald-300 text-[#005a43] hover:bg-emerald-50 text-xs font-bold transition shadow-2xs"
                 >
-                  Ver Perfil do Médico
+                  Editar Médico Titular
                 </button>
               </div>
 
@@ -1674,23 +1646,43 @@ export default function Dashboard() {
                   })
                   .map((u) => {
                     const perms: string[] = Array.isArray(u.permissions) ? u.permissions : [];
+                    const isDoctor = u.role === 'MEDICO';
                     return (
-                      <div key={u.id} className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+                      <div
+                        key={u.id}
+                        className={`p-4 rounded-2xl border space-y-3 transition ${
+                          isDoctor
+                            ? 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white border-emerald-300 shadow-xs ring-1 ring-emerald-300/50'
+                            : 'bg-slate-50/80 border-slate-200/80'
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="font-extrabold text-slate-900 text-base block">{u.name}</span>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-slate-900 text-base">{u.name}</span>
+                              {isDoctor && (
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43] border border-emerald-300 flex items-center gap-1">
+                                  ⭐ Médico Titular
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="font-mono text-xs font-bold text-[#005a43] bg-emerald-100/60 px-2 py-0.5 rounded-md">
                                 @{u.login || 'sem_login'}
                               </span>
-                              <span className="text-xs text-slate-500 font-medium">
-                                {u.specialty || u.role}
+                              <span className="text-xs text-slate-700 font-semibold">
+                                {u.specialty || (isDoctor ? 'Pediatria' : u.role)}
                               </span>
+                              {isDoctor && u.crm && (
+                                <span className="text-xs text-slate-500 font-mono">
+                                  • {u.crm}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleToggleUserStatus(u)}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition ${
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
                               u.status === 'ACTIVE'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : 'bg-slate-200 text-slate-600'
@@ -1777,10 +1769,23 @@ export default function Dashboard() {
                       })
                       .map((u) => {
                         const perms: string[] = Array.isArray(u.permissions) ? u.permissions : [];
+                        const isDoctor = u.role === 'MEDICO';
                         return (
-                          <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                          <tr
+                            key={u.id}
+                            className={`transition ${
+                              isDoctor ? 'bg-emerald-50/50 hover:bg-emerald-50/80 font-medium' : 'hover:bg-slate-50/80'
+                            }`}
+                          >
                             <td className="p-3.5">
-                              <span className="font-bold text-slate-900 block text-sm">{u.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 block text-sm">{u.name}</span>
+                                {isDoctor && (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43] border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                                    ⭐ Titular da Agenda
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="font-mono text-xs font-extrabold text-[#005a43] bg-emerald-50 border border-emerald-200/80 px-2 py-0.2 rounded-md">
                                   @{u.login || 'sem_login'}
@@ -1788,11 +1793,11 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td className="p-3.5">
-                              <span className="font-semibold text-slate-800 block text-xs">
-                                {u.specialty || 'Secretária'}
+                              <span className={`block text-xs ${isDoctor ? 'font-extrabold text-[#005a43]' : 'font-semibold text-slate-800'}`}>
+                                {u.specialty || (isDoctor ? 'Pediatria' : 'Secretária')}
                               </span>
-                              <span className="text-[11px] text-slate-400 font-medium">
-                                Operador do sistema
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                {isDoctor ? (u.crm ? `CRM: ${u.crm}` : 'Médico Responsável') : (u.role === 'ADMIN' ? 'Administrador' : 'Operador do sistema')}
                               </span>
                             </td>
                             <td className="p-3.5 text-xs">
@@ -2524,8 +2529,91 @@ export default function Dashboard() {
               {/* BLOCO 1: DADOS PESSOAIS E PROFISSIONAIS */}
               <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                 <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider block">
-                  1. Dados do Usuário
+                  1. Perfil & Identificação do Usuário
                 </span>
+
+                {/* SELETOR DE FUNÇÃO / PAPEL */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">
+                    Função no Sistema <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserRole('MEDICO');
+                        if (!userSpecialty || userSpecialty.includes('Secretária')) setUserSpecialty('Pediatria');
+                        if (!userCrm) setUserCrm('CRM/SP 148.910');
+                        applyPermissionPreset('all');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                        userRole === 'MEDICO'
+                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-xs">
+                        <span>⭐</span>
+                        <span>Médico(a) Titular</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Dono da agenda no aplicativo
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserRole('SECRETARIA');
+                        if (userSpecialty === 'Pediatria') setUserSpecialty('Secretária Executiva');
+                        applyPermissionPreset('secretary');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                        userRole === 'SECRETARIA'
+                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span>📋</span>
+                        <span>Secretária / Recepção</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Operador de consultas
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserRole('ADMIN');
+                        applyPermissionPreset('all');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                        userRole === 'ADMIN'
+                          ? 'bg-emerald-50 border-[#005a43] ring-2 ring-[#005a43]/20 text-[#005a43] shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span>🛡️</span>
+                        <span>Administrador</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Acesso irrestrito
+                      </span>
+                    </button>
+                  </div>
+
+                  {userRole === 'MEDICO' && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-emerald-100/70 border border-emerald-300 text-emerald-950 text-xs flex items-start gap-2.5">
+                      <span className="text-base shrink-0">⭐</span>
+                      <div>
+                        <strong>Titular da Agenda:</strong> O sistema vai reconhecer de quem é a agenda a partir deste médico (Ex: <em>Marcação de consultas • {userName || 'Dra. Mariana'} ({userSpecialty || 'Pediatra'})</em>).
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
@@ -2536,7 +2624,7 @@ export default function Dashboard() {
                     required
                     value={userName}
                     onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="Ex: Juliana Rocha Santos"
+                    placeholder={userRole === 'MEDICO' ? 'Ex: Dra. Mariana Souza' : 'Ex: Juliana Rocha Santos'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                   />
                 </div>
@@ -2544,18 +2632,21 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">
-                      Especialidade / Função <span className="text-rose-500">*</span>
+                      {userRole === 'MEDICO' ? 'Especialidade Médica *' : 'Especialidade / Função *'}
                     </label>
                     <input
                       type="text"
                       required
                       value={userSpecialty}
                       onChange={(e) => setUserSpecialty(e.target.value)}
-                      placeholder="Ex: Secretária Executiva, Recepção..."
+                      placeholder={userRole === 'MEDICO' ? 'Ex: Pediatria, Cardiologia...' : 'Ex: Secretária Executiva, Recepção...'}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                     />
                     <div className="flex flex-wrap gap-1 mt-1.5">
-                      {['Secretária Executiva', 'Recepção', 'Atendimento', 'Gestão'].map((esp) => (
+                      {(userRole === 'MEDICO'
+                        ? ['Pediatria', 'Cardiologia', 'Dermatologia', 'Ginecologia', 'Ortopedia', 'Clínica Geral']
+                        : ['Secretária Executiva', 'Recepção', 'Atendimento', 'Gestão']
+                      ).map((esp) => (
                         <button
                           key={esp}
                           type="button"
@@ -2568,22 +2659,56 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      CPF <span className="text-slate-400 font-normal">(opcional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={userCpf}
-                      onChange={(e) => setUserCpf(formatCPF(e.target.value))}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
-                    />
-                  </div>
+                  {userRole === 'MEDICO' ? (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        CRM / Registro Profissional <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={userCrm}
+                        onChange={(e) => setUserCrm(e.target.value)}
+                        placeholder="Ex: CRM/SP 148.910"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Exibido nos cabeçalhos e confirmações.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        CPF <span className="text-slate-400 font-normal">(opcional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={userCpf}
+                        onChange={(e) => setUserCpf(formatCPF(e.target.value))}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {userRole === 'MEDICO' && (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        CPF <span className="text-slate-400 font-normal">(opcional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={userCpf}
+                        onChange={(e) => setUserCpf(formatCPF(e.target.value))}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">
                       E-mail <span className="text-rose-500">*</span>
@@ -2593,7 +2718,7 @@ export default function Dashboard() {
                       required
                       value={userEmail}
                       onChange={(e) => setUserEmail(e.target.value)}
-                      placeholder="usuario@consultorio.med.br"
+                      placeholder={userRole === 'MEDICO' ? 'dra.mariana@consultorio.med.br' : 'usuario@consultorio.med.br'}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                     />
                   </div>

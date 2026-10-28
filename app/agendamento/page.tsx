@@ -36,9 +36,9 @@ export default function AgendamentoOnlinePage() {
   const [patientNameParam, setPatientNameParam] = useState('');
 
   // Estados de dados
-  const [doctorName, setDoctorName] = useState('Dra. Amanda Silva');
-  const [clinicName, setClinicName] = useState('CliniDesk - Consultório Médico');
-  const [specialty, setSpecialty] = useState('Cardiologia & Clínica Geral');
+  const [doctorName, setDoctorName] = useState('Dra. Mariana Souza');
+  const [clinicName, setClinicName] = useState('Consultório Dra. Mariana');
+  const [specialty, setSpecialty] = useState('Pediatria');
   const [loadingMonth, setLoadingMonth] = useState(true);
 
   // Navegação de 4 meses

@@ -40,12 +40,12 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
   } catch (e) {}
 
   return {
-    name: 'Dra. Amanda Silva',
+    name: 'Dra. Mariana Souza',
     link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
   };
 }
 
-export const SYSTEM_PROMPT = `Você é a assistente virtual inteligente de atendimento e gestão de consultas da plataforma CliniDesk.
+export const SYSTEM_PROMPT = `Você é a assistente virtual inteligente de atendimento e gestão de consultas do consultório médico Iterum.
 
 MANUAL OPERACIONAL PADRONIZADO (POP) - FLUXO DE ATENDIMENTO E AGENDAMENTO VIA WHATSAPP (1º CONTATO):
 Você deve seguir estritamente a árvore de decisão condicional e os scripts do POP:

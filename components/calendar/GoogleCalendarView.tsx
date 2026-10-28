@@ -1258,7 +1258,7 @@ export default function GoogleCalendarView({
                   <CalendarDays className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">CliniDesk Agenda</h3>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">Iterum • Agenda Médica</h3>
                   <p className="text-xs text-slate-500 font-medium">{activeDoctor.name}</p>
                 </div>
               </div>
@@ -1339,7 +1339,7 @@ export default function GoogleCalendarView({
               {onSwitchTab && (
                 <div className="p-3 space-y-1">
                   <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    Módulos CliniDesk
+                    Módulos do Sistema
                   </div>
                   <button
                     onClick={() => {

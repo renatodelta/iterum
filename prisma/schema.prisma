@@ -87,6 +87,7 @@ model User {
   name        String
   email       String   @unique
   cpf         String?
+  crm         String?
   phone       String?
   login       String?  @unique
   password    String?

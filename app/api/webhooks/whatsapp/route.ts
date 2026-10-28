@@ -130,10 +130,12 @@ export async function POST(req: NextRequest) {
     if (!clinic) {
       clinic = await prisma.clinic.create({
         data: {
-          name: 'Clínica Saúde & Vida',
-          email: 'contato@clinica.com.br',
+          name: 'Consultório Dra. Mariana Souza',
+          doctorName: 'Dra. Mariana Souza',
+          crm: 'CRM/SP 148.910',
+          specialty: 'Pediatria',
+          email: 'dra.mariana@iterum.med.br',
           phone: '+5511999999999',
-          specialty: 'Clínica Geral',
           slotDurationMinutes: 30,
           minCancelHours: 2,
         },

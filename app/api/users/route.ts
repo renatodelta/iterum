@@ -4,62 +4,19 @@ import { generateAutoLogin } from '@/lib/userPermissions';
 
 export const dynamic = 'force-dynamic';
 
-// Usuários iniciais com controle de acesso para a gestão do consultório (Perfil Único)
+// Usuários do sistema (O médico titular da agenda + operadores/secretárias)
 let memoryUsers: any[] = [
   {
-    id: 'user-sec-1',
-    name: 'Juliana Rocha Santos',
-    specialty: 'Secretária Executiva & Atendimento',
-    cpf: '123.456.789-01',
-    email: 'juliana.santos@consultorio.med.br',
-    phone: '(11) 98765-4321',
-    login: 'julianars',
+    id: 'user-med-1',
+    name: 'Dra. Mariana Souza',
+    role: 'MEDICO',
+    specialty: 'Pediatria',
+    crm: 'CRM/SP 148.910',
+    cpf: '111.222.333-44',
+    email: 'dra.mariana@iterum.med.br',
+    phone: '(11) 98888-7777',
+    login: 'marianas',
     password: 'password123',
-    role: 'SECRETARIA',
-    permissions: [
-      'visualizar_agenda',
-      'bloquear_horario',
-      'agendamento',
-      'desmarcacao',
-      'remarcacao',
-      'agendamento_extra',
-      'dados_paciente',
-    ],
-    status: 'ACTIVE',
-    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user-sec-2',
-    name: 'Mariana Costa Lima',
-    specialty: 'Recepção & Triagem',
-    cpf: '234.567.890-12',
-    email: 'mariana.costa@consultorio.med.br',
-    phone: '(11) 97654-3210',
-    login: 'marianacl',
-    password: 'password123',
-    role: 'SECRETARIA',
-    permissions: [
-      'visualizar_agenda',
-      'agendamento',
-      'desmarcacao',
-      'remarcacao',
-      'dados_paciente',
-    ],
-    status: 'ACTIVE',
-    createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'user-adm-3',
-    name: 'Carlos Eduardo Ferreira',
-    specialty: 'Gestão Administrativa',
-    cpf: '345.678.901-23',
-    email: 'carlos.ferreira@consultorio.med.br',
-    phone: '(11) 96543-2109',
-    login: 'carlosef',
-    password: 'password123',
-    role: 'ADMIN',
     permissions: [
       'visualizar_agenda',
       'configurar_perfil',
@@ -72,7 +29,31 @@ let memoryUsers: any[] = [
       'gerar_agenda',
     ],
     status: 'ACTIVE',
-    createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
+    createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'user-sec-2',
+    name: 'Juliana Rocha Santos',
+    role: 'SECRETARIA',
+    specialty: 'Secretária Executiva & Atendimento',
+    crm: null,
+    cpf: '123.456.789-01',
+    email: 'juliana.santos@consultorio.med.br',
+    phone: '(11) 98765-4321',
+    login: 'julianars',
+    password: 'password123',
+    permissions: [
+      'visualizar_agenda',
+      'bloquear_horario',
+      'agendamento',
+      'desmarcacao',
+      'remarcacao',
+      'agendamento_extra',
+      'dados_paciente',
+    ],
+    status: 'ACTIVE',
+    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     updatedAt: new Date().toISOString(),
   },
 ];
@@ -115,6 +96,7 @@ export async function POST(req: Request) {
     const {
       name,
       specialty,
+      crm,
       cpf,
       email,
       phone,
@@ -138,6 +120,7 @@ export async function POST(req: Request) {
         data: {
           name,
           specialty: specialty || 'Secretária',
+          crm: crm || null,
           cpf: cpf || null,
           email,
           phone: phone || null,
@@ -165,6 +148,7 @@ export async function POST(req: Request) {
         id: `user-${Date.now()}`,
         name,
         specialty: specialty || 'Secretária',
+        crm: crm || null,
         cpf: cpf || null,
         email,
         phone: phone || null,
@@ -192,6 +176,7 @@ export async function PUT(req: Request) {
       id,
       name,
       specialty,
+      crm,
       cpf,
       email,
       phone,
@@ -212,6 +197,7 @@ export async function PUT(req: Request) {
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (specialty !== undefined) updateData.specialty = specialty;
+      if (crm !== undefined) updateData.crm = crm;
       if (cpf !== undefined) updateData.cpf = cpf;
       if (email !== undefined) updateData.email = email;
       if (phone !== undefined) updateData.phone = phone;
@@ -255,6 +241,7 @@ export async function PUT(req: Request) {
           ...memoryUsers[index],
           name: name !== undefined ? name : memoryUsers[index].name,
           specialty: specialty !== undefined ? specialty : memoryUsers[index].specialty,
+          crm: crm !== undefined ? crm : memoryUsers[index].crm,
           cpf: cpf !== undefined ? cpf : memoryUsers[index].cpf,
           email: email !== undefined ? email : memoryUsers[index].email,
           phone: phone !== undefined ? phone : memoryUsers[index].phone,
