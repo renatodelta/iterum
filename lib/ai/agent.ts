@@ -1,6 +1,13 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 import {
+  addToWaitlist,
+  loadWaitlist,
+  confirmWaitlistBooking,
+  declineWaitlistSlot,
+  updateWaitlistEntry,
+} from '@/lib/waitlist';
+import {
   buscarConsultaAtual,
   buscarHorariosDisponiveis,
   buscarProximosHorariosDisponiveis,
@@ -485,6 +492,129 @@ async function runPOPWorkflow(
   }
 
   // =========================================================================
+  // ETAPA FILA DE ESPERA 1: OFERTA DE VAGA LIBERADA POR REMARCAÇÃO / CANCELAMENTO
+  // Pergunta anterior: "Você tem interesse em agendar neste horário?"
+  // =========================================================================
+  if (
+    lastAssistantMsg.includes('Você tem interesse em agendar neste horário?') ||
+    lastAssistantMsg.includes('Você tem interesse nesse horário?')
+  ) {
+    const waitlist = loadWaitlist();
+    const cleanPhone = patientPhone.replace(/\D/g, '');
+    const entry = waitlist.find(
+      (w) => w.patientPhone.replace(/\D/g, '') === cleanPhone && (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
+    );
+
+    if (isYes(userMessage)) {
+      // Paciente tem interesse! Resumir o agendamento e pedir confirmação final
+      const slotDisplay = entry?.offeredSlot
+        ? `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`
+        : 'horário liberado';
+      const patientTargetName = entry?.patientName || displayName || 'Paciente';
+
+      return {
+        reply: `Excelente, ${displayName || patientTargetName}! Resumo do seu agendamento para a vaga liberada:\n\n👤 *Paciente:* ${patientTargetName}\n📅 *Data e Horário:* ${slotDisplay}\n👨‍⚕️ *Profissional:* ${doctorInfo.name}\n\nPodemos confirmar o seu agendamento para preencher este horário?\n\n[1] SIM, confirmar agendamento\n[2] NÃO`,
+        toolsExecuted,
+      };
+    } else if (isNo(userMessage)) {
+      // Paciente não tem interesse: marcar como RECUSADO e notificar próximo da fila
+      if (entry) {
+        await declineWaitlistSlot(entry.id);
+      }
+      return {
+        reply: `Entendido, ${greetingName}! Registramos sua resposta e a vaga será oferecida ao próximo paciente da fila. Continuaremos avisando você caso surja uma nova vaga em outro dia!`,
+        toolsExecuted,
+      };
+    } else {
+      return {
+        reply: `Por favor, responda com [1] SIM caso tenha interesse no horário liberado ou [2] NÃO para passar a vez.`,
+        toolsExecuted,
+      };
+    }
+  }
+
+  // =========================================================================
+  // ETAPA FILA DE ESPERA 2: CONFIRMAÇÃO FINAL DO ENCAIXE & PREENCHIMENTO DA LACUNA
+  // Pergunta anterior: "Podemos confirmar o seu agendamento para preencher este horário?"
+  // =========================================================================
+  if (lastAssistantMsg.includes('Podemos confirmar o seu agendamento para preencher este horário?')) {
+    const waitlist = loadWaitlist();
+    const cleanPhone = patientPhone.replace(/\D/g, '');
+    const entry = waitlist.find(
+      (w) => w.patientPhone.replace(/\D/g, '') === cleanPhone && (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
+    );
+
+    if (isYes(userMessage)) {
+      if (entry) {
+        const bookRes = await confirmWaitlistBooking(entry.id, clinicId);
+        toolsExecuted.push({ name: 'confirmar_encaixe_fila', args: { waitlistId: entry.id }, result: bookRes });
+
+        const slotDisplay = entry.offeredSlot
+          ? `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`
+          : 'horário combinado';
+        return {
+          reply: `🎉 Agendamento confirmado com sucesso!\n\nA vaga foi garantida e a lacuna da agenda foi preenchida. Sua consulta está marcada para o dia *${slotDisplay}* com ${doctorInfo.name}.\n\nAgradecemos a sua confirmação e esperamos você!`,
+          toolsExecuted,
+        };
+      } else {
+        return {
+          reply: `Agendamento confirmado com sucesso!\n\n${doctorInfo.name} agradece o contato e aguarda você no horário marcado!`,
+          toolsExecuted,
+        };
+      }
+    } else if (isNo(userMessage)) {
+      if (entry) {
+        await declineWaitlistSlot(entry.id);
+      }
+      return {
+        reply: 'Sem problemas! O agendamento não foi concluído e você continuará em nossa lista para oportunidades futuras.',
+        toolsExecuted,
+      };
+    } else {
+      return {
+        reply: 'Por favor, responda com [1] SIM para confirmar o agendamento da vaga ou [2] NÃO para cancelar.',
+        toolsExecuted,
+      };
+    }
+  }
+
+  // =========================================================================
+  // ETAPA FILA DE ESPERA 3: RESPOSTA SOBRE ENTRAR NA FILA DE ESPERA
+  // Pergunta anterior: "Gostaria de entrar na nossa *Fila de Espera*?" ou "Gostaria de ficar na nossa *Fila de Espera*?"
+  // =========================================================================
+  if (
+    lastAssistantMsg.includes('Fila de Espera*?') ||
+    lastAssistantMsg.includes('fila de espera*?') ||
+    lastAssistantMsg.includes('Fila de Espera?')
+  ) {
+    if (isYes(userMessage)) {
+      const targetName = effectiveName && effectiveName !== 'Paciente' ? effectiveName : 'Paciente WhatsApp';
+      const added = await addToWaitlist({
+        patientName: targetName,
+        patientPhone,
+        preferredShift: 'Qualquer Horário',
+        notes: 'Adicionado via WhatsApp Bot por indisponibilidade de agenda',
+      });
+      toolsExecuted.push({ name: 'adicionar_fila_espera', args: { patientPhone }, result: added });
+
+      return {
+        reply: `Perfeito, ${greetingName}! Você foi adicionado(a) à nossa *Fila de Espera* com prioridade. Logo que um paciente remarcar ou cancelar uma consulta, você receberá uma mensagem automática por aqui para aproveitar o horário liberado! 📲`,
+        toolsExecuted,
+      };
+    } else if (isNo(userMessage)) {
+      return {
+        reply: 'Entendido! Caso deseje consultar outra data ou tiver alguma dúvida, estamos sempre à disposição.',
+        toolsExecuted,
+      };
+    } else {
+      return {
+        reply: 'Por favor, responda com [1] SIM se deseja entrar na Fila de Espera ou [2] NÃO.',
+        toolsExecuted,
+      };
+    }
+  }
+
+  // =========================================================================
   // ETAPA A.5: VALIDAÇÃO / CONFIRMAÇÃO DO HORÁRIO ESCOLHIDO
   // Pergunta anterior: "Você confirma o agendamento em [Data] às [Horário]?"
   // =========================================================================
@@ -730,11 +860,27 @@ async function runPOPWorkflow(
         };
       } else {
         return {
-          reply: `⚠️ ${resHorarios.message}\n\nPor favor, digite outra data para verificarmos a agenda.`,
+          reply: `⚠️ No momento não encontramos horários disponíveis na agenda para ${extractedDate.formattedStr}.\n\nVocê gostaria de ficar na nossa *Fila de Espera*? Caso surja alguma desistência ou remarcação, avisaremos você imediatamente!\n\n[1] SIM, quero fila de espera\n[2] NÃO`,
           toolsExecuted,
         };
       }
     }
+  }
+
+  // =========================================================================
+  // SUPORTE DIRETO A SOLICITAÇÃO DE FILA DE ESPERA / ENCAIXE
+  // =========================================================================
+  if (
+    msgLower.includes('fila de espera') ||
+    msgLower.includes('lista de espera') ||
+    msgLower.includes('fila') ||
+    msgLower.includes('encaixe') ||
+    msgLower.includes('tem vaga')
+  ) {
+    return {
+      reply: `Olá ${greetingName}! Gostaria de entrar na nossa *Fila de Espera* para ser avisado(a) automaticamente assim que surgir um horário liberado por cancelamento ou remarcação?\n\n[1] SIM, quero fila de espera\n[2] NÃO`,
+      toolsExecuted,
+    };
   }
 
   // =========================================================================

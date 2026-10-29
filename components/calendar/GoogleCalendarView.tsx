@@ -27,6 +27,7 @@ import {
   Settings,
   Sparkles,
   Activity,
+  Stethoscope,
 } from 'lucide-react';
 
 export type AgendaViewMode = 'dia' | '3dias' | 'semana' | 'mes';
@@ -43,7 +44,7 @@ interface GoogleCalendarViewProps {
   setSearchQuery: (q: string) => void;
   onOpenNewAppt: (date: Date, hourStr?: string) => void;
   onOpenApptDetails: (appt: any) => void;
-  onSwitchTab?: (tab: 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings') => void;
+  onSwitchTab?: (tab: 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings' | 'profissionais') => void;
   activeDoctor?: {
     name: string;
     specialty: string;
@@ -1392,6 +1393,16 @@ export default function GoogleCalendarView({
                   >
                     <CalendarPlus className="w-4 h-4 text-emerald-600" />
                     <span>Criar Agenda</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSwitchTab('profissionais');
+                      setDrawerOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
+                  >
+                    <Stethoscope className="w-4 h-4 text-emerald-700" />
+                    <span>Dados Profissionais</span>
                   </button>
                 </div>
               )}

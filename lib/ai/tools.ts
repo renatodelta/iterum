@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { addMinutes, isAfter, isBefore } from 'date-fns';
+import { notifyFirstInWaitlistForVacatedSlot } from '@/lib/waitlist';
 
 export interface ToolResult {
   success: boolean;
@@ -360,6 +361,16 @@ export async function cancelarConsulta(agendamentoId: string, motivo?: string): 
       },
     });
 
+    // Notificar automaticamente o 1º paciente da Fila de Espera sobre a vaga liberada
+    try {
+      await notifyFirstInWaitlistForVacatedSlot({
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+      });
+    } catch (waitErr) {
+      console.warn('⚠️ [Waitlist] Erro ao notificar fila no cancelamento:', waitErr);
+    }
+
     const dataFormatada = formatBRTShort(new Date(appointment.startTime));
 
     return {
@@ -484,6 +495,18 @@ export async function confirmarRemarcacao(
           : 'Agendado via WhatsApp IA',
       },
     });
+
+    // 3. Notificar automaticamente o 1º paciente da Fila de Espera para a lacuna aberta pela remarcação
+    if (oldAppointment?.startTime) {
+      try {
+        await notifyFirstInWaitlistForVacatedSlot({
+          startTime: oldAppointment.startTime,
+          endTime: oldAppointment.endTime,
+        });
+      } catch (waitErr) {
+        console.warn('⚠️ [Waitlist] Erro ao notificar fila na remarcação:', waitErr);
+      }
+    }
 
     return {
       success: true,

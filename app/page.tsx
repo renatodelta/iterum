@@ -165,7 +165,7 @@ const WEEKDAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábad
 const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:00', '13:45', '14:30', '15:15', '16:00', '16:45', '17:30'];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings' | 'profissionais'>('agenda');
   const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
@@ -184,9 +184,34 @@ export default function Dashboard() {
   const [breakEndTime, setBreakEndTime] = useState('13:00');
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
   const [returnSlotDurationMinutes, setReturnSlotDurationMinutes] = useState(20);
+  const [maxReturnSlotsPerDay, setMaxReturnSlotsPerDay] = useState<number>(4);
+  const [returnSlotTimes, setReturnSlotTimes] = useState<string[]>(['11:00', '16:00', '16:30', '17:00']);
   const [selectedDays, setSelectedDays] = useState<string[]>(['1', '2', '3', '4', '5']);
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Estados de "Dados Profissionais"
+  const [savingProfissionais, setSavingProfissionais] = useState(false);
+  const [saveProfissionaisMsg, setSaveProfissionaisMsg] = useState<string | null>(null);
+
+  // Estados de "Fila de Espera"
+  const [waitlist, setWaitlist] = useState<any[]>([]);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
+  const [waitlistSearch, setWaitlistSearch] = useState('');
+  const [waitlistStatusFilter, setWaitlistStatusFilter] = useState<string>('ALL');
+  const [showModalAddWaitlist, setShowModalAddWaitlist] = useState(false);
+  const [waitlistNotice, setWaitlistNotice] = useState<string | null>(null);
+  const [newWaitName, setNewWaitName] = useState('');
+  const [newWaitPhone, setNewWaitPhone] = useState('');
+  const [newWaitShift, setNewWaitShift] = useState<'Manhã' | 'Tarde' | 'Qualquer Horário'>('Qualquer Horário');
+  const [newWaitDays, setNewWaitDays] = useState('Qualquer dia útil');
+  const [newWaitNotes, setNewWaitNotes] = useState('');
+
+  // Estados de Remarcação Manual pela Agenda
+  const [showModalReschedule, setShowModalReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
 
   // Filtros da Agenda no menu esquerdo
   const [filterConfirmed, setFilterConfirmed] = useState(true);
@@ -290,7 +315,23 @@ export default function Dashboard() {
     fetchData();
     fetchPatients();
     fetchUsers();
+    fetchWaitlist();
   }, [filterDate, filterStatus]);
+
+  async function fetchWaitlist() {
+    try {
+      setLoadingWaitlist(true);
+      const res = await fetch('/api/waitlist');
+      const data = await res.json();
+      if (data.waitlist) {
+        setWaitlist(data.waitlist);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar fila de espera:', e);
+    } finally {
+      setLoadingWaitlist(false);
+    }
+  }
 
   async function fetchData() {
     try {
@@ -309,6 +350,8 @@ export default function Dashboard() {
         if (c.breakEndTime) setBreakEndTime(c.breakEndTime);
         if (c.slotDurationMinutes) setSlotDurationMinutes(Number(c.slotDurationMinutes));
         if (c.returnSlotDurationMinutes) setReturnSlotDurationMinutes(Number(c.returnSlotDurationMinutes));
+        if (c.maxReturnSlotsPerDay !== undefined) setMaxReturnSlotsPerDay(Number(c.maxReturnSlotsPerDay));
+        if (c.returnSlotTimes && Array.isArray(c.returnSlotTimes)) setReturnSlotTimes(c.returnSlotTimes);
         if (c.selectedDays && Array.isArray(c.selectedDays)) setSelectedDays(c.selectedDays.map(String));
       }
 
@@ -819,7 +862,7 @@ export default function Dashboard() {
     const bStartMin = breakStartH * 60 + breakStartM;
     const bEndMin = breakEndH * 60 + breakEndM;
 
-    const slots: Array<{ time: string; isBreak: boolean }> = [];
+    const slots: Array<{ time: string; isBreak: boolean; isReturn: boolean }> = [];
     let cur = startMin;
     const dur = Number(slotDurationMinutes) || 30;
 
@@ -830,11 +873,39 @@ export default function Dashboard() {
       const h = Math.floor(cur / 60);
       const m = cur % 60;
       const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      slots.push({ time: timeStr, isBreak: !!isBreak });
+      const isReturn = !isBreak && returnSlotTimes.includes(timeStr);
+      slots.push({ time: timeStr, isBreak: !!isBreak, isReturn: !!isReturn });
       cur += dur;
     }
     return slots;
-  }, [workStartTime, workEndTime, slotDurationMinutes, breakEnabled, breakStartTime, breakEndTime]);
+  }, [workStartTime, workEndTime, slotDurationMinutes, breakEnabled, breakStartTime, breakEndTime, returnSlotTimes]);
+
+  function toggleReturnSlotTime(timeStr: string) {
+    if (returnSlotTimes.includes(timeStr)) {
+      setReturnSlotTimes(returnSlotTimes.filter((t) => t !== timeStr));
+    } else {
+      setReturnSlotTimes([...returnSlotTimes, timeStr]);
+    }
+  }
+
+  function applyReturnPresets(type: 'end' | 'start' | 'split' | 'clear') {
+    const available = generatedPreviewSlots.filter((s) => !s.isBreak).map((s) => s.time);
+    if (type === 'clear') {
+      setReturnSlotTimes([]);
+      return;
+    }
+    const count = Math.min(maxReturnSlotsPerDay || 4, available.length);
+    if (type === 'end') {
+      setReturnSlotTimes(available.slice(-count));
+    } else if (type === 'start') {
+      setReturnSlotTimes(available.slice(0, count));
+    } else if (type === 'split') {
+      const half = Math.ceil(count / 2);
+      const startPart = available.slice(0, half);
+      const endPart = available.slice(-(count - half));
+      setReturnSlotTimes(Array.from(new Set([...startPart, ...endPart])));
+    }
+  }
 
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
@@ -845,15 +916,10 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: clinic?.doctorName || clinic?.name,
-          doctorName: clinic?.doctorName || clinic?.name,
-          specialty: clinic?.specialty,
-          crm: clinic?.crm,
-          email: clinic?.email,
-          phone: clinic?.phone,
-          address: clinic?.address,
           slotDurationMinutes: Number(slotDurationMinutes) || 30,
           returnSlotDurationMinutes: Number(returnSlotDurationMinutes) || 20,
+          maxReturnSlotsPerDay: Number(maxReturnSlotsPerDay) || 4,
+          returnSlotTimes,
           scheduleStartDate,
           scheduleEndDate,
           workStartTime,
@@ -862,7 +928,6 @@ export default function Dashboard() {
           breakStartTime,
           breakEndTime,
           selectedDays,
-          minCancelHours: Number(clinic?.minCancelHours) || 2,
         }),
       });
       const data = await res.json();
@@ -877,6 +942,234 @@ export default function Dashboard() {
       alert(`Erro ao salvar: ${e.message}`);
     } finally {
       setSavingSettings(false);
+    }
+  }
+
+  async function handleSaveProfissionais(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setSavingProfissionais(true);
+      setSaveProfissionaisMsg(null);
+      const res = await fetch('/api/clinic/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: clinic?.doctorName || clinic?.name,
+          doctorName: clinic?.doctorName || clinic?.name,
+          specialty: clinic?.specialty,
+          crm: clinic?.crm,
+          email: clinic?.email,
+          phone: clinic?.phone,
+          address: clinic?.address,
+          minCancelHours: Number(clinic?.minCancelHours) || 2,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClinic(data.clinic);
+        setSaveProfissionaisMsg('Dados profissionais do médico titular salvos com sucesso!');
+        setTimeout(() => setSaveProfissionaisMsg(null), 6000);
+        fetchUsers();
+      } else {
+        alert(data.error || 'Erro ao salvar dados profissionais.');
+      }
+    } catch (e: any) {
+      alert(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSavingProfissionais(false);
+    }
+  }
+
+  // Ações da Fila de Espera
+  async function handleAddWaitlistEntry(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newWaitName.trim() || !newWaitPhone.trim()) {
+      alert('Preencha o nome e o telefone do paciente.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientName: newWaitName,
+          patientPhone: newWaitPhone,
+          preferredShift: newWaitShift,
+          preferredDays: newWaitDays,
+          notes: newWaitNotes,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowModalAddWaitlist(false);
+        setNewWaitName('');
+        setNewWaitPhone('');
+        setNewWaitNotes('');
+        fetchWaitlist();
+        setWaitlistNotice('Paciente adicionado à Fila de Espera com prioridade!');
+        setTimeout(() => setWaitlistNotice(null), 5000);
+      } else {
+        alert(data.error || 'Erro ao adicionar à fila de espera.');
+      }
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    }
+  }
+
+  async function handleRemoveWaitlist(id: string) {
+    if (!confirm('Deseja realmente remover este paciente da fila de espera?')) return;
+    try {
+      const res = await fetch(`/api/waitlist?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchWaitlist();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleConfirmWaitlistBooking(id: string) {
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'confirm_booking' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchWaitlist();
+        fetchData();
+        setWaitlistNotice(data.message);
+        setTimeout(() => setWaitlistNotice(null), 8000);
+      } else {
+        alert(data.message || 'Erro ao confirmar agendamento.');
+      }
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    }
+  }
+
+  async function handleDeclineWaitlist(id: string) {
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'decline_slot' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchWaitlist();
+        setWaitlistNotice('Vaga recusada. O próximo paciente da fila foi acionado automaticamente!');
+        setTimeout(() => setWaitlistNotice(null), 6000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleTriggerWaitlistTest() {
+    const testSlotTime = new Date();
+    testSlotTime.setDate(testSlotTime.getDate() + 1);
+    testSlotTime.setHours(14, 0, 0, 0);
+
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'notify_vacated',
+          startTime: testSlotTime.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (data.contacted) {
+        setWaitlistNotice(
+          `🚀 Disparo de teste realizado! O 1º paciente (${data.patient?.patientName}) foi contactado via WhatsApp para o horário ${data.patient?.offeredSlot?.dateDisplay} às ${data.patient?.offeredSlot?.timeDisplay}.`
+        );
+        fetchWaitlist();
+      } else {
+        alert(data.message || 'Nenhum paciente aguardando na fila.');
+      }
+      setTimeout(() => setWaitlistNotice(null), 8000);
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    }
+  }
+
+  // Ações de Remarcação & Cancelamento Manual pela Agenda
+  async function handleManualReschedule(apptId: string, newDate: string, newTime: string) {
+    if (!newDate || !newTime) {
+      alert('Informe a nova data e o horário para remarcar.');
+      return;
+    }
+    try {
+      setRescheduling(true);
+      const newDateTimeStr = `${newDate} ${newTime}`;
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: apptId,
+          action: 'REMARCAR',
+          newStartTime: newDateTimeStr,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowModalReschedule(false);
+        setSelectedApptDetails(null);
+        fetchData();
+        fetchWaitlist();
+        if (data.waitlistNotification?.contacted) {
+          setWaitlistNotice(
+            `🎉 Consulta remarcada com sucesso! A lacuna aberta foi detectada e o 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
+          );
+        } else {
+          setWaitlistNotice('Consulta remarcada com sucesso na agenda!');
+        }
+        setTimeout(() => setWaitlistNotice(null), 8000);
+      } else {
+        alert(data.error || 'Erro ao remarcar consulta.');
+      }
+    } catch (err: any) {
+      alert(`Erro ao remarcar: ${err.message}`);
+    } finally {
+      setRescheduling(false);
+    }
+  }
+
+  async function handleManualCancel(apptId: string) {
+    if (!confirm('Deseja realmente cancelar este agendamento? O horário vago será oferecido automaticamente ao 1º paciente da Fila de Espera via WhatsApp.')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: apptId,
+          action: 'CANCELAR',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedApptDetails(null);
+        fetchData();
+        fetchWaitlist();
+        if (data.waitlistNotification?.contacted) {
+          setWaitlistNotice(
+            `Consulta cancelada! A lacuna foi liberada e o 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
+          );
+        } else {
+          setWaitlistNotice('Consulta cancelada com sucesso.');
+        }
+        setTimeout(() => setWaitlistNotice(null), 8000);
+      } else {
+        alert(data.error || 'Erro ao cancelar consulta.');
+      }
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
     }
   }
 
@@ -1115,9 +1408,11 @@ export default function Dashboard() {
             >
               <div className="flex items-center gap-3">
                 <Inbox className={`w-5 h-5 ${activeTab === 'fila' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Encaixes</span>
+                <span>Fila de Espera</span>
               </div>
-              <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43]">
+                {waitlist.filter((w) => w.status === 'AGUARDANDO').length}
+              </span>
             </button>
 
             <button
@@ -1166,6 +1461,17 @@ export default function Dashboard() {
             >
               <CalendarPlus className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
               <span>Criar Agenda</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('profissionais')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'profissionais'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
+            >
+              <Stethoscope className={`w-5 h-5 ${activeTab === 'profissionais' ? 'text-[#059669]' : 'text-slate-400'}`} />
+              <span>Dados Profissionais</span>
             </button>
           </nav>
         </div>
@@ -1254,9 +1560,11 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <Inbox className="w-5 h-5 text-slate-500" />
-                    <span>Encaixes</span>
+                    <span>Fila de Espera</span>
                   </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse"></span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                    {waitlist.filter((w) => w.status === 'AGUARDANDO').length}
+                  </span>
                 </button>
 
                 <button
@@ -1313,6 +1621,20 @@ export default function Dashboard() {
                 >
                   <CalendarPlus className="w-5 h-5 text-teal-400" />
                   <span>Criar Agenda</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('profissionais');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'profissionais'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                >
+                  <Stethoscope className="w-5 h-5 text-teal-400" />
+                  <span>Dados Profissionais</span>
                 </button>
               </nav>
             </div>
@@ -1759,44 +2081,370 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
-              ABA: FILA DE ESPERA & ENCAIXE
+              ABA: FILA DE ESPERA (REMODELAÇÃO DE ENCAIXES COM IA WHATSAPP)
           --------------------------------------------------------------------- */}
           {activeTab === 'fila' && (
-            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
-              <div className="pb-3 sm:pb-4 border-b border-slate-100">
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <Inbox className="w-5 h-5 text-sky-600" />
-                  Fila de Espera e Encaixes Inteligentes
-                </h2>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Pacientes aguardando antecipação de horário com disparo automático via WhatsApp
-                </p>
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 flex flex-col overflow-y-auto">
+              {/* CABEÇALHO */}
+              <div className="pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-100 shadow-2xs">
+                    <Inbox className="w-6 h-6 text-sky-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      Fila de Espera Inteligente
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                      Gerencie a lista de pacientes aguardando vagas e o acionamento automático via WhatsApp ao liberar horários por cancelamento ou remarcação.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleTriggerWaitlistTest}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                    title="Simula a liberação de um horário e dispara mensagem automática via WhatsApp para o 1º da fila"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Testar Disparo para o 1º da Fila</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowModalAddWaitlist(true)}
+                    className="px-4 py-2 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                    <span>Adicionar à Fila</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 my-4 sm:my-6">
-                <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/60 border border-sky-100">
-                  <span className="text-xs font-bold text-sky-900 block">Pacientes na Fila</span>
-                  <span className="text-2xl font-extrabold text-sky-950 mt-1 block">4</span>
-                  <span className="text-[11px] text-sky-700 mt-1 block">Prioridade por ordem de solicitação</span>
+              {/* BANNER DE NOTIFICAÇÃO / SUCESSO DA FILA */}
+              {waitlistNotice && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold">{waitlistNotice}</span>
+                  </div>
+                  <button onClick={() => setWaitlistNotice(null)} className="text-emerald-700 hover:text-emerald-900 p-1">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/60 border border-emerald-100">
-                  <span className="text-xs font-bold text-emerald-900 block">Tempo Médio de Resposta</span>
-                  <span className="text-2xl font-extrabold text-emerald-950 mt-1 block">4 min</span>
-                  <span className="text-[11px] text-emerald-700 mt-1 block">Aceite instantâneo via botão de WhatsApp</span>
+              )}
+
+              {/* CARDS DE MÉTRICAS */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 my-5">
+                <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/70 border border-sky-100/90 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-sky-900 block">Pacientes Aguardando Vaga</span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse" />
+                  </div>
+                  <span className="text-3xl font-black text-sky-950 mt-1.5 block">
+                    {waitlist.filter((w) => w.status === 'AGUARDANDO').length}
+                  </span>
+                  <span className="text-[11px] text-sky-700 mt-1 block font-medium">
+                    Prioridade por ordem de chegada na fila
+                  </span>
                 </div>
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-xs font-bold text-slate-900 block">Vagas Recuperadas este Mês</span>
-                  <span className="text-2xl font-extrabold text-slate-950 mt-1 block">18 vagas</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">0% de ociosidade por faltas</span>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-100/90 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900 block">Vagas Ofertadas (Aguardando)</span>
+                    <Clock className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <span className="text-3xl font-black text-amber-950 mt-1.5 block">
+                    {waitlist.filter((w) => w.status === 'NOTIFICADO').length}
+                  </span>
+                  <span className="text-[11px] text-amber-700 mt-1 block font-medium">
+                    Aguardando confirmação via WhatsApp
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/70 border border-emerald-100/90 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-900 block">Lacunas Preenchidas / Encaixes</span>
+                    <CheckCircle2 className="w-4 h-4 text-[#005a43]" />
+                  </div>
+                  <span className="text-3xl font-black text-emerald-950 mt-1.5 block">
+                    {waitlist.filter((w) => w.status === 'AGENDADO').length}
+                  </span>
+                  <span className="text-[11px] text-emerald-700 mt-1 block font-medium">
+                    Agendamentos recuperados automaticamente
+                  </span>
                 </div>
               </div>
 
-              <div className="flex-1 p-5 sm:p-6 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
-                <Zap className="w-10 h-10 text-sky-500 stroke-1 mb-2" />
-                <h3 className="text-sm font-bold text-slate-800">Motor de Recuperação de Faltas Ativo</h3>
-                <p className="text-xs text-slate-500 max-w-md mt-1">
-                  Quando uma consulta for cancelada ou remarcada pelo WhatsApp, o CliniDesk aciona automaticamente os pacientes da lista de espera com opções interativas de [SIM / NÃO].
-                </p>
+              {/* FILTROS E BUSCA */}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative flex-1 min-w-[240px] max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={waitlistSearch}
+                    onChange={(e) => setWaitlistSearch(e.target.value)}
+                    placeholder="Buscar por paciente ou telefone..."
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  {[
+                    { id: 'ALL', label: 'Todos' },
+                    { id: 'AGUARDANDO', label: 'Aguardando' },
+                    { id: 'NOTIFICADO', label: 'Notificados WhatsApp' },
+                    { id: 'AGENDADO', label: 'Confirmados' },
+                    { id: 'RECUSADO', label: 'Recusados' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setWaitlistStatusFilter(filter.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                        waitlistStatusFilter === filter.id
+                          ? 'bg-[#005a43] text-white shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* LISTA DE PACIENTES NA FILA DE ESPERA */}
+              <div className="space-y-3">
+                {waitlist
+                  .filter((w) => {
+                    if (waitlistStatusFilter !== 'ALL' && w.status !== waitlistStatusFilter) return false;
+                    if (!waitlistSearch.trim()) return true;
+                    const q = waitlistSearch.toLowerCase();
+                    return (
+                      w.patientName?.toLowerCase().includes(q) ||
+                      w.patientPhone?.includes(q) ||
+                      w.notes?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((entry, index) => {
+                    const isFirst = entry.status === 'AGUARDANDO' && index === 0;
+
+                    return (
+                      <div
+                        key={entry.id}
+                        className={`p-4 rounded-2xl border transition-all duration-150 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+                          entry.status === 'NOTIFICADO'
+                            ? 'bg-amber-50/50 border-amber-200 shadow-2xs'
+                            : entry.status === 'AGENDADO'
+                            ? 'bg-emerald-50/40 border-emerald-200'
+                            : isFirst
+                            ? 'bg-[#e8f7f0]/60 border-emerald-300 shadow-2xs ring-1 ring-emerald-400/40'
+                            : 'bg-white border-slate-200/90 shadow-2xs hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0">
+                          {/* Badge de Posição na Fila */}
+                          <div
+                            className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-2xs ${
+                              isFirst
+                                ? 'bg-[#005a43] text-white'
+                                : entry.status === 'NOTIFICADO'
+                                ? 'bg-amber-500 text-white'
+                                : entry.status === 'AGENDADO'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            #{index + 1}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-slate-900 text-sm">{entry.patientName}</span>
+                              {isFirst && (
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43] border border-emerald-300">
+                                  Próximo da Fila
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  entry.status === 'AGUARDANDO'
+                                    ? 'bg-sky-50 text-sky-800 border-sky-200'
+                                    : entry.status === 'NOTIFICADO'
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                                    : entry.status === 'AGENDADO'
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                                }`}
+                              >
+                                {entry.status === 'AGUARDANDO' && 'Aguardando Vaga'}
+                                {entry.status === 'NOTIFICADO' && 'Vaga Oferecida via WhatsApp'}
+                                {entry.status === 'AGENDADO' && 'Encaixe Confirmado (Vaga Preenchida)'}
+                                {entry.status === 'RECUSADO' && 'Recusou Horário'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap font-medium">
+                              <span className="flex items-center gap-1 font-mono text-slate-700">
+                                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                                {formatPhoneBR(entry.patientPhone)}
+                              </span>
+                              <span>•</span>
+                              <span>Turno: <strong>{entry.preferredShift}</strong></span>
+                              <span>•</span>
+                              <span>Preferência: <strong>{entry.preferredDays || 'Qualquer dia'}</strong></span>
+                            </div>
+
+                            {entry.offeredSlot && (
+                              <div className="mt-2 p-2 rounded-xl bg-amber-100/70 border border-amber-300/80 text-xs text-amber-950 flex items-center gap-2">
+                                <MessageSquare className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                                <span>
+                                  Horário Ofertado: <strong>{entry.offeredSlot.dateDisplay} às {entry.offeredSlot.timeDisplay}</strong>
+                                </span>
+                              </div>
+                            )}
+
+                            {entry.notes && (
+                              <p className="text-[11px] text-slate-400 mt-1 italic">
+                                Obs: {entry.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* AÇÕES PARA CADA PACIENTE NA FILA */}
+                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                          {entry.status === 'NOTIFICADO' && (
+                            <>
+                              <button
+                                onClick={() => handleConfirmWaitlistBooking(entry.id)}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Confirmar Encaixe</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeclineWaitlist(entry.id)}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-bold transition cursor-pointer"
+                              >
+                                Recusar
+                              </button>
+                            </>
+                          )}
+
+                          {entry.status === 'AGUARDANDO' && (
+                            <button
+                              onClick={() => {
+                                const nextSlot = prompt('Informe a data e horário para oferecer ao paciente (ex: 30/10/2026 14:00):');
+                                if (nextSlot) {
+                                  const parts = nextSlot.split(' ');
+                                  fetch('/api/waitlist', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      action: 'notify_vacated',
+                                      startTime: parts[0] && parts[1] ? `${parts[0]}T${parts[1]}:00` : new Date().toISOString(),
+                                    }),
+                                  }).then(() => {
+                                    fetchWaitlist();
+                                    setWaitlistNotice(`Vaga oferecida via WhatsApp para ${entry.patientName}!`);
+                                  });
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                              <span>Oferecer Vaga WhatsApp</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleRemoveWaitlist(entry.id)}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                            title="Remover da Fila"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {waitlist.length === 0 && !loadingWaitlist && (
+                  <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl">
+                    <Inbox className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-slate-700">A fila de espera está vazia no momento</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Quando pacientes interagirem pelo WhatsApp ou forem adicionados manualmente, eles aparecerão aqui.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* CARD INFORMATIVO: FLUXO DE MENSAGENS NO WHATSAPP */}
+              <div className="mt-8 p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
+                  <Sparkles className="w-5 h-5 text-[#005a43]" />
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">
+                      Fluxo Automatizado de Mensagens da Fila de Espera no WhatsApp
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Como o sistema interage com os pacientes sem intervenção manual
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-[#005a43] block text-[11px]">
+                      1. Paciente Não Consegue Vaga
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Se a agenda estiver cheia ou o paciente pedir data lotada, o bot pergunta:
+                    </p>
+                    <div className="p-2 rounded-lg bg-slate-50 font-mono text-[10px] text-slate-700">
+                      "Gostaria de entrar na nossa Fila de Espera? [1] SIM [2] NÃO"
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-sky-700 block text-[11px]">
+                      2. Remarcação ou Cancelamento
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Assim que um horário for liberado, o 1º paciente da fila recebe imediatamente:
+                    </p>
+                    <div className="p-2 rounded-lg bg-sky-50 font-mono text-[10px] text-sky-900">
+                      "Um horário acaba de ser liberado (Data/Hora). Tem interesse? [1] SIM [2] NÃO"
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-amber-700 block text-[11px]">
+                      3. Resumo & Confirmação
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Ao responder [1] SIM, o WhatsApp resume a consulta e solicita a confirmação final:
+                    </p>
+                    <div className="p-2 rounded-lg bg-amber-50 font-mono text-[10px] text-amber-900">
+                      "Excelente! Resumo: Paciente, Data e Horário. Confirmar agendamento? [1] SIM [2] NÃO"
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-emerald-700 block text-[11px]">
+                      4. Lacuna Preenchida
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      A vaga na agenda é ocupada instantaneamente e o paciente recebe a confirmação com sucesso:
+                    </p>
+                    <div className="p-2 rounded-lg bg-emerald-50 font-mono text-[10px] text-emerald-900">
+                      "Agendamento confirmado! A lacuna da agenda foi preenchida. Esperamos você!"
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2667,6 +3315,145 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
+
+                  {/* =========================================================================
+                      OPÇÕES ESPECÍFICAS DE CONSULTAS DE RETORNO (QUANTIDADE & HORÁRIOS)
+                  ========================================================================= */}
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50/60 to-white border border-sky-200/90 space-y-4 shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-100">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-sky-700" />
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                              Consultas de Retorno por Dia & Horários Reservados
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Configure o limite diário de consultas de retorno e marque em quais horários da grade essas consultas devam ficar
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="text-xs font-black px-2.5 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                          {returnSlotTimes.length} de {maxReturnSlotsPerDay} horários selecionados
+                        </span>
+                      </div>
+
+                      {/* 1. QUANTIDADE DE CONSULTAS DE RETORNO POR DIA */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="font-extrabold text-slate-800 text-xs">
+                            Quantas consultas de retorno por dia?
+                          </label>
+                          <span className="text-xs font-black px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-900">
+                            Máximo: {maxReturnSlotsPerDay} retornos/dia
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max="30"
+                            required
+                            value={maxReturnSlotsPerDay}
+                            onChange={(e) => setMaxReturnSlotsPerDay(Math.max(0, parseInt(e.target.value) || 0))}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 shadow-2xs"
+                          />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {[1, 2, 3, 4, 5, 6, 8].map((qtd) => (
+                              <button
+                                key={qtd}
+                                type="button"
+                                onClick={() => setMaxReturnSlotsPerDay(qtd)}
+                                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition ${
+                                  maxReturnSlotsPerDay === qtd
+                                    ? 'bg-sky-700 text-white border-sky-700 shadow-2xs'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                {qtd} por dia
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. HORÁRIOS QUE ESSAS CONSULTAS DEVAM FICAR */}
+                      <div className="space-y-2.5 pt-2 border-t border-sky-100/80">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="font-extrabold text-slate-800 text-xs">
+                            Horários em que essas consultas devam ficar (Selecione na grade):
+                          </label>
+
+                          {/* ATALHOS RÁPIDOS DE DISTRIBUIÇÃO DOS RETORNOS */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-400">Atalhos:</span>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('end')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Últimos horários
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('start')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Primeiros horários
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('split')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Início & Fim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('clear')}
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-rose-600 transition"
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500">
+                          Clique diretamente nos horários da grade abaixo para definir quais horários do expediente serão reservados para consultas de retorno:
+                        </p>
+
+                        {/* GRADE CLICÁVEL DE HORÁRIOS PARA RETORNO */}
+                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-sky-200/80 max-h-44 overflow-y-auto">
+                          {generatedPreviewSlots
+                            .filter((s) => !s.isBreak)
+                            .map((slot) => {
+                              const isSelectedReturn = returnSlotTimes.includes(slot.time);
+                              return (
+                                <button
+                                  key={slot.time}
+                                  type="button"
+                                  onClick={() => toggleReturnSlotTime(slot.time)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-black border transition flex items-center gap-1.5 cursor-pointer ${
+                                    isSelectedReturn
+                                      ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-sky-50 hover:border-sky-300'
+                                  }`}
+                                >
+                                  {isSelectedReturn && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                  <span>{slot.time}</span>
+                                  <span className={`text-[9px] font-bold px-1 rounded ${
+                                    isSelectedReturn ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-600'
+                                  }`}>
+                                    {isSelectedReturn ? 'Retorno' : '1ª Vez'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* =========================================================================
@@ -2678,12 +3465,15 @@ export default function Dashboard() {
                       <Sparkles className="w-5 h-5 text-[#005a43]" />
                       <div>
                         <h3 className="font-extrabold text-slate-900 text-sm">Previsão em Tempo Real da Grade de Horários</h3>
-                        <p className="text-[11px] text-slate-400 font-medium">Horários que ficarão disponíveis para agendamento dos pacientes em um dia típico</p>
+                        <p className="text-[11px] text-slate-400 font-medium">Visualização clara das consultas de 1ª vez, retornos e intervalo do médico</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-50 text-[#005a43] border border-emerald-200">
-                        {generatedPreviewSlots.filter((s) => !s.isBreak).length} consultas / dia
+                        {generatedPreviewSlots.filter((s) => !s.isBreak && !s.isReturn).length} 1ª Vez ({slotDurationMinutes}m)
+                      </span>
+                      <span className="text-xs font-black px-2.5 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200">
+                        {generatedPreviewSlots.filter((s) => !s.isBreak && s.isReturn).length} Retornos ({returnSlotDurationMinutes}m)
                       </span>
                       {breakEnabled && (
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
@@ -2695,7 +3485,7 @@ export default function Dashboard() {
                   </div>
 
                   <p className="text-xs text-slate-500">
-                    Grade gerada para atendimentos das <strong>{workStartTime}</strong> às <strong>{workEndTime}</strong> com intervalos de <strong>{slotDurationMinutes} min</strong>:
+                    Grade gerada para atendimentos das <strong>{workStartTime}</strong> às <strong>{workEndTime}</strong>:
                   </p>
 
                   <div className="flex flex-wrap gap-2 pt-1 max-h-48 overflow-y-auto p-1 bg-slate-50/60 rounded-xl border border-slate-100">
@@ -2705,27 +3495,113 @@ export default function Dashboard() {
                         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition flex items-center gap-1.5 ${
                           slot.isBreak
                             ? 'bg-amber-100/80 text-amber-900 border-amber-300 line-through opacity-80 cursor-not-allowed'
+                            : slot.isReturn
+                            ? 'bg-sky-50 text-sky-800 border-sky-300 shadow-2xs font-black'
                             : 'bg-white text-[#005a43] border-emerald-200 shadow-2xs hover:border-[#005a43]'
                         }`}
-                        title={slot.isBreak ? 'Intervalo Bloqueado (Almoço)' : `Horário Disponível (${slot.time})`}
+                        title={
+                          slot.isBreak
+                            ? 'Intervalo Bloqueado (Almoço)'
+                            : slot.isReturn
+                            ? `Consulta de Retorno Reservada (${slot.time})`
+                            : `Consulta Nova / 1ª Vez (${slot.time})`
+                        }
                       >
                         {slot.isBreak && <Coffee className="w-3.5 h-3.5 text-amber-700" />}
+                        {slot.isReturn && <Clock className="w-3.5 h-3.5 text-sky-600" />}
                         {slot.time}
                         {slot.isBreak && <span className="text-[10px] no-underline font-normal">(Intervalo)</span>}
+                        {slot.isReturn && <span className="text-[10px] text-sky-700 bg-sky-100 px-1 rounded font-bold">Retorno</span>}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                {/* =========================================================================
-                    7. DADOS DO MÉDICO TITULAR RESPONSÁVEL PELA AGENDA
-                ========================================================================= */}
+                {/* BOTÃO PRINCIPAL DE SALVAR E CRIAR AGENDA */}
+                <div className="pt-4 pb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100">
+                  <div className="text-xs text-slate-500 font-medium">
+                    Ao salvar, a agenda e os horários de atendimento são recalculados para o período selecionado.
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="w-full sm:w-auto px-8 py-3.5 bg-[#005a43] hover:bg-[#004735] text-white font-black rounded-2xl shadow-lg shadow-[#005a43]/20 transition-all duration-150 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {savingSettings ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Criando e Salvando Agenda...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[2.5]" />
+                        <span>Criar e Salvar Agenda</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------------------
+              NOVA ABA: DADOS PROFISSIONAIS (MÉDICO TITULAR DA AGENDA)
+          --------------------------------------------------------------------- */}
+          {activeTab === 'profissionais' && clinic && (
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 overflow-y-auto">
+              {/* CABEÇALHO DADOS PROFISSIONAIS */}
+              <div className="pb-4 border-b border-slate-100 mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#e8f7f0] text-[#00875a] flex items-center justify-center shrink-0 border border-[#d1fae5] shadow-2xs">
+                    <Stethoscope className="w-6 h-6 text-[#005a43]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      Dados Profissionais
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                      Informações profissionais do médico titular da agenda exibidas nas mensagens automáticas de confirmação do WhatsApp, receitas e identificação do consultório.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-[#005a43] border border-emerald-200 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#059669] animate-pulse"></span>
+                    {clinic.doctorName || clinic.name || 'Médico Titular'} • {clinic.crm || 'CRM pendente'}
+                  </span>
+                </div>
+              </div>
+
+              {/* BANNER DE CONFIRMAÇÃO DE SALVAMENTO */}
+              {saveProfissionaisMsg && (
+                <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div className="flex-1 text-xs sm:text-sm font-bold">
+                    {saveProfissionaisMsg}
+                  </div>
+                  <button
+                    onClick={() => setSaveProfissionaisMsg(null)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* FORMULÁRIO DE DADOS PROFISSIONAIS */}
+              <form onSubmit={handleSaveProfissionais} className="space-y-6 max-w-4xl text-sm">
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
                     <Stethoscope className="w-4.5 h-4.5 text-[#005a43]" />
                     <div>
-                      <h3 className="font-extrabold text-slate-900 text-sm">Dados do Médico Titular da Agenda</h3>
-                      <p className="text-[11px] text-slate-400 font-medium">Informações profissionais exibidas nas mensagens de confirmação e receita</p>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Identificação do Médico Titular</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        Nome, especialidade e registro de conselho de classe
+                      </p>
                     </div>
                   </div>
 
@@ -2755,7 +3631,7 @@ export default function Dashboard() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-800 mb-1 text-xs">Especialidade Médica</label>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">Especialidade Médica Principal</label>
                     <input
                       type="text"
                       required
@@ -2766,16 +3642,29 @@ export default function Dashboard() {
                     />
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <span className="text-[11px] font-bold text-slate-400">Sugestões rápidas:</span>
-                      {['Cardiologia', 'Pediatria', 'Dermatologia', 'Clínica Geral', 'Ginecologia', 'Ortopedia', 'Oftalmologia'].map((esp) => (
+                      {['Cardiologia', 'Pediatria', 'Dermatologia', 'Clínica Geral', 'Ginecologia', 'Ortopedia', 'Oftalmologia', 'Endocrinologia'].map((esp) => (
                         <button
                           key={esp}
                           type="button"
                           onClick={() => setClinic({ ...clinic, specialty: esp })}
-                          className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#005a43] text-slate-600 transition"
+                          className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#005a43] text-slate-600 transition cursor-pointer"
                         >
                           {esp}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CONTATOS E ENDEREÇO DO CONSULTÓRIO */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
+                    <Building2 className="w-4.5 h-4.5 text-[#005a43]" />
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Contatos e Local de Atendimento</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        Canais de contato direto e endereço fornecido aos pacientes
+                      </p>
                     </div>
                   </div>
 
@@ -2803,18 +3692,20 @@ export default function Dashboard() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-800 mb-1 text-xs">Consultório / Sala / Endereço</label>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">Consultório / Sala / Endereço Completo</label>
                     <input
                       type="text"
                       value={clinic.address || ''}
                       onChange={(e) => setClinic({ ...clinic, address: e.target.value })}
-                      placeholder="Ex: Av. Paulista, 1000 - Conjunto 402 - Bela Vista, SP"
+                      placeholder="Ex: Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                     />
                   </div>
 
                   <div className="pt-2">
-                    <label className="block font-bold text-slate-800 mb-1 text-xs">Antecedência Mínima para Cancelamento (horas)</label>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">
+                      Antecedência Mínima para Cancelamento / Remarcação (horas)
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -2822,29 +3713,32 @@ export default function Dashboard() {
                       onChange={(e) => setClinic({ ...clinic, minCancelHours: parseInt(e.target.value) || 2 })}
                       className="w-full sm:w-48 px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                     />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Tempo mínimo que o paciente precisa para cancelar via bot antes de exigir contato com a recepção.
+                    </p>
                   </div>
                 </div>
 
-                {/* BOTÃO PRINCIPAL DE SALVAR E CRIAR AGENDA */}
+                {/* BOTÃO SALVAR DADOS PROFISSIONAIS */}
                 <div className="pt-4 pb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100">
                   <div className="text-xs text-slate-500 font-medium">
-                    Ao salvar, a agenda e os horários de atendimento são recalculados para o período selecionado.
+                    As informações salvas são sincronizadas em tempo real nos canais de atendimento e mensagens de confirmação.
                   </div>
 
                   <button
                     type="submit"
-                    disabled={savingSettings}
+                    disabled={savingProfissionais}
                     className="w-full sm:w-auto px-8 py-3.5 bg-[#005a43] hover:bg-[#004735] text-white font-black rounded-2xl shadow-lg shadow-[#005a43]/20 transition-all duration-150 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
-                    {savingSettings ? (
+                    {savingProfissionais ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Criando e Salvando Agenda...</span>
+                        <span>Salvando Dados Profissionais...</span>
                       </>
                     ) : (
                       <>
                         <Check className="w-4 h-4 stroke-[2.5]" />
-                        <span>Criar e Salvar Agenda</span>
+                        <span>Salvar Dados Profissionais</span>
                       </>
                     )}
                   </button>
@@ -2891,9 +3785,9 @@ export default function Dashboard() {
         >
           <div className="relative">
             <Inbox className="w-5 h-5" />
-            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           </div>
-          <span className="text-[10px] mt-0.5">Encaixes</span>
+          <span className="text-[10px] mt-0.5">Fila de Espera</span>
         </button>
 
         <button
@@ -3213,14 +4107,224 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date(selectedApptDetails.startTime);
+                    setRescheduleDate(d.toISOString().split('T')[0]);
+                    setRescheduleTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                    setShowModalReschedule(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Remarcar Consulta</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleManualCancel(selectedApptDetails.id)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Cancelar</span>
+                </button>
+              </div>
+
               <button
                 onClick={() => setSelectedApptDetails(null)}
-                className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs"
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition"
               >
                 Fechar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: REMARCAR CONSULTA (COM DISPARO AUTOMÁTICO PARA A FILA DE ESPERA)
+      ========================================================================= */}
+      {showModalReschedule && selectedApptDetails && (
+        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-sky-600" />
+                Remarcar Consulta
+              </h3>
+              <button onClick={() => setShowModalReschedule(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-sky-50 border border-sky-100 text-xs text-sky-950 space-y-1">
+              <p className="font-bold">Paciente: {selectedApptDetails.patient?.name}</p>
+              <p className="text-sky-800 font-medium">
+                Ao remarcar, o horário antigo ({new Date(selectedApptDetails.startTime).toLocaleDateString('pt-BR')} às {new Date(selectedApptDetails.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}) ficará vago e o <strong>1º paciente da Fila de Espera</strong> será contactado automaticamente pelo WhatsApp!
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleManualReschedule(selectedApptDetails.id, rescheduleDate, rescheduleTime);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Nova Data</label>
+                <input
+                  type="date"
+                  required
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Novo Horário</label>
+                <input
+                  type="time"
+                  required
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowModalReschedule(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  disabled={rescheduling}
+                  className="px-5 py-2 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl font-bold shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {rescheduling ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Remarcando e acionando fila...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Confirmar Remarcação</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: INSERIR PACIENTE NA FILA DE ESPERA
+      ========================================================================= */}
+      {showModalAddWaitlist && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <Plus className="w-4 h-4 text-[#005a43]" />
+                Adicionar Paciente à Fila de Espera
+              </h3>
+              <button onClick={() => setShowModalAddWaitlist(false)} className="text-slate-400 hover:text-slate-700 font-bold p-1">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddWaitlistEntry} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nome Completo do Paciente <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newWaitName}
+                  onChange={(e) => setNewWaitName(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Celular / WhatsApp com DDD <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newWaitPhone}
+                  onChange={(e) => setNewWaitPhone(e.target.value)}
+                  placeholder="(11) 98888-7777"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Turno Preferido</label>
+                  <select
+                    value={newWaitShift}
+                    onChange={(e: any) => setNewWaitShift(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                  >
+                    <option value="Qualquer Horário">Qualquer Horário</option>
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Dias Preferidos</label>
+                  <input
+                    type="text"
+                    value={newWaitDays}
+                    onChange={(e) => setNewWaitDays(e.target.value)}
+                    placeholder="Ex: Segundas/Quartas"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Observações da Fila</label>
+                <textarea
+                  rows={2}
+                  value={newWaitNotes}
+                  onChange={(e) => setNewWaitNotes(e.target.value)}
+                  placeholder="Ex: Aguardando retorno com urgência; aceita qualquer horário pela tarde..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowModalAddWaitlist(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                >
+                  Salvar na Fila
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
