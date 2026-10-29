@@ -189,6 +189,20 @@ export async function buscarHorariosDisponiveis(
       return { success: false, message: 'Erro na configuração do expediente da clínica.' };
     }
 
+    // Verificar se a data está dentro do período de abertura da agenda
+    const metaAgenda = (workingHoursConfig as any)?.meta;
+    if (metaAgenda && metaAgenda.scheduleStartDate && metaAgenda.scheduleEndDate) {
+      if (cleanDateStr < metaAgenda.scheduleStartDate || cleanDateStr > metaAgenda.scheduleEndDate) {
+        const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
+        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+        return {
+          success: true,
+          message: `A agenda está aberta para atendimentos exclusivamente de ${sd}/${sm}/${sy} até ${ed}/${em}/${ey}. A data solicitada (${cleanDateStr}) está fora do período de atendimento configurado.`,
+          data: { slots: [] },
+        };
+      }
+    }
+
     const dayConfig = workingHoursConfig[dayOfWeek];
     if (!dayConfig || !dayConfig.active) {
       const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];

@@ -14,40 +14,73 @@ let memoryClinic: any = {
   phone: '(11) 98888-7777',
   address: 'Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP',
   slotDurationMinutes: 30,
+  returnSlotDurationMinutes: 20,
+  scheduleStartDate: '2026-11-01',
+  scheduleEndDate: '2026-12-31',
+  workStartTime: '08:00',
+  workEndTime: '17:00',
+  breakEnabled: true,
+  breakStartTime: '12:00',
+  breakEndTime: '13:00',
+  selectedDays: ['1', '2', '3', '4', '5'],
   minCancelHours: 2,
   workingHours: {
-    '1': { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '2': { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '3': { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '4': { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '1': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '2': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '3': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '4': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
     '5': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
     '6': { active: false, start: '08:00', end: '12:00', lunchStart: '', lunchEnd: '' },
     '0': { active: false, start: '08:00', end: '12:00', lunchStart: '', lunchEnd: '' },
+    meta: {
+      scheduleStartDate: '2026-11-01',
+      scheduleEndDate: '2026-12-31',
+      workStartTime: '08:00',
+      workEndTime: '17:00',
+      breakEnabled: true,
+      breakStartTime: '12:00',
+      breakEndTime: '13:00',
+      slotDurationMinutes: 30,
+      returnSlotDurationMinutes: 20,
+      selectedDays: ['1', '2', '3', '4', '5'],
+    },
   },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
 
-// GET /api/clinic/settings - Obter configurações do Perfil Único do Médico
+// GET /api/clinic/settings - Obter configurações da Agenda e Perfil do Médico
 export async function GET() {
   try {
     try {
       let clinic = await prisma.clinic.findFirst();
       if (clinic) {
-        let parsedWorkingHours = {};
+        let parsedWorkingHours: any = {};
         try {
           parsedWorkingHours = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
         } catch (e) {
           parsedWorkingHours = memoryClinic.workingHours;
         }
 
+        const meta = parsedWorkingHours?.meta || {};
+
         return NextResponse.json({
           success: true,
           clinic: {
             ...clinic,
-            doctorName: clinic.doctorName || clinic.name,
-            crm: clinic.crm || 'CRM/SP 148.910',
-            address: clinic.address || 'Sala 402',
+            doctorName: clinic.doctorName || clinic.name || memoryClinic.doctorName,
+            crm: clinic.crm || memoryClinic.crm,
+            address: clinic.address || memoryClinic.address,
+            slotDurationMinutes: clinic.slotDurationMinutes || meta.slotDurationMinutes || memoryClinic.slotDurationMinutes,
+            returnSlotDurationMinutes: meta.returnSlotDurationMinutes || memoryClinic.returnSlotDurationMinutes,
+            scheduleStartDate: meta.scheduleStartDate || memoryClinic.scheduleStartDate,
+            scheduleEndDate: meta.scheduleEndDate || memoryClinic.scheduleEndDate,
+            workStartTime: meta.workStartTime || memoryClinic.workStartTime,
+            workEndTime: meta.workEndTime || memoryClinic.workEndTime,
+            breakEnabled: meta.breakEnabled !== undefined ? meta.breakEnabled : memoryClinic.breakEnabled,
+            breakStartTime: meta.breakStartTime || memoryClinic.breakStartTime,
+            breakEndTime: meta.breakEndTime || memoryClinic.breakEndTime,
+            selectedDays: meta.selectedDays || memoryClinic.selectedDays,
             workingHours: parsedWorkingHours,
           },
         });
@@ -66,7 +99,7 @@ export async function GET() {
   }
 }
 
-// POST /api/clinic/settings - Atualizar configurações do perfil do médico / consultório
+// POST /api/clinic/settings - Atualizar parâmetros de criação de agenda e perfil do médico
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -79,11 +112,71 @@ export async function POST(req: NextRequest) {
       phone,
       address,
       slotDurationMinutes,
+      returnSlotDurationMinutes,
+      scheduleStartDate,
+      scheduleEndDate,
+      workStartTime,
+      workEndTime,
+      breakEnabled,
+      breakStartTime,
+      breakEndTime,
+      selectedDays,
       minCancelHours,
       workingHours,
     } = body;
 
-    const dataToUpdate: any = {};
+    // Montar o objeto completo de workingHours com a grade de dias e meta-parâmetros da agenda
+    let finalWorkingHours: any = {};
+    if (workingHours && typeof workingHours === 'object' && !Array.isArray(workingHours)) {
+      finalWorkingHours = { ...workingHours };
+    }
+
+    const currentSelectedDays: string[] = selectedDays
+      ? (Array.isArray(selectedDays) ? selectedDays.map(String) : ['1', '2', '3', '4', '5'])
+      : (finalWorkingHours.meta?.selectedDays || memoryClinic.selectedDays || ['1', '2', '3', '4', '5']);
+
+    const currentWorkStart: string = workStartTime || finalWorkingHours.meta?.workStartTime || memoryClinic.workStartTime || '08:00';
+    const currentWorkEnd: string = workEndTime || finalWorkingHours.meta?.workEndTime || memoryClinic.workEndTime || '17:00';
+    const currentBreakEnabled: boolean = breakEnabled !== undefined
+      ? Boolean(breakEnabled)
+      : (finalWorkingHours.meta?.breakEnabled !== undefined ? finalWorkingHours.meta.breakEnabled : memoryClinic.breakEnabled);
+    const currentBreakStart: string = breakStartTime || finalWorkingHours.meta?.breakStartTime || memoryClinic.breakStartTime || '12:00';
+    const currentBreakEnd: string = breakEndTime || finalWorkingHours.meta?.breakEndTime || memoryClinic.breakEndTime || '13:00';
+    const currentScheduleStart: string = scheduleStartDate || finalWorkingHours.meta?.scheduleStartDate || memoryClinic.scheduleStartDate || '2026-11-01';
+    const currentScheduleEnd: string = scheduleEndDate || finalWorkingHours.meta?.scheduleEndDate || memoryClinic.scheduleEndDate || '2026-12-31';
+    const currentSlotDuration: number = slotDurationMinutes ? parseInt(slotDurationMinutes, 10) : (memoryClinic.slotDurationMinutes || 30);
+    const currentReturnDuration: number = returnSlotDurationMinutes ? parseInt(returnSlotDurationMinutes, 10) : (memoryClinic.returnSlotDurationMinutes || 20);
+
+    // Gerar horários para os 7 dias da semana (0 = Domingo a 6 = Sábado)
+    ['0', '1', '2', '3', '4', '5', '6'].forEach((day) => {
+      const isActive = currentSelectedDays.includes(day);
+      finalWorkingHours[day] = {
+        active: isActive,
+        start: currentWorkStart,
+        end: currentWorkEnd,
+        lunchStart: currentBreakEnabled ? currentBreakStart : '',
+        lunchEnd: currentBreakEnabled ? currentBreakEnd : '',
+      };
+    });
+
+    finalWorkingHours.meta = {
+      scheduleStartDate: currentScheduleStart,
+      scheduleEndDate: currentScheduleEnd,
+      workStartTime: currentWorkStart,
+      workEndTime: currentWorkEnd,
+      breakEnabled: currentBreakEnabled,
+      breakStartTime: currentBreakStart,
+      breakEndTime: currentBreakEnd,
+      slotDurationMinutes: currentSlotDuration,
+      returnSlotDurationMinutes: currentReturnDuration,
+      selectedDays: currentSelectedDays,
+    };
+
+    const dataToUpdate: any = {
+      workingHours: JSON.stringify(finalWorkingHours),
+      slotDurationMinutes: currentSlotDuration,
+    };
+
     if (name) dataToUpdate.name = name;
     if (doctorName) dataToUpdate.doctorName = doctorName;
     if (specialty) dataToUpdate.specialty = specialty;
@@ -91,12 +184,32 @@ export async function POST(req: NextRequest) {
     if (email) dataToUpdate.email = email;
     if (phone) dataToUpdate.phone = phone;
     if (address !== undefined) dataToUpdate.address = address;
-    if (slotDurationMinutes) dataToUpdate.slotDurationMinutes = parseInt(slotDurationMinutes);
-    if (minCancelHours) dataToUpdate.minCancelHours = parseInt(minCancelHours);
+    if (minCancelHours) dataToUpdate.minCancelHours = parseInt(minCancelHours, 10);
 
-    if (workingHours) {
-      dataToUpdate.workingHours = typeof workingHours === 'string' ? workingHours : JSON.stringify(workingHours);
-    }
+    // Atualizar fallback em memória
+    memoryClinic = {
+      ...memoryClinic,
+      name: name || doctorName || memoryClinic.name,
+      doctorName: doctorName || name || memoryClinic.doctorName,
+      specialty: specialty || memoryClinic.specialty,
+      crm: crm !== undefined ? crm : memoryClinic.crm,
+      email: email || memoryClinic.email,
+      phone: phone || memoryClinic.phone,
+      address: address !== undefined ? address : memoryClinic.address,
+      slotDurationMinutes: currentSlotDuration,
+      returnSlotDurationMinutes: currentReturnDuration,
+      scheduleStartDate: currentScheduleStart,
+      scheduleEndDate: currentScheduleEnd,
+      workStartTime: currentWorkStart,
+      workEndTime: currentWorkEnd,
+      breakEnabled: currentBreakEnabled,
+      breakStartTime: currentBreakStart,
+      breakEndTime: currentBreakEnd,
+      selectedDays: currentSelectedDays,
+      minCancelHours: minCancelHours ? parseInt(minCancelHours, 10) : memoryClinic.minCancelHours,
+      workingHours: finalWorkingHours,
+      updatedAt: new Date().toISOString(),
+    };
 
     try {
       let clinic = await prisma.clinic.findFirst();
@@ -111,9 +224,9 @@ export async function POST(req: NextRequest) {
             email: email || 'contato@consultorio.med.br',
             phone: phone || '(11) 98888-7777',
             address: address || 'Sala 402',
-            slotDurationMinutes: slotDurationMinutes ? parseInt(slotDurationMinutes) : 30,
-            minCancelHours: minCancelHours ? parseInt(minCancelHours) : 2,
-            workingHours: dataToUpdate.workingHours || JSON.stringify(memoryClinic.workingHours),
+            slotDurationMinutes: currentSlotDuration,
+            minCancelHours: minCancelHours ? parseInt(minCancelHours, 10) : 2,
+            workingHours: JSON.stringify(finalWorkingHours),
           },
         });
       } else {
@@ -123,50 +236,26 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      let parsedWorkingHours = {};
-      try {
-        parsedWorkingHours = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
-      } catch (e) {
-        parsedWorkingHours = memoryClinic.workingHours;
-      }
-
-      // Sincronizar em memória
-      memoryClinic = {
-        ...memoryClinic,
-        ...clinic,
-        doctorName: clinic.doctorName || clinic.name,
-        crm: clinic.crm || memoryClinic.crm,
-        address: clinic.address || memoryClinic.address,
-        workingHours: parsedWorkingHours as any,
-        updatedAt: new Date().toISOString(),
-      };
-
       return NextResponse.json({
         success: true,
-        clinic: memoryClinic,
+        clinic: {
+          ...memoryClinic,
+          ...clinic,
+          scheduleStartDate: currentScheduleStart,
+          scheduleEndDate: currentScheduleEnd,
+          workStartTime: currentWorkStart,
+          workEndTime: currentWorkEnd,
+          breakEnabled: currentBreakEnabled,
+          breakStartTime: currentBreakStart,
+          breakEndTime: currentBreakEnd,
+          slotDurationMinutes: currentSlotDuration,
+          returnSlotDurationMinutes: currentReturnDuration,
+          selectedDays: currentSelectedDays,
+          workingHours: finalWorkingHours,
+        },
       });
     } catch (dbErr) {
       console.warn('⚠️ [Clinic Settings DB Update Error] Atualizando fallback em memória:', dbErr);
-      
-      const parsedHours = workingHours 
-        ? (typeof workingHours === 'string' ? JSON.parse(workingHours) : workingHours) 
-        : memoryClinic.workingHours;
-
-      memoryClinic = {
-        ...memoryClinic,
-        name: name || memoryClinic.name,
-        doctorName: doctorName || name || memoryClinic.doctorName,
-        specialty: specialty || memoryClinic.specialty,
-        crm: crm !== undefined ? crm : memoryClinic.crm,
-        email: email || memoryClinic.email,
-        phone: phone || memoryClinic.phone,
-        address: address !== undefined ? address : memoryClinic.address,
-        slotDurationMinutes: slotDurationMinutes ? parseInt(slotDurationMinutes) : memoryClinic.slotDurationMinutes,
-        minCancelHours: minCancelHours ? parseInt(minCancelHours) : memoryClinic.minCancelHours,
-        workingHours: parsedHours,
-        updatedAt: new Date().toISOString(),
-      };
-
       return NextResponse.json({
         success: true,
         clinic: memoryClinic,

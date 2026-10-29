@@ -11,6 +11,7 @@ import {
 } from '@/lib/userPermissions';
 import {
   Calendar as CalendarIcon,
+  CalendarPlus,
   LayoutDashboard,
   Bell,
   ChevronDown,
@@ -43,10 +44,10 @@ import {
   Check,
   X,
   UserCog,
+  Coffee,
   Briefcase,
   Contact,
   HeartPulse,
-  CalendarPlus,
   FileText,
   ExternalLink,
   ChevronsUpDown,
@@ -173,6 +174,20 @@ export default function Dashboard() {
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
+  // Estados de "Criar Agenda" (Parâmetros de atendimento do médico)
+  const [scheduleStartDate, setScheduleStartDate] = useState('2026-11-01');
+  const [scheduleEndDate, setScheduleEndDate] = useState('2026-12-31');
+  const [workStartTime, setWorkStartTime] = useState('08:00');
+  const [workEndTime, setWorkEndTime] = useState('17:00');
+  const [breakEnabled, setBreakEnabled] = useState(true);
+  const [breakStartTime, setBreakStartTime] = useState('12:00');
+  const [breakEndTime, setBreakEndTime] = useState('13:00');
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
+  const [returnSlotDurationMinutes, setReturnSlotDurationMinutes] = useState(20);
+  const [selectedDays, setSelectedDays] = useState<string[]>(['1', '2', '3', '4', '5']);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
   // Filtros da Agenda no menu esquerdo
   const [filterConfirmed, setFilterConfirmed] = useState(true);
   const [filterWaiting, setFilterWaiting] = useState(true);
@@ -284,6 +299,17 @@ export default function Dashboard() {
       const dataSettings = await resSettings.json();
       if (dataSettings.clinic) {
         setClinic(dataSettings.clinic);
+        const c = dataSettings.clinic;
+        if (c.scheduleStartDate) setScheduleStartDate(c.scheduleStartDate);
+        if (c.scheduleEndDate) setScheduleEndDate(c.scheduleEndDate);
+        if (c.workStartTime) setWorkStartTime(c.workStartTime);
+        if (c.workEndTime) setWorkEndTime(c.workEndTime);
+        if (c.breakEnabled !== undefined) setBreakEnabled(Boolean(c.breakEnabled));
+        if (c.breakStartTime) setBreakStartTime(c.breakStartTime);
+        if (c.breakEndTime) setBreakEndTime(c.breakEndTime);
+        if (c.slotDurationMinutes) setSlotDurationMinutes(Number(c.slotDurationMinutes));
+        if (c.returnSlotDurationMinutes) setReturnSlotDurationMinutes(Number(c.returnSlotDurationMinutes));
+        if (c.selectedDays && Array.isArray(c.selectedDays)) setSelectedDays(c.selectedDays.map(String));
       }
 
       let apptUrl = '/api/appointments?';
@@ -734,32 +760,123 @@ export default function Dashboard() {
     }
   }
 
+  // DIAS DA SEMANA PARA ATENDIMENTO (CONFIGURAÇÃO DE AGENDA)
+  const DAYS_OF_WEEK = [
+    { id: '1', label: 'Seg', name: 'Segunda-feira' },
+    { id: '2', label: 'Ter', name: 'Terça-feira' },
+    { id: '3', label: 'Qua', name: 'Quarta-feira' },
+    { id: '4', label: 'Qui', name: 'Quinta-feira' },
+    { id: '5', label: 'Sex', name: 'Sexta-feira' },
+    { id: '6', label: 'Sáb', name: 'Sábado' },
+    { id: '0', label: 'Dom', name: 'Domingo' },
+  ];
+
+  function toggleDay(dayId: string) {
+    setSelectedDays((prev) =>
+      prev.includes(dayId) ? prev.filter((d) => d !== dayId) : [...prev, dayId]
+    );
+  }
+
+  function applyDatePreset(days: number) {
+    const today = new Date();
+    const startStr = today.toISOString().split('T')[0];
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + days);
+    const endStr = endDate.toISOString().split('T')[0];
+    setScheduleStartDate(startStr);
+    setScheduleEndDate(endStr);
+  }
+
+  function applyEndOfYearPreset() {
+    const today = new Date();
+    const startStr = today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const endStr = `${year}-12-31`;
+    setScheduleStartDate(startStr);
+    setScheduleEndDate(endStr);
+  }
+
+  // Previsão de dias e horas totais no período de abertura
+  const scheduleDateSpanDays = useMemo(() => {
+    if (!scheduleStartDate || !scheduleEndDate) return 0;
+    const d1 = new Date(scheduleStartDate + 'T00:00:00');
+    const d2 = new Date(scheduleEndDate + 'T00:00:00');
+    const diffTime = d2.getTime() - d1.getTime();
+    if (diffTime < 0) return 0;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  }, [scheduleStartDate, scheduleEndDate]);
+
+  // Simulador em Tempo Real da grade diária de consultas
+  const generatedPreviewSlots = useMemo(() => {
+    if (!workStartTime || !workEndTime || !slotDurationMinutes) return [];
+    const [startH, startM] = workStartTime.split(':').map(Number);
+    const [endH, endM] = workEndTime.split(':').map(Number);
+    const startMin = (startH || 0) * 60 + (startM || 0);
+    const endMin = (endH || 0) * 60 + (endM || 0);
+
+    const [breakStartH, breakStartM] = (breakStartTime || '12:00').split(':').map(Number);
+    const [breakEndH, breakEndM] = (breakEndTime || '13:00').split(':').map(Number);
+    const bStartMin = breakStartH * 60 + breakStartM;
+    const bEndMin = breakEndH * 60 + breakEndM;
+
+    const slots: Array<{ time: string; isBreak: boolean }> = [];
+    let cur = startMin;
+    const dur = Number(slotDurationMinutes) || 30;
+
+    while (cur + dur <= endMin) {
+      const isBreak =
+        breakEnabled &&
+        ((cur >= bStartMin && cur < bEndMin) || (cur + dur > bStartMin && cur < bEndMin));
+      const h = Math.floor(cur / 60);
+      const m = cur % 60;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      slots.push({ time: timeStr, isBreak: !!isBreak });
+      cur += dur;
+    }
+    return slots;
+  }, [workStartTime, workEndTime, slotDurationMinutes, breakEnabled, breakStartTime, breakEndTime]);
+
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
     try {
+      setSavingSettings(true);
+      setSaveSuccessMsg(null);
       const res = await fetch('/api/clinic/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: clinic.name,
-          doctorName: clinic.doctorName,
-          specialty: clinic.specialty,
-          crm: clinic.crm,
-          email: clinic.email,
-          phone: clinic.phone,
-          address: clinic.address,
-          slotDurationMinutes: clinic.slotDurationMinutes,
-          minCancelHours: clinic.minCancelHours,
-          workingHours: clinic.workingHours,
+          name: clinic?.doctorName || clinic?.name,
+          doctorName: clinic?.doctorName || clinic?.name,
+          specialty: clinic?.specialty,
+          crm: clinic?.crm,
+          email: clinic?.email,
+          phone: clinic?.phone,
+          address: clinic?.address,
+          slotDurationMinutes: Number(slotDurationMinutes) || 30,
+          returnSlotDurationMinutes: Number(returnSlotDurationMinutes) || 20,
+          scheduleStartDate,
+          scheduleEndDate,
+          workStartTime,
+          workEndTime,
+          breakEnabled,
+          breakStartTime,
+          breakEndTime,
+          selectedDays,
+          minCancelHours: Number(clinic?.minCancelHours) || 2,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        alert('Perfil do Médico e configurações do consultório salvos com sucesso!');
         setClinic(data.clinic);
+        setSaveSuccessMsg('Agenda criada e parâmetros de atendimento salvos com sucesso!');
+        setTimeout(() => setSaveSuccessMsg(null), 6000);
+      } else {
+        alert(data.error || 'Erro ao salvar parâmetros da agenda');
       }
     } catch (e: any) {
       alert(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSavingSettings(false);
     }
   }
 
@@ -1047,8 +1164,8 @@ export default function Dashboard() {
                 : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
                 }`}
             >
-              <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
-              <span>Perfil e Expediente</span>
+              <CalendarPlus className={`w-5 h-5 ${activeTab === 'settings' ? 'text-[#059669]' : 'text-slate-400'}`} />
+              <span>Criar Agenda</span>
             </button>
           </nav>
         </div>
@@ -1194,8 +1311,8 @@ export default function Dashboard() {
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                 >
-                  <Settings className="w-5 h-5 text-slate-500" />
-                  <span>Perfil & Expediente</span>
+                  <CalendarPlus className="w-5 h-5 text-teal-400" />
+                  <span>Criar Agenda</span>
                 </button>
               </nav>
             </div>
@@ -2073,31 +2190,543 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
-              ABA: CONFIGURAÇÕES & PERFIL DO MÉDICO (PERFIL ÚNICO)
+              ABA: CRIAR AGENDA & PARÂMETROS DE ATENDIMENTO DO MÉDICO
           --------------------------------------------------------------------- */}
           {activeTab === 'settings' && clinic && (
             <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 overflow-y-auto">
-              <div className="pb-3.5 sm:pb-4 border-b border-slate-100 mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                    <Stethoscope className="w-5 h-5 text-[#005a43]" />
-                    Perfil Único do Médico e Configurações
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                    Defina o médico responsável pela agenda, especialidade, CRM e regras de expediente
-                  </p>
+              {/* CABEÇALHO DA ABA CRIAR AGENDA */}
+              <div className="pb-4 border-b border-slate-100 mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#e8f7f0] text-[#00875a] flex items-center justify-center shrink-0 border border-[#d1fae5] shadow-2xs">
+                    <CalendarPlus className="w-6 h-6 text-[#005a43]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      Criar Agenda & Parâmetros de Atendimento
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                      Configure o período de abertura da agenda, dias de atendimento, horários de expediente, intervalos e duração das consultas.
+                    </p>
+                  </div>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-[#005a43] border border-emerald-200">
-                  Sistema de Médico Único
-                </span>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-[#005a43] border border-emerald-200 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#059669] animate-pulse"></span>
+                    Agenda do Dr(a). {activeDoctor.name}
+                  </span>
+                </div>
               </div>
 
-              <form onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl text-sm">
-                {/* SEÇÃO 1: PERFIL DO MÉDICO RESPONSÁVEL */}
-                <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/40 to-slate-50/70 border border-emerald-100 space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-emerald-200/60">
+              {/* BANNER DE SUCESSO AO SALVAR */}
+              {saveSuccessMsg && (
+                <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div className="flex-1 text-xs sm:text-sm font-bold">
+                    {saveSuccessMsg}
+                  </div>
+                  <button
+                    onClick={() => setSaveSuccessMsg(null)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* FORMULÁRIO DE CRIAÇÃO E CONFIGURAÇÃO DA AGENDA */}
+              <form onSubmit={handleSaveSettings} className="space-y-6 max-w-4xl text-sm">
+                {/* =========================================================================
+                    1. PERÍODO DE ABERTURA DA AGENDA (DATA INÍCIO E DATA FIM)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <CalendarRange className="w-5 h-5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">1. Período de Abertura da Agenda</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">Intervalo de datas em que o médico estará com a agenda aberta para atendimentos</p>
+                      </div>
+                    </div>
+                    {scheduleDateSpanDays > 0 && (
+                      <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-50 text-[#005a43] border border-emerald-200">
+                        {scheduleDateSpanDays} dias abertos
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                        Data de Início da Abertura da Agenda
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={scheduleStartDate}
+                        onChange={(e) => setScheduleStartDate(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Início da liberação de consultas</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                        Data de Término da Abertura da Agenda
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={scheduleEndDate}
+                        onChange={(e) => setScheduleEndDate(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Limite máximo de agendamento futuro</span>
+                    </div>
+                  </div>
+
+                  {/* ATALHOS RÁPIDOS DE PERÍODO */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-50">
+                    <span className="text-[11px] font-bold text-slate-400">Atalhos de período:</span>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset(30)}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Próximos 30 dias
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset(60)}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Próximos 60 dias
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset(90)}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Próximos 90 dias
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyEndOfYearPreset()}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Até 31 de Dezembro
+                    </button>
+                  </div>
+                </div>
+
+                {/* =========================================================================
+                    2. DIAS DA SEMANA QUE VAI ATENDER (ESTILO CHECKBOX)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="w-5 h-5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">2. Dias da Semana que vai Atender</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">Marcador estilo checkbox dos dias com expediente habilitado para o médico</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                      {selectedDays.length} {selectedDays.length === 1 ? 'dia ativo' : 'dias ativos'}
+                    </span>
+                  </div>
+
+                  {/* CARDS COM CHECKBOX PARA CADA DIA DA SEMANA */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const isChecked = selectedDays.includes(day.id);
+                      return (
+                        <label
+                          key={day.id}
+                          className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 cursor-pointer select-none transition-all duration-150 ${
+                            isChecked
+                              ? 'bg-[#e8f7f0] border-[#00875a] text-[#005a43] shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1.5">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleDay(day.id)}
+                              className="w-4 h-4 rounded text-[#005a43] accent-[#005a43] focus:ring-[#005a43] border-slate-300 cursor-pointer"
+                            />
+                            <span className={`text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              isChecked ? 'bg-[#005a43] text-white' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {isChecked ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
+                          <span className="text-base font-black tracking-tight mt-0.5">
+                            {day.label}
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-500 text-center truncate max-w-full">
+                            {day.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* AÇÕES RÁPIDAS DE SELEÇÃO DE DIAS */}
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-50">
+                    <span className="text-[11px] font-bold text-slate-400">Seleção rápida:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDays(['1', '2', '3', '4', '5'])}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#005a43] border border-emerald-200 transition"
+                    >
+                      Segunda a Sexta (Padrão)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDays(['1', '2', '3', '4', '5', '6'])}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Segunda a Sábado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDays(['0', '1', '2', '3', '4', '5', '6'])}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      Todos os Dias
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDays([])}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 transition"
+                    >
+                      Desmarcar Todos
+                    </button>
+                  </div>
+                </div>
+
+                {/* =========================================================================
+                    3. EXPEDIENTE DE ATENDIMENTO (Ex: 08:00 às 17:00)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">3. Expediente de Atendimento Diário</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">Horário de início e término dos atendimentos (exemplo: das 08:00 às 17:00)</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                      {workStartTime} às {workEndTime}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                        Início do Expediente
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={workStartTime}
+                        onChange={(e) => setWorkStartTime(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Exemplo comum: 08:00</span>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                        Término do Expediente
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={workEndTime}
+                        onChange={(e) => setWorkEndTime(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Exemplo comum: 17:00 ou 18:00</span>
+                    </div>
+                  </div>
+
+                  {/* ATALHOS RÁPIDOS DE JORNADA */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-50">
+                    <span className="text-[11px] font-bold text-slate-400">Sugestões de expediente:</span>
+                    <button
+                      type="button"
+                      onClick={() => { setWorkStartTime('08:00'); setWorkEndTime('17:00'); }}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#005a43] border border-emerald-200 transition"
+                    >
+                      08:00 às 17:00 (Padrão)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWorkStartTime('08:00'); setWorkEndTime('18:00'); }}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      08:00 às 18:00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWorkStartTime('07:00'); setWorkEndTime('16:00'); }}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      07:00 às 16:00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWorkStartTime('09:00'); setWorkEndTime('19:00'); }}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >
+                      09:00 às 19:00
+                    </button>
+                  </div>
+                </div>
+
+                {/* =========================================================================
+                    4. PERÍODO DE INTERVALO DURANTE O EXPEDIENTE (BLOQUEIO DE CONSULTA)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">4. Intervalo durante o Expediente (Almoço / Pausa)</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Durante esse período o médico pode almoçar ou resolver outros compromissos — <strong>não haverá marcação de consultas</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={breakEnabled}
+                        onChange={(e) => setBreakEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded text-[#005a43] accent-[#005a43] focus:ring-[#005a43] border-slate-300 cursor-pointer"
+                      />
+                      <span className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                        breakEnabled ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {breakEnabled ? 'Intervalo Habilitado' : 'Sem Intervalo'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {breakEnabled ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                            Início do Intervalo (Almoço)
+                          </label>
+                          <input
+                            type="time"
+                            required={breakEnabled}
+                            value={breakStartTime}
+                            onChange={(e) => setBreakStartTime(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                          />
+                          <span className="text-[11px] text-slate-400 mt-1 block">Ex: 12:00</span>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-800 mb-1.5 text-xs">
+                            Fim do Intervalo (Retorno do Almoço)
+                          </label>
+                          <input
+                            type="time"
+                            required={breakEnabled}
+                            value={breakEndTime}
+                            onChange={(e) => setBreakEndTime(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                          />
+                          <span className="text-[11px] text-slate-400 mt-1 block">Ex: 13:00</span>
+                        </div>
+                      </div>
+
+                      {/* CALLOUT DE BLOQUEIO DE CONSULTA */}
+                      <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-xl flex items-start gap-3 text-xs text-amber-900">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold block text-amber-950">
+                            Bloqueio Automático de Agendamento:
+                          </span>
+                          Entre <strong>{breakStartTime}</strong> e <strong>{breakEndTime}</strong>, nenhum paciente poderá marcar consulta pelo WhatsApp Bot, recepcionista ou encaixe.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 font-medium">
+                      Atendimento contínuo sem intervalo configurado. Os horários serão gerados sequencialmente das {workStartTime} às {workEndTime}.
+                    </div>
+                  )}
+                </div>
+
+                {/* =========================================================================
+                    5. DURAÇÃO DAS CONSULTAS (FUTURA E RETORNO EM MINUTOS)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">5. Duração das Consultas (em minutos)</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">Tempo previsto de atendimento para consultas novas e consultas de retorno</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* DURAÇÃO CONSULTA FUTURA / PRIMEIRA CONSULTA */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/50 to-white border border-emerald-100/90 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#005a43]"></span>
+                          Duração de Consulta Futura / 1ª Vez
+                        </label>
+                        <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-100 text-[#005a43]">
+                          {slotDurationMinutes} min
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Tempo de duração reservado para novas consultas e avaliações completas do paciente.
+                      </p>
+                      <input
+                        type="number"
+                        min="5"
+                        step="5"
+                        required
+                        value={slotDurationMinutes}
+                        onChange={(e) => setSlotDurationMinutes(Math.max(5, parseInt(e.target.value) || 5))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] shadow-2xs"
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {[15, 20, 30, 40, 45, 60].map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            onClick={() => setSlotDurationMinutes(mins)}
+                            className={`text-[11px] font-bold px-2 py-1 rounded-lg border transition ${
+                              slotDurationMinutes === mins
+                                ? 'bg-[#005a43] text-white border-[#005a43] shadow-2xs'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {mins} min
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* DURAÇÃO CONSULTA DE RETORNO */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50/50 to-white border border-sky-100/90 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-sky-600"></span>
+                          Duração de Consulta de Retorno
+                        </label>
+                        <span className="text-xs font-black px-2 py-0.5 rounded-md bg-sky-100 text-sky-800">
+                          {returnSlotDurationMinutes} min
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Tempo previsto para retorno, reavaliação de exames e pós-tratamento.
+                      </p>
+                      <input
+                        type="number"
+                        min="5"
+                        step="5"
+                        required
+                        value={returnSlotDurationMinutes}
+                        onChange={(e) => setReturnSlotDurationMinutes(Math.max(5, parseInt(e.target.value) || 5))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-black text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 shadow-2xs"
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {[10, 15, 20, 25, 30, 40].map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            onClick={() => setReturnSlotDurationMinutes(mins)}
+                            className={`text-[11px] font-bold px-2 py-1 rounded-lg border transition ${
+                              returnSlotDurationMinutes === mins
+                                ? 'bg-sky-700 text-white border-sky-700 shadow-2xs'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {mins} min
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* =========================================================================
+                    6. VISUALIZAÇÃO EM TEMPO REAL DA GRADE GERADA (PREVIEW INTERATIVO)
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">Previsão em Tempo Real da Grade de Horários</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">Horários que ficarão disponíveis para agendamento dos pacientes em um dia típico</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-50 text-[#005a43] border border-emerald-200">
+                        {generatedPreviewSlots.filter((s) => !s.isBreak).length} consultas / dia
+                      </span>
+                      {breakEnabled && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                          <Coffee className="w-3 h-3" />
+                          Pausa {breakStartTime} - {breakEndTime}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500">
+                    Grade gerada para atendimentos das <strong>{workStartTime}</strong> às <strong>{workEndTime}</strong> com intervalos de <strong>{slotDurationMinutes} min</strong>:
+                  </p>
+
+                  <div className="flex flex-wrap gap-2 pt-1 max-h-48 overflow-y-auto p-1 bg-slate-50/60 rounded-xl border border-slate-100">
+                    {generatedPreviewSlots.map((slot, idx) => (
+                      <span
+                        key={idx}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition flex items-center gap-1.5 ${
+                          slot.isBreak
+                            ? 'bg-amber-100/80 text-amber-900 border-amber-300 line-through opacity-80 cursor-not-allowed'
+                            : 'bg-white text-[#005a43] border-emerald-200 shadow-2xs hover:border-[#005a43]'
+                        }`}
+                        title={slot.isBreak ? 'Intervalo Bloqueado (Almoço)' : `Horário Disponível (${slot.time})`}
+                      >
+                        {slot.isBreak && <Coffee className="w-3.5 h-3.5 text-amber-700" />}
+                        {slot.time}
+                        {slot.isBreak && <span className="text-[10px] no-underline font-normal">(Intervalo)</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* =========================================================================
+                    7. DADOS DO MÉDICO TITULAR RESPONSÁVEL PELA AGENDA
+                ========================================================================= */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
                     <Stethoscope className="w-4.5 h-4.5 text-[#005a43]" />
-                    <h3 className="font-extrabold text-slate-900 text-sm">Dados do Médico Titular</h3>
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Dados do Médico Titular da Agenda</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">Informações profissionais exibidas nas mensagens de confirmação e receita</p>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2109,7 +2738,7 @@ export default function Dashboard() {
                         value={clinic.doctorName || clinic.name || ''}
                         onChange={(e) => setClinic({ ...clinic, doctorName: e.target.value, name: e.target.value })}
                         placeholder="Ex: Dr. Renato Silva"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                       />
                     </div>
 
@@ -2120,7 +2749,7 @@ export default function Dashboard() {
                         value={clinic.crm || ''}
                         onChange={(e) => setClinic({ ...clinic, crm: e.target.value })}
                         placeholder="Ex: CRM/SP 148.910"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                       />
                     </div>
                   </div>
@@ -2133,7 +2762,7 @@ export default function Dashboard() {
                       value={clinic.specialty || ''}
                       onChange={(e) => setClinic({ ...clinic, specialty: e.target.value })}
                       placeholder="Ex: Cardiologia, Pediatria, Dermatologia..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                     />
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <span className="text-[11px] font-bold text-slate-400">Sugestões rápidas:</span>
@@ -2158,7 +2787,7 @@ export default function Dashboard() {
                         value={clinic.email || ''}
                         onChange={(e) => setClinic({ ...clinic, email: e.target.value })}
                         placeholder="contato@medico.med.br"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                       />
                     </div>
                     <div>
@@ -2168,7 +2797,7 @@ export default function Dashboard() {
                         value={clinic.phone || ''}
                         onChange={(e) => setClinic({ ...clinic, phone: e.target.value })}
                         placeholder="(11) 98888-7777"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                       />
                     </div>
                   </div>
@@ -2180,50 +2809,44 @@ export default function Dashboard() {
                       value={clinic.address || ''}
                       onChange={(e) => setClinic({ ...clinic, address: e.target.value })}
                       placeholder="Ex: Av. Paulista, 1000 - Conjunto 402 - Bela Vista, SP"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">Antecedência Mínima para Cancelamento (horas)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={clinic.minCancelHours || 2}
+                      onChange={(e) => setClinic({ ...clinic, minCancelHours: parseInt(e.target.value) || 2 })}
+                      className="w-full sm:w-48 px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                     />
                   </div>
                 </div>
 
-                {/* SEÇÃO 2: PARÂMETROS DA AGENDA */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <Clock className="w-4.5 h-4.5 text-[#005a43]" />
-                    <h3 className="font-extrabold text-slate-900 text-sm">Parâmetros das Consultas</h3>
+                {/* BOTÃO PRINCIPAL DE SALVAR E CRIAR AGENDA */}
+                <div className="pt-4 pb-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100">
+                  <div className="text-xs text-slate-500 font-medium">
+                    Ao salvar, a agenda e os horários de atendimento são recalculados para o período selecionado.
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-800 mb-1 text-xs">Duração Padrão da Consulta (minutos)</label>
-                      <input
-                        type="number"
-                        min="10"
-                        step="5"
-                        value={clinic.slotDurationMinutes || 30}
-                        onChange={(e) => setClinic({ ...clinic, slotDurationMinutes: parseInt(e.target.value) || 30 })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-800 mb-1 text-xs">Antecedência Mínima para Cancelamento (horas)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={clinic.minCancelHours || 2}
-                        onChange={(e) => setClinic({ ...clinic, minCancelHours: parseInt(e.target.value) || 2 })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end">
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-7 py-3 bg-[#005a43] hover:bg-[#004735] text-white font-bold rounded-xl shadow-md shadow-[#005a43]/15 transition active:scale-95 text-sm flex items-center justify-center gap-2"
+                    disabled={savingSettings}
+                    className="w-full sm:w-auto px-8 py-3.5 bg-[#005a43] hover:bg-[#004735] text-white font-black rounded-2xl shadow-lg shadow-[#005a43]/20 transition-all duration-150 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>Salvar Perfil do Médico & Parâmetros</span>
+                    {savingSettings ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Criando e Salvando Agenda...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[2.5]" />
+                        <span>Criar e Salvar Agenda</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

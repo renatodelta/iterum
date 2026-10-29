@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ChevronDown,
   Calendar as CalendarIcon,
+  CalendarPlus,
   Plus,
   Clock,
   User,
@@ -203,6 +204,17 @@ export default function GoogleCalendarView({
     let endM = 0;
     let lunchStartH = 12;
     let lunchEndH = 13;
+
+    // Verificar se está dentro do período de abertura da agenda
+    if (clinicWorkingHours?.meta?.scheduleStartDate && clinicWorkingHours?.meta?.scheduleEndDate) {
+      const y = targetDate.getFullYear();
+      const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const d = String(targetDate.getDate()).padStart(2, '0');
+      const targetISO = `${y}-${m}-${d}`;
+      if (targetISO < clinicWorkingHours.meta.scheduleStartDate || targetISO > clinicWorkingHours.meta.scheduleEndDate) {
+        dayActive = false;
+      }
+    }
 
     if (clinicWorkingHours && clinicWorkingHours[dayOfWeek]) {
       const cfg = clinicWorkingHours[dayOfWeek];
@@ -1378,8 +1390,8 @@ export default function GoogleCalendarView({
                     }}
                     className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
                   >
-                    <Settings className="w-4 h-4 text-slate-500" />
-                    <span>Horários & Expediente</span>
+                    <CalendarPlus className="w-4 h-4 text-emerald-600" />
+                    <span>Criar Agenda</span>
                   </button>
                 </div>
               )}
