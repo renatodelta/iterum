@@ -198,7 +198,7 @@ export default function GoogleCalendarView({
   // Gerar resumo de horários (vagos e ocupados) para qualquer data
   const getDaySlotsInfo = (targetDate: Date) => {
     const dayOfWeek = targetDate.getDay().toString(); // 0 = Domingo, 6 = Sábado
-    let dayActive = true;
+    let dayActive = false;
     let startH = 8;
     let startM = 0;
     let endH = 18;
@@ -206,20 +206,75 @@ export default function GoogleCalendarView({
     let lunchStartH = 12;
     let lunchEndH = 13;
 
-    // Verificar se está dentro do período de abertura da agenda
-    if (clinicWorkingHours?.meta?.scheduleStartDate && clinicWorkingHours?.meta?.scheduleEndDate) {
-      const y = targetDate.getFullYear();
-      const m = String(targetDate.getMonth() + 1).padStart(2, '0');
-      const d = String(targetDate.getDate()).padStart(2, '0');
-      const targetISO = `${y}-${m}-${d}`;
-      if (targetISO < clinicWorkingHours.meta.scheduleStartDate || targetISO > clinicWorkingHours.meta.scheduleEndDate) {
-        dayActive = false;
-      }
+    // Consultas do dia (sempre preservadas na visualização da agenda)
+    const dayAppts = appointments.filter((a) => {
+      const d = new Date(a.startTime);
+      const isDay = isSameDay(d, targetDate);
+      const isNotCanceled = a.status !== 'CANCELADO' && a.status !== 'CANCELED';
+      if (!isDay || !isNotCanceled) return false;
+
+      return matchesSearch(a, searchQuery);
+    });
+
+    const meta = clinicWorkingHours?.meta;
+    const selectedDays: string[] = Array.isArray(meta?.selectedDays)
+      ? meta.selectedDays.map(String)
+      : (Array.isArray(clinicWorkingHours?.selectedDays) ? clinicWorkingHours.selectedDays.map(String) : []);
+
+    // Se não há dias selecionados ou o período não foi configurado, a agenda está inativa (sem vagas)
+    if (selectedDays.length === 0 || !meta?.scheduleStartDate || !meta?.scheduleEndDate) {
+      return {
+        isActive: false,
+        allSlots: [],
+        bookedAppts: dayAppts,
+        vacantSlots: [],
+        bookedCount: dayAppts.length,
+        vacantCount: 0,
+      };
     }
 
+    // Verificar se a data está estritamente dentro do período de abertura da agenda
+    const y = targetDate.getFullYear();
+    const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const d = String(targetDate.getDate()).padStart(2, '0');
+    const targetISO = `${y}-${m}-${d}`;
+    if (targetISO < meta.scheduleStartDate || targetISO > meta.scheduleEndDate) {
+      return {
+        isActive: false,
+        allSlots: [],
+        bookedAppts: dayAppts,
+        vacantSlots: [],
+        bookedCount: dayAppts.length,
+        vacantCount: 0,
+      };
+    }
+
+    // Verificar se o dia da semana atual está entre os dias selecionados no Criar Agenda
+    if (!selectedDays.includes(dayOfWeek)) {
+      return {
+        isActive: false,
+        allSlots: [],
+        bookedAppts: dayAppts,
+        vacantSlots: [],
+        bookedCount: dayAppts.length,
+        vacantCount: 0,
+      };
+    }
+
+    // Obter configuração de horário de expediente para este dia da semana
     if (clinicWorkingHours && clinicWorkingHours[dayOfWeek]) {
       const cfg = clinicWorkingHours[dayOfWeek];
-      dayActive = !!cfg.active;
+      if (cfg.active === false) {
+        return {
+          isActive: false,
+          allSlots: [],
+          bookedAppts: dayAppts,
+          vacantSlots: [],
+          bookedCount: dayAppts.length,
+          vacantCount: 0,
+        };
+      }
+      dayActive = true;
       if (cfg.start) {
         const [sh, sm] = cfg.start.split(':').map(Number);
         startH = sh;
@@ -235,35 +290,22 @@ export default function GoogleCalendarView({
         lunchEndH = parseInt(cfg.lunchEnd.split(':')[0], 10);
       }
     } else {
-      // Padrão: Segunda a Sexta ativa, Sábado meia jornada, Domingo inativo
-      const dow = targetDate.getDay();
-      if (dow === 0) dayActive = false;
-      if (dow === 6) {
-        endH = 12;
-        lunchStartH = 12;
-        lunchEndH = 12;
+      // Se está em selectedDays mas não tem objeto específico no JSON, ativa com padrão do meta
+      dayActive = true;
+      if (meta?.workStartTime) {
+        const [sh, sm] = meta.workStartTime.split(':').map(Number);
+        startH = sh;
+        startM = sm || 0;
       }
-    }
-
-    // Consultas do dia
-    const dayAppts = appointments.filter((a) => {
-      const d = new Date(a.startTime);
-      const isDay = isSameDay(d, targetDate);
-      const isNotCanceled = a.status !== 'CANCELADO' && a.status !== 'CANCELED';
-      if (!isDay || !isNotCanceled) return false;
-
-      return matchesSearch(a, searchQuery);
-    });
-
-    if (!dayActive) {
-      return {
-        isActive: false,
-        allSlots: [],
-        bookedAppts: dayAppts,
-        vacantSlots: [],
-        bookedCount: dayAppts.length,
-        vacantCount: 0,
-      };
+      if (meta?.workEndTime) {
+        const [eh, em] = meta.workEndTime.split(':').map(Number);
+        endH = eh;
+        endM = em || 0;
+      }
+      if (meta?.breakStartTime && meta?.breakEndTime) {
+        lunchStartH = parseInt(meta.breakStartTime.split(':')[0], 10);
+        lunchEndH = parseInt(meta.breakEndTime.split(':')[0], 10);
+      }
     }
 
     // Gerar slots regulares
@@ -889,6 +931,16 @@ export default function GoogleCalendarView({
 
             {/* GRADE DA TIMELINE COM HORÁRIOS VAGOS E AGENDADOS */}
             <div className="flex-1 overflow-y-auto relative bg-white">
+              {/* AVISO SE A AGENDA ESTIVER FECHADA / SEM ATENDIMENTO NO DIA */}
+              {!currentDayInfo.isActive && (
+                <div className="mx-4 my-2.5 p-3 rounded-xl bg-slate-100/90 border border-slate-200 text-slate-600 text-xs flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>
+                    <strong>Agenda Fechada / Sem Atendimento:</strong> Este dia está fora dos dias da semana ou do período de datas aberto em &ldquo;Criar Agenda&rdquo;.
+                  </span>
+                </div>
+              )}
+
               {/* LINHA DE TEMPO ATUAL (INDICADOR DO GOOGLE CALENDAR EM TEMPO REAL) */}
               {isToday(selectedDate) && (
                 <div
@@ -1001,12 +1053,18 @@ export default function GoogleCalendarView({
 
                         {/* Se não houver nada agendado nem vago (fora de expediente) */}
                         {apptsInHour.length === 0 && vacantInHour.length === 0 && (
-                          <div
-                            onClick={() => onOpenNewAppt(selectedDate, hourFormatted)}
-                            className="h-9 rounded-lg hover:bg-slate-100/80 cursor-pointer flex items-center px-2 text-slate-300 hover:text-slate-500 text-xs transition"
-                          >
-                            + Toque para agendar em {hourFormatted}
-                          </div>
+                          currentDayInfo.isActive ? (
+                            <div
+                              onClick={() => onOpenNewAppt(selectedDate, hourFormatted)}
+                              className="h-9 rounded-lg hover:bg-slate-100/80 cursor-pointer flex items-center px-2 text-slate-300 hover:text-slate-500 text-xs transition"
+                            >
+                              + Toque para agendar em {hourFormatted}
+                            </div>
+                          ) : (
+                            <div className="h-9 flex items-center px-2 text-slate-300/30 text-xs select-none">
+                              —
+                            </div>
+                          )
                         )}
                       </div>
                     </div>
@@ -1082,8 +1140,16 @@ export default function GoogleCalendarView({
                         return (
                           <div
                             key={colIdx}
-                            className="p-1 flex flex-col gap-1 justify-center relative hover:bg-blue-50/20 transition cursor-pointer"
-                            onClick={() => onOpenNewAppt(colDate, hourFormatted)}
+                            className={`p-1 flex flex-col gap-1 justify-center relative transition ${
+                              daySlots.isActive
+                                ? 'hover:bg-blue-50/20 cursor-pointer'
+                                : 'bg-slate-50/40 cursor-default select-none'
+                            }`}
+                            onClick={() => {
+                              if (daySlots.isActive) {
+                                onOpenNewAppt(colDate, hourFormatted);
+                              }
+                            }}
                           >
                             {/* Consultas Agendadas */}
                             {apptsInHour.map((appt) => {
@@ -1192,8 +1258,16 @@ export default function GoogleCalendarView({
                         return (
                           <div
                             key={colIdx}
-                            className="p-0.5 flex flex-col gap-0.5 justify-center relative hover:bg-blue-50/20 transition cursor-pointer"
-                            onClick={() => onOpenNewAppt(colDate, hourFormatted)}
+                            className={`p-0.5 flex flex-col gap-0.5 justify-center relative transition ${
+                              daySlots.isActive
+                                ? 'hover:bg-blue-50/20 cursor-pointer'
+                                : 'bg-slate-50/40 cursor-default select-none'
+                            }`}
+                            onClick={() => {
+                              if (daySlots.isActive) {
+                                onOpenNewAppt(colDate, hourFormatted);
+                              }
+                            }}
                           >
                             {apptsInHour.map((appt) => {
                               const badge = getAppointmentBadge(appt);
@@ -1229,12 +1303,12 @@ export default function GoogleCalendarView({
 
       {/* =========================================================================
           3. FLOATING ACTION BUTTON (FAB DO GOOGLE CALENDAR COM O ÍCONE + COLORIDO)
-          Oculto na visualização de mês conforme solicitação do usuário.
+          Oculto na visualização de mês e em telas menores (onde a barra mobile exibe o botão dedicado na Agenda).
       ========================================================================= */}
       {agendaViewMode !== 'mes' && (
         <button
           onClick={() => onOpenNewAppt(selectedDate)}
-          className="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
+          className="hidden sm:flex fixed sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
           aria-label="Criar nova consulta"
           title="Criar nova consulta"
         >

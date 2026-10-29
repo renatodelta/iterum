@@ -174,9 +174,9 @@ export default function Dashboard() {
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
-  // Estados de "Criar Agenda" (Parâmetros de atendimento do médico)
-  const [scheduleStartDate, setScheduleStartDate] = useState('2026-11-01');
-  const [scheduleEndDate, setScheduleEndDate] = useState('2026-12-31');
+  // Estados de "Criar Agenda" (Parâmetros de atendimento do médico) - Inicia com nenhum dia marcado
+  const [scheduleStartDate, setScheduleStartDate] = useState('');
+  const [scheduleEndDate, setScheduleEndDate] = useState('');
   const [workStartTime, setWorkStartTime] = useState('08:00');
   const [workEndTime, setWorkEndTime] = useState('17:00');
   const [breakEnabled, setBreakEnabled] = useState(true);
@@ -185,8 +185,8 @@ export default function Dashboard() {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
   const [returnSlotDurationMinutes, setReturnSlotDurationMinutes] = useState(20);
   const [maxReturnSlotsPerDay, setMaxReturnSlotsPerDay] = useState<number>(4);
-  const [returnSlotTimes, setReturnSlotTimes] = useState<string[]>(['11:00', '16:00', '16:30', '17:00']);
-  const [selectedDays, setSelectedDays] = useState<string[]>(['1', '2', '3', '4', '5']);
+  const [returnSlotTimes, setReturnSlotTimes] = useState<string[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
@@ -341,8 +341,8 @@ export default function Dashboard() {
       if (dataSettings.clinic) {
         setClinic(dataSettings.clinic);
         const c = dataSettings.clinic;
-        if (c.scheduleStartDate) setScheduleStartDate(c.scheduleStartDate);
-        if (c.scheduleEndDate) setScheduleEndDate(c.scheduleEndDate);
+        if (c.scheduleStartDate !== undefined) setScheduleStartDate(c.scheduleStartDate || '');
+        if (c.scheduleEndDate !== undefined) setScheduleEndDate(c.scheduleEndDate || '');
         if (c.workStartTime) setWorkStartTime(c.workStartTime);
         if (c.workEndTime) setWorkEndTime(c.workEndTime);
         if (c.breakEnabled !== undefined) setBreakEnabled(Boolean(c.breakEnabled));
@@ -849,6 +849,17 @@ export default function Dashboard() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   }, [scheduleStartDate, scheduleEndDate]);
 
+  // Consultas já agendadas no período selecionado (para alertar preservação)
+  const existingApptsInRange = useMemo(() => {
+    if (!scheduleStartDate || !scheduleEndDate) return [];
+    return appointments.filter((a) => {
+      if (a.status === 'CANCELADO' || a.status === 'CANCELED') return false;
+      const apptDate = a.startTime ? a.startTime.split('T')[0] : '';
+      if (!apptDate) return false;
+      return apptDate >= scheduleStartDate && apptDate <= scheduleEndDate;
+    });
+  }, [appointments, scheduleStartDate, scheduleEndDate]);
+
   // Simulador em Tempo Real da grade diária de consultas
   const generatedPreviewSlots = useMemo(() => {
     if (!workStartTime || !workEndTime || !slotDurationMinutes) return [];
@@ -912,6 +923,17 @@ export default function Dashboard() {
     try {
       setSavingSettings(true);
       setSaveSuccessMsg(null);
+
+      // Verificar consultas já agendadas anteriormente neste período (não serão substituídas)
+      const conflictingAppts = appointments.filter((a) => {
+        if (a.status === 'CANCELADO' || a.status === 'CANCELED') return false;
+        const apptDate = a.startTime ? a.startTime.split('T')[0] : '';
+        if (!apptDate) return false;
+        if (scheduleStartDate && apptDate < scheduleStartDate) return false;
+        if (scheduleEndDate && apptDate > scheduleEndDate) return false;
+        return true;
+      });
+
       const res = await fetch('/api/clinic/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -933,8 +955,14 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.success) {
         setClinic(data.clinic);
-        setSaveSuccessMsg('Agenda criada e parâmetros de atendimento salvos com sucesso!');
-        setTimeout(() => setSaveSuccessMsg(null), 6000);
+        if (conflictingAppts.length > 0) {
+          setSaveSuccessMsg(
+            `Agenda criada com sucesso! ⚠️ Aviso: ${conflictingAppts.length} consulta(s) já agendada(s) anteriormente neste período foram preservadas intactas e mantidas na agenda (nenhum horário marcado foi substituído).`
+          );
+        } else {
+          setSaveSuccessMsg('Agenda criada e parâmetros de atendimento salvos com sucesso!');
+        }
+        setTimeout(() => setSaveSuccessMsg(null), 8000);
       } else {
         alert(data.error || 'Erro ao salvar parâmetros da agenda');
       }
@@ -2967,6 +2995,20 @@ export default function Dashboard() {
                       Até 31 de Dezembro
                     </button>
                   </div>
+
+                  {/* AVISO DE CONSULTAS PREVIAMENTE AGENDADAS NO PERÍODO */}
+                  {existingApptsInRange.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Aviso sobre horários já marcados anteriormente:</p>
+                        <p className="mt-0.5 text-amber-800">
+                          Existem <strong>{existingApptsInRange.length} consulta(s) previamente agendada(s)</strong> no período de {scheduleStartDate} a {scheduleEndDate}.
+                          Ao salvar a abertura desta agenda, <strong>nenhuma consulta anterior será substituída ou apagada</strong>; todos os horários marcados anteriormente permanecerão preservados e mantidos na agenda.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* =========================================================================
@@ -3803,18 +3845,18 @@ export default function Dashboard() {
         </button>
       </nav>
 
-      {/* FAB: NOVA CONSULTA (MOBILE) */}
-      {activeTab !== 'agenda' && (
+      {/* FAB: NOVA CONSULTA (MOBILE) - EXCLUSIVO NO MENU AGENDA */}
+      {activeTab === 'agenda' && (
         <button
           onClick={() => {
             setNewApptTime('');
             setShowModalNewAppt(true);
           }}
-          className="lg:hidden fixed right-4 bottom-20 z-40 bg-slate-900 hover:bg-slate-800 text-white rounded-full p-3.5 shadow-xl shadow-slate-900/30 flex items-center gap-1.5 font-bold text-xs active:scale-95 transition"
+          className="lg:hidden fixed right-4 bottom-20 z-40 bg-teal-600 hover:bg-teal-700 text-white rounded-full px-4 py-3 shadow-xl shadow-teal-900/30 flex items-center gap-1.5 font-bold text-xs active:scale-95 transition"
           aria-label="Nova Consulta"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span className="pr-1">Consulta</span>
+          <span>+ Consulta</span>
         </button>
       )}
 

@@ -15,26 +15,26 @@ let memoryClinic: any = {
   address: 'Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP',
   slotDurationMinutes: 30,
   returnSlotDurationMinutes: 20,
-  scheduleStartDate: '2026-11-01',
-  scheduleEndDate: '2026-12-31',
+  scheduleStartDate: '',
+  scheduleEndDate: '',
   workStartTime: '08:00',
   workEndTime: '17:00',
   breakEnabled: true,
   breakStartTime: '12:00',
   breakEndTime: '13:00',
-  selectedDays: ['1', '2', '3', '4', '5'],
+  selectedDays: [],
   minCancelHours: 2,
   workingHours: {
-    '1': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '2': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '3': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '4': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
-    '5': { active: true, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '1': { active: false, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '2': { active: false, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '3': { active: false, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '4': { active: false, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+    '5': { active: false, start: '08:00', end: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
     '6': { active: false, start: '08:00', end: '12:00', lunchStart: '', lunchEnd: '' },
     '0': { active: false, start: '08:00', end: '12:00', lunchStart: '', lunchEnd: '' },
     meta: {
-      scheduleStartDate: '2026-11-01',
-      scheduleEndDate: '2026-12-31',
+      scheduleStartDate: '',
+      scheduleEndDate: '',
       workStartTime: '08:00',
       workEndTime: '17:00',
       breakEnabled: true,
@@ -43,8 +43,8 @@ let memoryClinic: any = {
       slotDurationMinutes: 30,
       returnSlotDurationMinutes: 20,
       maxReturnSlotsPerDay: 4,
-      returnSlotTimes: ['11:00', '16:00', '16:30', '17:00'],
-      selectedDays: ['1', '2', '3', '4', '5'],
+      returnSlotTimes: [],
+      selectedDays: [],
     },
   },
   createdAt: new Date().toISOString(),
@@ -77,14 +77,14 @@ export async function GET() {
             returnSlotDurationMinutes: meta.returnSlotDurationMinutes || memoryClinic.returnSlotDurationMinutes,
             maxReturnSlotsPerDay: meta.maxReturnSlotsPerDay !== undefined ? meta.maxReturnSlotsPerDay : 4,
             returnSlotTimes: meta.returnSlotTimes || ['11:00', '16:00', '16:30', '17:00'],
-            scheduleStartDate: meta.scheduleStartDate || memoryClinic.scheduleStartDate,
-            scheduleEndDate: meta.scheduleEndDate || memoryClinic.scheduleEndDate,
+            scheduleStartDate: meta.scheduleStartDate !== undefined ? meta.scheduleStartDate : memoryClinic.scheduleStartDate,
+            scheduleEndDate: meta.scheduleEndDate !== undefined ? meta.scheduleEndDate : memoryClinic.scheduleEndDate,
             workStartTime: meta.workStartTime || memoryClinic.workStartTime,
             workEndTime: meta.workEndTime || memoryClinic.workEndTime,
             breakEnabled: meta.breakEnabled !== undefined ? meta.breakEnabled : memoryClinic.breakEnabled,
             breakStartTime: meta.breakStartTime || memoryClinic.breakStartTime,
             breakEndTime: meta.breakEndTime || memoryClinic.breakEndTime,
-            selectedDays: meta.selectedDays || memoryClinic.selectedDays,
+            selectedDays: meta.selectedDays !== undefined ? meta.selectedDays : memoryClinic.selectedDays,
             workingHours: parsedWorkingHours,
           },
         });
@@ -137,9 +137,9 @@ export async function POST(req: NextRequest) {
       finalWorkingHours = { ...workingHours };
     }
 
-    const currentSelectedDays: string[] = selectedDays
-      ? (Array.isArray(selectedDays) ? selectedDays.map(String) : ['1', '2', '3', '4', '5'])
-      : (finalWorkingHours.meta?.selectedDays || memoryClinic.selectedDays || ['1', '2', '3', '4', '5']);
+    const currentSelectedDays: string[] = selectedDays !== undefined
+      ? (Array.isArray(selectedDays) ? selectedDays.map(String) : [])
+      : (finalWorkingHours.meta?.selectedDays || memoryClinic.selectedDays || []);
 
     const currentWorkStart: string = workStartTime || finalWorkingHours.meta?.workStartTime || memoryClinic.workStartTime || '08:00';
     const currentWorkEnd: string = workEndTime || finalWorkingHours.meta?.workEndTime || memoryClinic.workEndTime || '17:00';
@@ -148,14 +148,14 @@ export async function POST(req: NextRequest) {
       : (finalWorkingHours.meta?.breakEnabled !== undefined ? finalWorkingHours.meta.breakEnabled : memoryClinic.breakEnabled);
     const currentBreakStart: string = breakStartTime || finalWorkingHours.meta?.breakStartTime || memoryClinic.breakStartTime || '12:00';
     const currentBreakEnd: string = breakEndTime || finalWorkingHours.meta?.breakEndTime || memoryClinic.breakEndTime || '13:00';
-    const currentScheduleStart: string = scheduleStartDate || finalWorkingHours.meta?.scheduleStartDate || memoryClinic.scheduleStartDate || '2026-11-01';
-    const currentScheduleEnd: string = scheduleEndDate || finalWorkingHours.meta?.scheduleEndDate || memoryClinic.scheduleEndDate || '2026-12-31';
+    const currentScheduleStart: string = scheduleStartDate !== undefined ? scheduleStartDate : (finalWorkingHours.meta?.scheduleStartDate || memoryClinic.scheduleStartDate || '');
+    const currentScheduleEnd: string = scheduleEndDate !== undefined ? scheduleEndDate : (finalWorkingHours.meta?.scheduleEndDate || memoryClinic.scheduleEndDate || '');
     const currentSlotDuration: number = slotDurationMinutes ? parseInt(slotDurationMinutes, 10) : (memoryClinic.slotDurationMinutes || 30);
     const currentReturnDuration: number = returnSlotDurationMinutes ? parseInt(returnSlotDurationMinutes, 10) : (memoryClinic.returnSlotDurationMinutes || 20);
     const currentMaxReturnSlots: number = maxReturnSlotsPerDay !== undefined ? parseInt(maxReturnSlotsPerDay, 10) : (finalWorkingHours.meta?.maxReturnSlotsPerDay ?? 4);
     const currentReturnSlotTimes: string[] = Array.isArray(returnSlotTimes)
       ? returnSlotTimes
-      : (finalWorkingHours.meta?.returnSlotTimes || ['11:00', '16:00', '16:30', '17:00']);
+      : (finalWorkingHours.meta?.returnSlotTimes || []);
 
     // Gerar horários para os 7 dias da semana (0 = Domingo a 6 = Sábado)
     ['0', '1', '2', '3', '4', '5', '6'].forEach((day) => {

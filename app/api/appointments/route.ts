@@ -131,6 +131,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Formato de startTime inválido.' }, { status: 400 });
     }
 
+    // Verificar se o horário está dentro do período e dias da agenda criada
+    if (clinic.workingHours) {
+      try {
+        const whConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
+        const meta = whConfig?.meta;
+        const selectedDaysList: string[] = Array.isArray(meta?.selectedDays)
+          ? meta.selectedDays
+          : (Array.isArray(whConfig?.selectedDays) ? whConfig.selectedDays : []);
+        const y = start.getFullYear();
+        const m = String(start.getMonth() + 1).padStart(2, '0');
+        const d = String(start.getDate()).padStart(2, '0');
+        const dateISO = `${y}-${m}-${d}`;
+        const dow = start.getDay().toString();
+
+        if (meta?.scheduleStartDate && meta?.scheduleEndDate) {
+          if (dateISO < meta.scheduleStartDate || dateISO > meta.scheduleEndDate) {
+            return NextResponse.json(
+              { error: `Data fora do período de abertura da agenda (${meta.scheduleStartDate} a ${meta.scheduleEndDate}).` },
+              { status: 400 }
+            );
+          }
+        }
+        if (selectedDaysList.length > 0 && !selectedDaysList.includes(dow)) {
+          return NextResponse.json(
+            { error: 'Não há atendimento médico no dia da semana selecionado.' },
+            { status: 400 }
+          );
+        }
+      } catch (e) {
+        // Ignora erro de parsing
+      }
+    }
+
     const end = addMinutes(start, clinic.slotDurationMinutes || 30);
 
     // Verificar colisão

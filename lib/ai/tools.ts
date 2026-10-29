@@ -190,18 +190,37 @@ export async function buscarHorariosDisponiveis(
       return { success: false, message: 'Erro na configuração do expediente da clínica.' };
     }
 
-    // Verificar se a data está dentro do período de abertura da agenda
+    // Verificar se a agenda está aberta e se a data está dentro do período configurado
     const metaAgenda = (workingHoursConfig as any)?.meta;
-    if (metaAgenda && metaAgenda.scheduleStartDate && metaAgenda.scheduleEndDate) {
-      if (cleanDateStr < metaAgenda.scheduleStartDate || cleanDateStr > metaAgenda.scheduleEndDate) {
-        const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
-        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
-        return {
-          success: true,
-          message: `A agenda está aberta para atendimentos exclusivamente de ${sd}/${sm}/${sy} até ${ed}/${em}/${ey}. A data solicitada (${cleanDateStr}) está fora do período de atendimento configurado.`,
-          data: { slots: [] },
-        };
-      }
+    const selectedDaysList: string[] = Array.isArray(metaAgenda?.selectedDays)
+      ? metaAgenda.selectedDays
+      : (Array.isArray((workingHoursConfig as any)?.selectedDays) ? (workingHoursConfig as any).selectedDays : []);
+
+    if (!metaAgenda?.scheduleStartDate || !metaAgenda?.scheduleEndDate || selectedDaysList.length === 0) {
+      return {
+        success: true,
+        message: 'A agenda ainda não foi aberta para atendimentos pelo profissional. Por favor, entre em contato mais tarde.',
+        data: { slots: [] },
+      };
+    }
+
+    if (cleanDateStr < metaAgenda.scheduleStartDate || cleanDateStr > metaAgenda.scheduleEndDate) {
+      const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
+      const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+      return {
+        success: true,
+        message: `A agenda está aberta para atendimentos exclusivamente de ${sd}/${sm}/${sy} até ${ed}/${em}/${ey}. A data solicitada (${cleanDateStr}) está fora do período de atendimento configurado.`,
+        data: { slots: [] },
+      };
+    }
+
+    if (!selectedDaysList.includes(dayOfWeek)) {
+      const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      return {
+        success: true,
+        message: `O profissional não atende aos ${diasNomes[parseInt(dayOfWeek)]}s. Por favor escolha outro dia da semana.`,
+        data: { slots: [] },
+      };
     }
 
     const dayConfig = workingHoursConfig[dayOfWeek];
@@ -665,6 +684,43 @@ export async function criarNovoAgendamento(
 
     const slotDuration = clinic.slotDurationMinutes || 30;
     const newEnd = addMinutes(newStart, slotDuration);
+
+    // Verificar se o horário solicitado está dentro dos dias e período da agenda criada
+    if (clinic.workingHours) {
+      try {
+        const whConfig = JSON.parse(clinic.workingHours);
+        const meta = whConfig?.meta;
+        const selectedDaysList: string[] = Array.isArray(meta?.selectedDays)
+          ? meta.selectedDays
+          : (Array.isArray(whConfig?.selectedDays) ? whConfig.selectedDays : []);
+        const year = newStart.getFullYear();
+        const month = String(newStart.getMonth() + 1).padStart(2, '0');
+        const day = String(newStart.getDate()).padStart(2, '0');
+        const dateISO = `${year}-${month}-${day}`;
+        const dow = newStart.getDay().toString();
+
+        if (!meta?.scheduleStartDate || !meta?.scheduleEndDate || selectedDaysList.length === 0) {
+          return {
+            success: false,
+            message: 'A agenda do médico ainda não foi aberta para novas consultas.',
+          };
+        }
+        if (dateISO < meta.scheduleStartDate || dateISO > meta.scheduleEndDate) {
+          return {
+            success: false,
+            message: 'A data desejada está fora do período de abertura da agenda do profissional.',
+          };
+        }
+        if (!selectedDaysList.includes(dow)) {
+          return {
+            success: false,
+            message: 'O médico não atende neste dia da semana.',
+          };
+        }
+      } catch (e) {
+        // Ignora erro de parsing
+      }
+    }
 
     // Verificar colisão de horários
     const conflict = await prisma.appointment.findFirst({
