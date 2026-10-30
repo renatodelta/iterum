@@ -60,22 +60,21 @@ function ensureDataDirectory() {
 
 export function loadWaitlist(): WaitlistEntry[] {
   ensureDataDirectory();
-  // Sempre lê do arquivo: rotas diferentes do Next (webhook, API, cancelamento) rodam em
-  // bundles separados e um cache em memória ficaria desatualizado entre elas.
   try {
     if (fs.existsSync(WAITLIST_FILE_PATH)) {
       const data = fs.readFileSync(WAITLIST_FILE_PATH, 'utf-8');
-      const parsed = JSON.parse(data);
-      inMemoryWaitlist = Array.isArray(parsed) ? parsed : [];
-      return inMemoryWaitlist;
+      if (data && data.trim()) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          inMemoryWaitlist = parsed;
+          return parsed;
+        }
+      }
     }
   } catch (err) {
     console.warn('⚠️ [Waitlist] Erro ao ler arquivo:', err);
-    if (inMemoryWaitlist) return inMemoryWaitlist;
   }
-  inMemoryWaitlist = [...INITIAL_WAITLIST];
-  saveWaitlist(inMemoryWaitlist);
-  return inMemoryWaitlist;
+  return inMemoryWaitlist || [];
 }
 
 export function saveWaitlist(list: WaitlistEntry[]): void {
@@ -319,11 +318,24 @@ export async function notifyFirstInWaitlistForVacatedSlot(vacatedSlot: {
  */
 export async function confirmWaitlistBooking(
   waitlistId: string,
-  clinicId?: string
+  clinicId?: string,
+  fallbackSlot?: {
+    startTime: string;
+    endTime?: string;
+    dateDisplay?: string;
+    timeDisplay?: string;
+  }
 ): Promise<{ success: boolean; appointment?: any; message: string }> {
   const list = loadWaitlist();
-  const entry = list.find((i) => i.id === waitlistId);
-  if (!entry || !entry.offeredSlot) {
+  const cleanId = (waitlistId || '').replace(/\D/g, '');
+  let entry = list.find((i) => i.id === waitlistId);
+  if (!entry && cleanId) {
+    const last8 = cleanId.slice(-8);
+    entry = list.find((i) => i.patientPhone.replace(/\D/g, '').slice(-8) === last8);
+  }
+
+  const slot = entry?.offeredSlot || fallbackSlot;
+  if (!slot || !slot.startTime) {
     return { success: false, message: 'Entrada da fila de espera ou horário ofertado não encontrado.' };
   }
 
@@ -338,10 +350,11 @@ export async function confirmWaitlistBooking(
     }
 
     // Buscar ou criar o paciente no banco
+    const phoneToSearch = entry?.patientPhone || waitlistId;
     let patient = await prisma.patient.findFirst({
       where: {
         clinicId: clinic.id,
-        phone: { contains: entry.patientPhone.replace(/\D/g, '').slice(-8) },
+        phone: { contains: phoneToSearch.replace(/\D/g, '').slice(-8) },
       },
     });
 
@@ -349,14 +362,14 @@ export async function confirmWaitlistBooking(
       patient = await prisma.patient.create({
         data: {
           clinicId: clinic.id,
-          name: entry.patientName,
-          phone: entry.patientPhone,
+          name: entry?.patientName || 'Paciente Fila de Espera',
+          phone: phoneToSearch,
         },
       });
     }
 
-    const start = new Date(entry.offeredSlot.startTime);
-    const end = entry.offeredSlot.endTime ? new Date(entry.offeredSlot.endTime) : new Date(start.getTime() + (clinic.slotDurationMinutes || 30) * 60000);
+    const start = new Date(slot.startTime);
+    const end = slot.endTime ? new Date(slot.endTime) : new Date(start.getTime() + (clinic.slotDurationMinutes || 30) * 60000);
 
     // Criar o agendamento preenchendo a lacuna
     const newAppointment = await prisma.appointment.create({
@@ -366,7 +379,7 @@ export async function confirmWaitlistBooking(
         startTime: start,
         endTime: end,
         status: 'CONFIRMADO',
-        notes: `Encaixe preenchido automaticamente via Fila de Espera WhatsApp (${entry.notes || 'Sem observações'})`,
+        notes: `Encaixe preenchido automaticamente via Fila de Espera WhatsApp (${entry?.notes || 'Vaga recuperada'})`,
       },
       include: {
         patient: true,
@@ -374,14 +387,19 @@ export async function confirmWaitlistBooking(
     });
 
     // Atualizar status na fila de espera para AGENDADO
-    updateWaitlistEntry(entry.id, {
-      status: 'AGENDADO',
-    });
+    if (entry) {
+      updateWaitlistEntry(entry.id, {
+        status: 'AGENDADO',
+      });
+    }
+
+    const dateDisp = slot.dateDisplay || start.toLocaleDateString('pt-BR');
+    const timeDisp = slot.timeDisplay || start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     return {
       success: true,
       appointment: newAppointment,
-      message: `Agendamento criado com sucesso! A lacuna da agenda para ${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay} foi preenchida pelo paciente ${entry.patientName}.`,
+      message: `Agendamento criado com sucesso! A lacuna da agenda para ${dateDisp} às ${timeDisp} foi preenchida pelo paciente ${patient.name}.`,
     };
   } catch (error: any) {
     console.error('Erro ao confirmar agendamento da fila de espera:', error);

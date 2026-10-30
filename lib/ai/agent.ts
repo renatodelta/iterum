@@ -538,12 +538,44 @@ async function runPOPWorkflow(
       );
 
     if (isYes(userMessage)) {
+      // 1. Tentar obter o horário ofertado do entry ou reconstruir a partir da mensagem no histórico
+      let slotData = entry?.offeredSlot;
+      if (!slotData) {
+        for (let i = history.length - 1; i >= 0; i--) {
+          const text = history[i].content || '';
+          const dMatch = text.match(/Data:\s*\*([^*]+)\*/i);
+          const tMatch = text.match(/Horário:\s*\*([^*]+)\*/i);
+          if (dMatch && tMatch) {
+            const datePart = dMatch[1].trim();
+            const timePart = tMatch[1].trim();
+            const timeParts = timePart.includes('às') ? timePart.split('às').map((s) => s.trim()) : [timePart, timePart];
+            const dParts = datePart.split('/');
+            if (dParts.length === 3) {
+              const isoDate = `${dParts[2]}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`;
+              const startIso = parseBRT(`${isoDate}T${timeParts[0]}:00`).toISOString();
+              const endIso = timeParts[1] ? parseBRT(`${isoDate}T${timeParts[1]}:00`).toISOString() : undefined;
+              slotData = {
+                startTime: startIso,
+                endTime: endIso,
+                dateDisplay: datePart,
+                timeDisplay: timePart,
+              };
+              if (entry) {
+                entry.offeredSlot = slotData;
+                updateWaitlistEntry(entry.id, { offeredSlot: slotData });
+              }
+              break;
+            }
+          }
+        }
+      }
+
       // Paciente tem interesse! Resumir o agendamento e pedir confirmação final
       let slotDisplay = 'horário liberado';
-      if (entry?.offeredSlot) {
-        slotDisplay = entry.offeredSlot.timeDisplay.includes('às')
-          ? `${entry.offeredSlot.dateDisplay} das ${entry.offeredSlot.timeDisplay}`
-          : `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`;
+      if (slotData) {
+        slotDisplay = slotData.timeDisplay.includes('às')
+          ? `${slotData.dateDisplay} das ${slotData.timeDisplay}`
+          : `${slotData.dateDisplay} às ${slotData.timeDisplay}`;
       }
       const patientTargetName = entry?.patientName || displayName || 'Paciente';
 
@@ -584,31 +616,57 @@ async function runPOPWorkflow(
         (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
     );
 
-    if (isYes(userMessage)) {
-      if (entry) {
-        const bookRes = await confirmWaitlistBooking(entry.id, clinicId);
-        toolsExecuted.push({ name: 'confirmar_encaixe_fila', args: { waitlistId: entry.id }, result: bookRes });
-
-        if (!bookRes.success) {
-          return {
-            reply: `Não foi possível concluir o agendamento deste horário no momento. Nossa equipe da recepção entrará em contato para ajudar. 🙏`,
-            toolsExecuted,
-          };
+    // Reconstruir slotData caso não esteja presente no entry
+    let slotData = entry?.offeredSlot;
+    if (!slotData) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const text = history[i].content || '';
+        const dMatch = text.match(/Data:\s*\*([^*]+)\*/i) || text.match(/Data e Horário:\s*([^\n]+)/i);
+        const tMatch = text.match(/Horário:\s*\*([^*]+)\*/i);
+        if (dMatch && tMatch) {
+          const datePart = dMatch[1].trim();
+          const timePart = tMatch[1].trim();
+          const timeParts = timePart.includes('às') ? timePart.split('às').map((s) => s.trim()) : [timePart, timePart];
+          const dParts = datePart.split('/');
+          if (dParts.length === 3) {
+            const isoDate = `${dParts[2]}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`;
+            const startIso = parseBRT(`${isoDate}T${timeParts[0]}:00`).toISOString();
+            const endIso = timeParts[1] ? parseBRT(`${isoDate}T${timeParts[1]}:00`).toISOString() : undefined;
+            slotData = {
+              startTime: startIso,
+              endTime: endIso,
+              dateDisplay: datePart,
+              timeDisplay: timePart,
+            };
+            if (entry) {
+              entry.offeredSlot = slotData;
+              updateWaitlistEntry(entry.id, { offeredSlot: slotData });
+            }
+            break;
+          }
         }
+      }
+    }
 
+    if (isYes(userMessage)) {
+      const bookRes = await confirmWaitlistBooking(entry?.id || patientPhone, clinicId, slotData || undefined);
+      toolsExecuted.push({ name: 'confirmar_encaixe_fila', args: { waitlistId: entry?.id || patientPhone }, result: bookRes });
+
+      if (bookRes.success) {
         let slotDisplay = 'horário combinado';
-        if (entry.offeredSlot) {
-          slotDisplay = entry.offeredSlot.timeDisplay.includes('às')
-            ? `${entry.offeredSlot.dateDisplay} das ${entry.offeredSlot.timeDisplay}`
-            : `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`;
+        if (slotData) {
+          slotDisplay = slotData.timeDisplay.includes('às')
+            ? `${slotData.dateDisplay} das ${slotData.timeDisplay}`
+            : `${slotData.dateDisplay} às ${slotData.timeDisplay}`;
         }
         return {
           reply: `🎉 Agendamento confirmado com sucesso!\n\nA vaga foi garantida e a lacuna da agenda foi preenchida. Sua consulta está marcada para o dia *${slotDisplay}* com ${doctorInfo.name}.\n\nAgradecemos a sua confirmação e esperamos você!`,
           toolsExecuted,
         };
       } else {
+        console.error('❌ Falha ao confirmar agendamento da fila:', bookRes.message);
         return {
-          reply: `Agendamento confirmado com sucesso!\n\n${doctorInfo.name} agradece o contato e aguarda você no horário marcado!`,
+          reply: `Tivemos uma instabilidade ao confirmar a vaga na agenda (${bookRes.message}). Por favor, tente novamente ou fale com a nossa recepção.`,
           toolsExecuted,
         };
       }
