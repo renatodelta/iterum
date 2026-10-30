@@ -164,25 +164,71 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const end = addMinutes(start, clinic.slotDurationMinutes || 30);
+    // Determinar duração da consulta considerando se é Retorno ou 1ª Vez
+    let durationMinutes = Number(body.durationMinutes) || 0;
+    if (!durationMinutes) {
+      try {
+        const workingHoursConfig = typeof clinic.workingHours === 'string'
+          ? JSON.parse(clinic.workingHours)
+          : clinic.workingHours;
+        const meta = workingHoursConfig?.meta || {};
+        const normDur = Number(meta.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
+        const retDur = Number(meta.returnSlotDurationMinutes || 25);
+        const returnSlotTimesList: string[] = Array.isArray(meta.returnSlotTimes)
+          ? meta.returnSlotTimes
+          : [];
 
-    // Verificar colisão
+        const apptHour = String(start.getHours()).padStart(2, '0');
+        const apptMin = String(start.getMinutes()).padStart(2, '0');
+        const apptTimeStr = `${apptHour}:${apptMin}`;
+
+        const isReturn =
+          Boolean(body.isReturn) ||
+          returnSlotTimesList.includes(apptTimeStr) ||
+          (notes && notes.toLowerCase().includes('retorno'));
+
+        durationMinutes = isReturn ? retDur : normDur;
+      } catch (e) {
+        durationMinutes = clinic.slotDurationMinutes || 45;
+      }
+    }
+
+    const end = addMinutes(start, durationMinutes);
+
+    // Verificar colisão de horários
     const conflict = await prisma.appointment.findFirst({
       where: {
         clinicId: clinic.id,
-        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
+        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED', 'ENCAIXE'] },
         OR: [
           { startTime: { lte: start }, endTime: { gt: start } },
           { startTime: { lt: end }, endTime: { gte: end } },
         ],
       },
+      include: {
+        patient: true,
+      },
     });
 
-    if (conflict) {
+    const isEncaixeRequested = Boolean(body.isEncaixe || body.status === 'ENCAIXE');
+
+    if (conflict && !isEncaixeRequested) {
       return NextResponse.json(
-        { error: 'Já existe um agendamento para este mesmo horário.' },
+        {
+          error: `Já existe uma consulta marcada neste horário para ${conflict.patient?.name || 'outro paciente'}. Confirme para agendar como ENCAIXE.`,
+          isConflict: true,
+          conflictingPatient: conflict.patient?.name || 'Paciente',
+        },
         { status: 409 }
       );
+    }
+
+    const finalStatus = (conflict || isEncaixeRequested) ? 'ENCAIXE' : (status || 'AGENDADO');
+    let finalNotes = notes || 'Agendamento manual criado pelo painel';
+    if ((conflict || isEncaixeRequested) && !finalNotes.toUpperCase().includes('ENCAIXE')) {
+      finalNotes = conflict?.patient?.name
+        ? `[ENCAIXE] ${finalNotes} (Sobreposto ao agendamento de ${conflict.patient.name})`
+        : `[ENCAIXE] ${finalNotes}`;
     }
 
     const newAppointment = await prisma.appointment.create({
@@ -191,8 +237,8 @@ export async function POST(req: NextRequest) {
         patientId: patient.id,
         startTime: start,
         endTime: end,
-        status: status || 'AGENDADO',
-        notes: notes || 'Agendamento manual criado pelo painel',
+        status: finalStatus,
+        notes: finalNotes,
       },
       include: {
         patient: true,

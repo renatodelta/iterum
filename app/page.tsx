@@ -154,9 +154,10 @@ function getInitials(name: string): string {
 function getStatusLabel(status: string | undefined | null): string {
   if (!status) return 'Agendado';
   const s = status.toUpperCase();
+  if (s === 'ENCAIXE') return '⚡ Consulta de Encaixe';
   if (s === 'CONFIRMED' || s === 'CONFIRMADO') return 'Confirmado';
   if (s === 'SCHEDULED' || s === 'AGENDADO') return 'Aguardando Confirmação';
-  if (s === 'RESCHEDULED' || s === 'REMARCADO') return 'Encaixe Confirmado';
+  if (s === 'RESCHEDULED' || s === 'REMARCADO') return 'Remarcado';
   if (s === 'CANCELED' || s === 'CANCELADO') return 'Cancelado';
   return status;
 }
@@ -244,6 +245,22 @@ export default function Dashboard() {
   const [newApptName, setNewApptName] = useState('');
   const [newApptTime, setNewApptTime] = useState('');
   const [newApptNotes, setNewApptNotes] = useState('');
+
+  // Identificar se o horário escolhido colide com uma consulta existente (Encaixe)
+  const conflictingAppt = useMemo(() => {
+    if (!newApptTime) return null;
+    const chosenStart = new Date(newApptTime).getTime();
+    if (isNaN(chosenStart)) return null;
+    const dur = (clinic?.slotDurationMinutes || 30) * 60 * 1000;
+    const chosenEnd = chosenStart + dur;
+
+    return appointments.find((a) => {
+      if (a.status === 'CANCELADO' || a.status === 'CANCELED') return false;
+      const aStart = new Date(a.startTime).getTime();
+      const aEnd = a.endTime ? new Date(a.endTime).getTime() : aStart + dur;
+      return aStart < chosenEnd && aEnd > chosenStart;
+    });
+  }, [newApptTime, appointments, clinic?.slotDurationMinutes]);
 
   // Modal de Detalhes do Agendamento
   const [selectedApptDetails, setSelectedApptDetails] = useState<any | null>(null);
@@ -424,13 +441,23 @@ export default function Dashboard() {
     }
   }
 
-  // Criar Agendamento Manual
-  async function handleCreateAppointment(e: React.FormEvent) {
-    e.preventDefault();
+  // Criar Agendamento Manual (com confirmação e registro de Encaixe)
+  async function handleCreateAppointment(e: React.FormEvent, forceEncaixe?: boolean) {
+    if (e) e.preventDefault();
     if (!selectedPatientId) {
       alert('Selecione obrigatoriamente um paciente cadastrado antes de marcar a consulta.');
       return;
     }
+
+    let isEncaixe = forceEncaixe || Boolean(conflictingAppt);
+    if (conflictingAppt && !forceEncaixe) {
+      const confirmEncaixe = window.confirm(
+        `⚠️ ATENÇÃO: HORÁRIO COM CONSULTA EXISTENTE!\n\nJá existe uma consulta marcada neste horário para "${conflictingAppt.patient?.name || 'outro paciente'}".\n\nEsta nova consulta será registrada como "ENCAIXE" e terá destaque visual diferenciado na agenda.\n\nDeseja confirmar o agendamento como ENCAIXE?`
+      );
+      if (!confirmEncaixe) return;
+      isEncaixe = true;
+    }
+
     try {
       const res = await fetch('/api/appointments', {
         method: 'POST',
@@ -441,6 +468,8 @@ export default function Dashboard() {
           patientPhone: newApptPhone,
           startTime: newApptTime,
           notes: newApptNotes,
+          isEncaixe,
+          status: isEncaixe ? 'ENCAIXE' : 'AGENDADO',
         }),
       });
       const data = await res.json();
@@ -453,6 +482,13 @@ export default function Dashboard() {
         setNewApptNotes('');
         fetchData();
         fetchPatients();
+      } else if (data.isConflict) {
+        const confirmEncaixe = window.confirm(
+          `⚠️ ${data.error}\n\nDeseja confirmar este agendamento como ENCAIXE?`
+        );
+        if (confirmEncaixe) {
+          handleCreateAppointment(e, true);
+        }
       } else {
         alert(data.error || 'Erro ao criar agendamento.');
       }
@@ -871,7 +907,7 @@ export default function Dashboard() {
     });
   }, [appointments, scheduleStartDate, scheduleEndDate]);
 
-  // Simulador em Tempo Real da grade diária de consultas
+  // Simulador em Tempo Real da grade diária de consultas com cálculo dinâmico e sequencial para Retornos
   const generatedPreviewSlots = useMemo(() => {
     if (!workStartTime || !workEndTime || !slotDurationMinutes) return [];
     const [startH, startM] = workStartTime.split(':').map(Number);
@@ -881,26 +917,85 @@ export default function Dashboard() {
 
     const [breakStartH, breakStartM] = (breakStartTime || '12:00').split(':').map(Number);
     const [breakEndH, breakEndM] = (breakEndTime || '13:00').split(':').map(Number);
-    const bStartMin = breakStartH * 60 + breakStartM;
-    const bEndMin = breakEndH * 60 + breakEndM;
+    const bStartMin = (breakStartH || 12) * 60 + (breakStartM || 0);
+    const bEndMin = (breakEndH || 13) * 60 + (breakEndM || 0);
 
-    const slots: Array<{ time: string; isBreak: boolean; isReturn: boolean }> = [];
+    const normDur = Number(slotDurationMinutes) || 45;
+    const retDur = Number(returnSlotDurationMinutes) || 25;
+    const returnSet = new Set(returnSlotTimes);
+
+    const slots: Array<{
+      time: string;
+      endTime: string;
+      duration: number;
+      isBreak: boolean;
+      isReturn: boolean;
+    }> = [];
+
     let cur = startMin;
-    const dur = Number(slotDurationMinutes) || 30;
 
-    while (cur + dur <= endMin) {
-      const isBreak =
-        breakEnabled &&
-        ((cur >= bStartMin && cur < bEndMin) || (cur + dur > bStartMin && cur < bEndMin));
+    while (cur < endMin) {
+      // Se intervalo de pausa está ativo e cur está no intervalo
+      if (breakEnabled && cur >= bStartMin && cur < bEndMin) {
+        const pStartH = Math.floor(bStartMin / 60);
+        const pStartM = bStartMin % 60;
+        const pEndH = Math.floor(bEndMin / 60);
+        const pEndM = bEndMin % 60;
+        slots.push({
+          time: `${String(pStartH).padStart(2, '0')}:${String(pStartM).padStart(2, '0')}`,
+          endTime: `${String(pEndH).padStart(2, '0')}:${String(pEndM).padStart(2, '0')}`,
+          duration: bEndMin - bStartMin,
+          isBreak: true,
+          isReturn: false,
+        });
+        cur = bEndMin;
+        continue;
+      }
+
       const h = Math.floor(cur / 60);
       const m = cur % 60;
       const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      const isReturn = !isBreak && returnSlotTimes.includes(timeStr);
-      slots.push({ time: timeStr, isBreak: !!isBreak, isReturn: !!isReturn });
+      const isReturn = returnSet.has(timeStr);
+      const dur = isReturn ? retDur : normDur;
+
+      // Se a consulta cruzaria com o início do intervalo
+      if (breakEnabled && cur < bStartMin && cur + dur > bStartMin) {
+        const pStartH = Math.floor(bStartMin / 60);
+        const pStartM = bStartMin % 60;
+        const pEndH = Math.floor(bEndMin / 60);
+        const pEndM = bEndMin % 60;
+        slots.push({
+          time: `${String(pStartH).padStart(2, '0')}:${String(pStartM).padStart(2, '0')}`,
+          endTime: `${String(pEndH).padStart(2, '0')}:${String(pEndM).padStart(2, '0')}`,
+          duration: bEndMin - bStartMin,
+          isBreak: true,
+          isReturn: false,
+        });
+        cur = bEndMin;
+        continue;
+      }
+
+      // Se ultrapassar o término do expediente
+      if (cur + dur > endMin) {
+        break;
+      }
+
+      const endH_ = Math.floor((cur + dur) / 60);
+      const endM_ = (cur + dur) % 60;
+      const endTimeStr = `${String(endH_).padStart(2, '0')}:${String(endM_).padStart(2, '0')}`;
+
+      slots.push({
+        time: timeStr,
+        endTime: endTimeStr,
+        duration: dur,
+        isBreak: false,
+        isReturn,
+      });
+
       cur += dur;
     }
     return slots;
-  }, [workStartTime, workEndTime, slotDurationMinutes, breakEnabled, breakStartTime, breakEndTime, returnSlotTimes]);
+  }, [workStartTime, workEndTime, slotDurationMinutes, returnSlotDurationMinutes, breakEnabled, breakStartTime, breakEndTime, returnSlotTimes]);
 
   function toggleReturnSlotTime(timeStr: string) {
     if (returnSlotTimes.includes(timeStr)) {
@@ -911,21 +1006,98 @@ export default function Dashboard() {
   }
 
   function applyReturnPresets(type: 'end' | 'start' | 'split' | 'clear') {
-    const available = generatedPreviewSlots.filter((s) => !s.isBreak).map((s) => s.time);
     if (type === 'clear') {
       setReturnSlotTimes([]);
       return;
     }
-    const count = Math.min(maxReturnSlotsPerDay || 4, available.length);
+    const [startH, startM] = (workStartTime || '08:00').split(':').map(Number);
+    const [endH, endM] = (workEndTime || '17:00').split(':').map(Number);
+    const startMin = (startH || 0) * 60 + (startM || 0);
+    const endMin = (endH || 0) * 60 + (endM || 0);
+
+    const [bStartH, bStartM] = (breakStartTime || '12:00').split(':').map(Number);
+    const [bEndH, bEndM] = (breakEndTime || '13:00').split(':').map(Number);
+    const bStartMin = (bStartH || 12) * 60 + (bStartM || 0);
+    const bEndMin = (bEndH || 13) * 60 + (bEndM || 0);
+
+    const normDur = Number(slotDurationMinutes) || 45;
+    const retDur = Number(returnSlotDurationMinutes) || 25;
+    const count = Math.max(1, Math.min(Number(maxReturnSlotsPerDay) || 4, 10));
+
+    if (type === 'start') {
+      const times: string[] = [];
+      let c = startMin;
+      while (times.length < count && c + retDur <= endMin) {
+        if (breakEnabled && c >= bStartMin && c < bEndMin) {
+          c = bEndMin;
+          continue;
+        }
+        if (breakEnabled && c < bStartMin && c + retDur > bStartMin) {
+          c = bEndMin;
+          continue;
+        }
+        const h = Math.floor(c / 60);
+        const m = c % 60;
+        times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        c += retDur;
+      }
+      setReturnSlotTimes(times);
+      return;
+    }
+
     if (type === 'end') {
-      setReturnSlotTimes(available.slice(-count));
-    } else if (type === 'start') {
-      setReturnSlotTimes(available.slice(0, count));
-    } else if (type === 'split') {
+      const normalSlots: string[] = [];
+      let c = startMin;
+      while (c + normDur <= endMin) {
+        if (breakEnabled && c >= bStartMin && c < bEndMin) {
+          c = bEndMin;
+          continue;
+        }
+        if (breakEnabled && c < bStartMin && c + normDur > bStartMin) {
+          c = bEndMin;
+          continue;
+        }
+        const h = Math.floor(c / 60);
+        const m = c % 60;
+        normalSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        c += normDur;
+      }
+      setReturnSlotTimes(normalSlots.slice(-count));
+      return;
+    }
+
+    if (type === 'split') {
       const half = Math.ceil(count / 2);
-      const startPart = available.slice(0, half);
-      const endPart = available.slice(-(count - half));
-      setReturnSlotTimes(Array.from(new Set([...startPart, ...endPart])));
+      const startTimes: string[] = [];
+      let c = startMin;
+      while (startTimes.length < half && c + retDur <= endMin) {
+        if (breakEnabled && c >= bStartMin && c < bEndMin) {
+          c = bEndMin;
+          continue;
+        }
+        const h = Math.floor(c / 60);
+        const m = c % 60;
+        startTimes.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        c += retDur;
+      }
+      const normalSlots: string[] = [];
+      let c2 = startMin;
+      while (c2 + normDur <= endMin) {
+        if (breakEnabled && c2 >= bStartMin && c2 < bEndMin) {
+          c2 = bEndMin;
+          continue;
+        }
+        if (breakEnabled && c2 < bStartMin && c2 + normDur > bStartMin) {
+          c2 = bEndMin;
+          continue;
+        }
+        const h = Math.floor(c2 / 60);
+        const m = c2 % 60;
+        normalSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        c2 += normDur;
+      }
+      const endPart = normalSlots.slice(-(count - half));
+      setReturnSlotTimes(Array.from(new Set([...startTimes, ...endPart])));
     }
   }
 
@@ -3478,7 +3650,7 @@ export default function Dashboard() {
                         </p>
 
                         {/* GRADE CLICÁVEL DE HORÁRIOS PARA RETORNO */}
-                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-sky-200/80 max-h-44 overflow-y-auto">
+                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-sky-200/80 max-h-48 overflow-y-auto">
                           {generatedPreviewSlots
                             .filter((s) => !s.isBreak)
                             .map((slot) => {
@@ -3495,11 +3667,11 @@ export default function Dashboard() {
                                   }`}
                                 >
                                   {isSelectedReturn && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                  <span>{slot.time}</span>
-                                  <span className={`text-[9px] font-bold px-1 rounded ${
+                                  <span>{slot.time} - {slot.endTime}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                                     isSelectedReturn ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-600'
                                   }`}>
-                                    {isSelectedReturn ? 'Retorno' : '1ª Vez'}
+                                    {isSelectedReturn ? `Retorno (${slot.duration}m)` : `1ª Vez (${slot.duration}m)`}
                                   </span>
                                 </button>
                               );
@@ -3548,24 +3720,27 @@ export default function Dashboard() {
                         key={idx}
                         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition flex items-center gap-1.5 ${
                           slot.isBreak
-                            ? 'bg-amber-100/80 text-amber-900 border-amber-300 line-through opacity-80 cursor-not-allowed'
+                            ? 'bg-amber-100/80 text-amber-900 border-amber-300 opacity-90 cursor-not-allowed'
                             : slot.isReturn
                             ? 'bg-sky-50 text-sky-800 border-sky-300 shadow-2xs font-black'
                             : 'bg-white text-[#005a43] border-emerald-200 shadow-2xs hover:border-[#005a43]'
                         }`}
                         title={
                           slot.isBreak
-                            ? 'Intervalo Bloqueado (Almoço)'
+                            ? `Intervalo Bloqueado (${slot.time} - ${slot.endTime})`
                             : slot.isReturn
-                            ? `Consulta de Retorno Reservada (${slot.time})`
-                            : `Consulta Nova / 1ª Vez (${slot.time})`
+                            ? `Consulta de Retorno Reservada (${slot.time} às ${slot.endTime})`
+                            : `Consulta Nova / 1ª Vez (${slot.time} às ${slot.endTime})`
                         }
                       >
                         {slot.isBreak && <Coffee className="w-3.5 h-3.5 text-amber-700" />}
                         {slot.isReturn && <Clock className="w-3.5 h-3.5 text-sky-600" />}
-                        {slot.time}
-                        {slot.isBreak && <span className="text-[10px] no-underline font-normal">(Intervalo)</span>}
-                        {slot.isReturn && <span className="text-[10px] text-sky-700 bg-sky-100 px-1 rounded font-bold">Retorno</span>}
+                        <span>{slot.time} - {slot.endTime}</span>
+                        {slot.isBreak && <span className="text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded">Pausa Almoço</span>}
+                        {slot.isReturn && <span className="text-[10px] text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded font-bold">Retorno ({slot.duration}m)</span>}
+                        {!slot.isBreak && !slot.isReturn && (
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">1ª Vez ({slot.duration}m)</span>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -4088,6 +4263,26 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* AVISO VISUAL DE ENCAIXE CASO O HORÁRIO JÁ ESTEJA OCUPADO */}
+              {conflictingAppt && (
+                <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 flex items-start gap-2.5 shadow-xs animate-in fade-in">
+                  <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold shadow-xs">
+                    ⚡
+                  </div>
+                  <div className="text-xs">
+                    <p className="font-extrabold text-purple-950 flex items-center gap-1.5">
+                      <span>Horário Ocupado • Agendamento como Encaixe</span>
+                    </p>
+                    <p className="mt-1 text-purple-800 leading-snug">
+                      Já existe uma consulta neste horário para <strong>{conflictingAppt.patient?.name || 'outro paciente'}</strong> ({new Date(conflictingAppt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+                    </p>
+                    <p className="mt-1 text-[11px] text-purple-700 font-semibold">
+                      Ao confirmar, esta consulta será registrada como <strong>ENCAIXE</strong> e destacada na cor roxa na agenda.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Procedimento / Observações</label>
                 <textarea
@@ -4110,9 +4305,20 @@ export default function Dashboard() {
                 <button
                   type="submit"
                   disabled={!selectedPatientId}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs disabled:opacity-40"
+                  className={`px-4 py-2 text-white rounded-xl font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5 ${
+                    conflictingAppt
+                      ? 'bg-purple-700 hover:bg-purple-800 shadow-purple-900/20'
+                      : 'bg-slate-900 hover:bg-slate-800'
+                  }`}
                 >
-                  Confirmar Agendamento
+                  {conflictingAppt ? (
+                    <>
+                      <span>⚡</span>
+                      <span>Confirmar Encaixe</span>
+                    </>
+                  ) : (
+                    'Confirmar Agendamento'
+                  )}
                 </button>
               </div>
             </form>
@@ -4152,7 +4358,16 @@ export default function Dashboard() {
                   {new Date(selectedApptDetails.startTime).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} às{' '}
                   {new Date(selectedApptDetails.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
-                <p className="text-slate-500">Status atual: <span className="font-bold text-slate-800">{getStatusLabel(selectedApptDetails.status)}</span></p>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-slate-500">Status atual:</span>
+                  {(selectedApptDetails.status === 'ENCAIXE' || (selectedApptDetails.notes && selectedApptDetails.notes.includes('ENCAIXE'))) ? (
+                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 font-extrabold text-[11px] shadow-2xs flex items-center gap-1">
+                      ⚡ Consulta de Encaixe
+                    </span>
+                  ) : (
+                    <span className="font-bold text-slate-800">{getStatusLabel(selectedApptDetails.status)}</span>
+                  )}
+                </div>
               </div>
 
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">

@@ -32,6 +32,13 @@ import {
 
 export type AgendaViewMode = 'dia' | '3dias' | 'semana' | 'mes';
 
+export interface DaySlotItem {
+  time: string;
+  endTime: string;
+  duration: number;
+  isReturn: boolean;
+}
+
 interface GoogleCalendarViewProps {
   appointments: any[];
   clinic: any;
@@ -231,15 +238,20 @@ export default function GoogleCalendarView({
     const scheduleStartDate = meta?.scheduleStartDate || clinicWorkingHours?.scheduleStartDate || clinic?.scheduleStartDate || '';
     const scheduleEndDate = meta?.scheduleEndDate || clinicWorkingHours?.scheduleEndDate || clinic?.scheduleEndDate || '';
 
+    const encaixeAppts = dayAppts.filter(
+      (a) => (a.status || '').toUpperCase() === 'ENCAIXE' || (a.notes && a.notes.toUpperCase().includes('ENCAIXE'))
+    );
+
     // Se não há dias selecionados ou o período não foi configurado, a agenda está inativa (sem vagas)
     if (selectedDays.length === 0 || !scheduleStartDate || !scheduleEndDate) {
       return {
         isActive: false,
-        allSlots: [],
+        allSlots: [] as DaySlotItem[],
         bookedAppts: dayAppts,
-        vacantSlots: [],
+        vacantSlots: [] as DaySlotItem[],
         bookedCount: dayAppts.length,
         vacantCount: 0,
+        encaixeCount: encaixeAppts.length,
       };
     }
 
@@ -251,11 +263,12 @@ export default function GoogleCalendarView({
     if (targetISO < scheduleStartDate || targetISO > scheduleEndDate) {
       return {
         isActive: false,
-        allSlots: [],
+        allSlots: [] as DaySlotItem[],
         bookedAppts: dayAppts,
-        vacantSlots: [],
+        vacantSlots: [] as DaySlotItem[],
         bookedCount: dayAppts.length,
         vacantCount: 0,
+        encaixeCount: encaixeAppts.length,
       };
     }
 
@@ -263,25 +276,31 @@ export default function GoogleCalendarView({
     if (!selectedDays.includes(dayOfWeek)) {
       return {
         isActive: false,
-        allSlots: [],
+        allSlots: [] as DaySlotItem[],
         bookedAppts: dayAppts,
-        vacantSlots: [],
+        vacantSlots: [] as DaySlotItem[],
         bookedCount: dayAppts.length,
         vacantCount: 0,
+        encaixeCount: encaixeAppts.length,
       };
     }
 
     // Obter configuração de horário de expediente para este dia da semana
+    let hasBreak = true;
+    let bStart = meta?.breakStartTime || clinic?.breakStartTime || '12:00';
+    let bEnd = meta?.breakEndTime || clinic?.breakEndTime || '13:00';
+
     if (clinicWorkingHours && clinicWorkingHours[dayOfWeek]) {
       const cfg = clinicWorkingHours[dayOfWeek];
       if (cfg.active === false) {
         return {
           isActive: false,
-          allSlots: [],
+          allSlots: [] as DaySlotItem[],
           bookedAppts: dayAppts,
-          vacantSlots: [],
+          vacantSlots: [] as DaySlotItem[],
           bookedCount: dayAppts.length,
           vacantCount: 0,
+          encaixeCount: encaixeAppts.length,
         };
       }
       dayActive = true;
@@ -296,16 +315,15 @@ export default function GoogleCalendarView({
         endM = em || 0;
       }
       if (cfg.lunchStart && cfg.lunchEnd) {
-        lunchStartH = parseInt(cfg.lunchStart.split(':')[0], 10);
-        lunchEndH = parseInt(cfg.lunchEnd.split(':')[0], 10);
+        bStart = cfg.lunchStart;
+        bEnd = cfg.lunchEnd;
       }
     } else {
-      // Se está em selectedDays mas não tem objeto específico no JSON, ativa com padrão do meta ou clinic
       dayActive = true;
       const wStart = meta?.workStartTime || clinic?.workStartTime || '08:00';
       const wEnd = meta?.workEndTime || clinic?.workEndTime || '17:00';
-      const bStart = meta?.breakStartTime || clinic?.breakStartTime || '12:00';
-      const bEnd = meta?.breakEndTime || clinic?.breakEndTime || '13:00';
+      bStart = meta?.breakStartTime || clinic?.breakStartTime || '12:00';
+      bEnd = meta?.breakEndTime || clinic?.breakEndTime || '13:00';
 
       const [sh, sm] = wStart.split(':').map(Number);
       startH = sh;
@@ -313,39 +331,82 @@ export default function GoogleCalendarView({
       const [eh, em] = wEnd.split(':').map(Number);
       endH = eh;
       endM = em || 0;
-      lunchStartH = parseInt(bStart.split(':')[0], 10);
-      lunchEndH = parseInt(bEnd.split(':')[0], 10);
     }
 
-    // Gerar slots regulares
-    const slots: string[] = [];
+    if (meta?.breakEnabled !== undefined) {
+      hasBreak = Boolean(meta.breakEnabled);
+    } else if (clinic?.breakEnabled !== undefined) {
+      hasBreak = Boolean(clinic.breakEnabled);
+    }
+
+    const [bsh, bsm] = bStart.split(':').map(Number);
+    const [beh, bem] = bEnd.split(':').map(Number);
+    const lunchStartMinutes = (bsh || 12) * 60 + (bsm || 0);
+    const lunchEndMinutes = (beh || 13) * 60 + (bem || 0);
+
+    const normDur = Number(meta?.slotDurationMinutes || clinic?.slotDurationMinutes) || 45;
+    const retDur = Number(meta?.returnSlotDurationMinutes || clinic?.returnSlotDurationMinutes) || 25;
+    const returnSlotTimesList: string[] = Array.isArray(meta?.returnSlotTimes)
+      ? meta.returnSlotTimes
+      : Array.isArray(clinic?.returnSlotTimes)
+      ? clinic.returnSlotTimes
+      : [];
+    const returnSet = new Set(returnSlotTimesList);
+
+    // Gerar grade sequencial dinâmica considerando a duração exata dos retornos
+    const slots: DaySlotItem[] = [];
     let curMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
-    const lunchStartMinutes = lunchStartH * 60;
-    const lunchEndMinutes = lunchEndH * 60;
 
-    while (curMinutes + slotDuration <= endMinutes) {
-      // Pular almoço se aplicável
-      if (lunchStartH !== lunchEndH && curMinutes >= lunchStartMinutes && curMinutes < lunchEndMinutes) {
+    while (curMinutes < endMinutes) {
+      // Pular intervalo se aplicável
+      if (hasBreak && curMinutes >= lunchStartMinutes && curMinutes < lunchEndMinutes) {
         curMinutes = lunchEndMinutes;
         continue;
       }
+
       const h = Math.floor(curMinutes / 60);
       const m = curMinutes % 60;
-      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      curMinutes += slotDuration;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+      const isReturn = returnSet.has(timeStr);
+      const dur = isReturn ? retDur : normDur;
+
+      // Se a consulta cruzaria com o início do intervalo
+      if (hasBreak && curMinutes < lunchStartMinutes && curMinutes + dur > lunchStartMinutes) {
+        curMinutes = lunchEndMinutes;
+        continue;
+      }
+
+      // Se ultrapassar o encerramento do expediente
+      if (curMinutes + dur > endMinutes) {
+        break;
+      }
+
+      const endH_ = Math.floor((curMinutes + dur) / 60);
+      const endM_ = (curMinutes + dur) % 60;
+      const endTimeStr = `${String(endH_).padStart(2, '0')}:${String(endM_).padStart(2, '0')}`;
+
+      slots.push({
+        time: timeStr,
+        endTime: endTimeStr,
+        duration: dur,
+        isReturn,
+      });
+
+      curMinutes += dur;
     }
 
     // Identificar quais slots estão ocupados por consultas
-    const vacantSlots: string[] = [];
-    slots.forEach((timeStr) => {
+    const vacantSlots: DaySlotItem[] = [];
+    slots.forEach((slotItem) => {
       const isOccupied = dayAppts.some((a) => {
         const d = new Date(a.startTime);
         const apptTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        return apptTime === timeStr;
+        return apptTime === slotItem.time;
       });
       if (!isOccupied) {
-        vacantSlots.push(timeStr);
+        vacantSlots.push(slotItem);
       }
     });
 
@@ -356,6 +417,7 @@ export default function GoogleCalendarView({
       vacantSlots,
       bookedCount: dayAppts.length,
       vacantCount: vacantSlots.length,
+      encaixeCount: encaixeAppts.length,
     };
   };
 
@@ -472,12 +534,24 @@ export default function GoogleCalendarView({
   // Estilo de status das consultas (estilo Google Calendar + Saúde)
   const getAppointmentBadge = (appt: any) => {
     const s = (appt.status || '').toUpperCase();
+    const isEncaixe = s === 'ENCAIXE' || (appt.notes && appt.notes.toUpperCase().includes('ENCAIXE'));
+
+    if (isEncaixe) {
+      return {
+        bg: 'bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-300 ring-offset-1',
+        border: 'border-l-4 border-l-purple-950',
+        softBg: 'bg-purple-50 text-purple-900 border-purple-200',
+        tag: '⚡ Encaixe',
+        isEncaixe: true,
+      };
+    }
     if (s === 'CONFIRMADO' || s === 'CONFIRMED') {
       return {
         bg: 'bg-emerald-600 text-white',
         border: 'border-l-4 border-l-emerald-800',
         softBg: 'bg-emerald-50 text-emerald-900 border-emerald-200',
         tag: 'Confirmado',
+        isEncaixe: false,
       };
     }
     if (s === 'REMARCADO' || s === 'RESCHEDULED') {
@@ -485,7 +559,8 @@ export default function GoogleCalendarView({
         bg: 'bg-sky-600 text-white',
         border: 'border-l-4 border-l-sky-800',
         softBg: 'bg-sky-50 text-sky-900 border-sky-200',
-        tag: 'Encaixe',
+        tag: 'Remarcado',
+        isEncaixe: false,
       };
     }
     if (s === 'CANCELADO' || s === 'CANCELED') {
@@ -494,6 +569,7 @@ export default function GoogleCalendarView({
         border: 'border-l-4 border-l-rose-700',
         softBg: 'bg-rose-50 text-rose-900 border-rose-200',
         tag: 'Cancelado',
+        isEncaixe: false,
       };
     }
     // Padrão: Aguardando / Agendado (Google Blue)
@@ -502,6 +578,7 @@ export default function GoogleCalendarView({
       border: 'border-l-4 border-l-blue-800',
       softBg: 'bg-blue-50 text-blue-900 border-blue-200',
       tag: 'Agendado',
+      isEncaixe: false,
     };
   };
 
@@ -854,7 +931,7 @@ export default function GoogleCalendarView({
             <div className="flex-1 grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[#dadce0] border-b border-[#dadce0]">
               {monthGridDays.map((cell, idx) => {
                 const isCurToday = isToday(cell.date);
-                const { bookedCount, vacantCount } = cell.slotsInfo;
+                const { bookedCount, vacantCount, encaixeCount } = cell.slotsInfo;
 
                 return (
                   <button
@@ -891,6 +968,16 @@ export default function GoogleCalendarView({
                           title={`${bookedCount} consulta(s) agendada(s)`}
                         >
                           {bookedCount}
+                        </span>
+                      )}
+
+                      {/* BOLINHA ROXA COM O NÚMERO DE ENCAIXES */}
+                      {encaixeCount > 0 && (
+                        <span
+                          className="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0 shadow-2xs ring-1 ring-purple-300"
+                          title={`${encaixeCount} consulta(s) de encaixe`}
+                        >
+                          ⚡{encaixeCount}
                         </span>
                       )}
 
@@ -980,7 +1067,7 @@ export default function GoogleCalendarView({
 
                   // Verificar se este horário tem slots vagos
                   const vacantInHour = currentDayInfo.vacantSlots.filter((v) => {
-                    const h = parseInt(v.split(':')[0], 10);
+                    const h = parseInt(v.time.split(':')[0], 10);
                     return h === hour;
                   });
 
@@ -1015,7 +1102,7 @@ export default function GoogleCalendarView({
                                   <span className="font-extrabold text-sm truncate">
                                     {appt.patient?.name || 'Paciente sem nome'}
                                   </span>
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-white/20 text-white shrink-0">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${badge.isEncaixe ? 'bg-amber-300 text-purple-950 font-black shadow-xs' : 'bg-white/20 text-white'} shrink-0`}>
                                     {badge.tag}
                                   </span>
                                 </div>
@@ -1042,18 +1129,29 @@ export default function GoogleCalendarView({
                         })}
 
                         {/* 2. HORÁRIOS VAGOS DISPONÍVEIS NESTE INTERVALO */}
-                        {vacantInHour.map((vacTime) => (
+                        {vacantInHour.map((vacSlot) => (
                           <div
-                            key={vacTime}
-                            onClick={() => onOpenNewAppt(selectedDate, vacTime)}
-                            className="p-2 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-100/70 hover:border-amber-400 cursor-pointer flex items-center justify-between text-amber-900 transition active:scale-[0.99] group/slot"
+                            key={vacSlot.time}
+                            onClick={() => onOpenNewAppt(selectedDate, vacSlot.time)}
+                            className={`p-2.5 rounded-xl border border-dashed transition active:scale-[0.99] group/slot cursor-pointer flex items-center justify-between ${
+                              vacSlot.isReturn
+                                ? 'border-sky-300 bg-sky-50/70 hover:bg-sky-100/80 hover:border-sky-400 text-sky-950 shadow-2xs'
+                                : 'border-amber-300 bg-amber-50/60 hover:bg-amber-100/70 hover:border-amber-400 text-amber-900'
+                            }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                              <span className="font-bold text-xs">{vacTime}</span>
-                              <span className="text-xs text-amber-800 font-medium">Horário Vago • Disponível</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`w-2.5 h-2.5 rounded-full ${vacSlot.isReturn ? 'bg-sky-500' : 'bg-amber-500'}`}></span>
+                              <span className="font-extrabold text-xs">{vacSlot.time} - {vacSlot.endTime}</span>
+                              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
+                                vacSlot.isReturn ? 'bg-sky-100 text-sky-800 border border-sky-200' : 'bg-amber-100/80 text-amber-800'
+                              }`}>
+                                {vacSlot.isReturn ? `Retorno (${vacSlot.duration}m)` : `1ª Vez (${vacSlot.duration}m)`}
+                              </span>
+                              <span className="text-xs text-slate-500 font-medium hidden sm:inline">• Horário Vago Disponível</span>
                             </div>
-                            <span className="text-[11px] font-extrabold text-amber-700 group-hover/slot:text-amber-900 flex items-center gap-1">
+                            <span className={`text-[11px] font-extrabold flex items-center gap-1 shrink-0 ${
+                              vacSlot.isReturn ? 'text-sky-700 group-hover/slot:text-sky-900' : 'text-amber-700 group-hover/slot:text-amber-900'
+                            }`}>
                               <Plus className="w-3 h-3 stroke-[3]" />
                               Agendar
                             </span>
@@ -1142,7 +1240,7 @@ export default function GoogleCalendarView({
                           return d.getHours() === hour;
                         });
                         const vacantInHour = daySlots.vacantSlots.filter((v) => {
-                          const h = parseInt(v.split(':')[0], 10);
+                          const h = parseInt(v.time.split(':')[0], 10);
                           return h === hour;
                         });
 
@@ -1186,15 +1284,19 @@ export default function GoogleCalendarView({
                             {/* Vaga Disponível */}
                             {vacantInHour.map((v) => (
                               <div
-                                key={v}
+                                key={v.time}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onOpenNewAppt(colDate, v);
+                                  onOpenNewAppt(colDate, v.time);
                                 }}
-                                className="px-1.5 py-0.5 rounded border border-dashed border-amber-300 bg-amber-50/70 text-amber-900 text-[10px] font-bold flex items-center justify-between"
+                                className={`px-1.5 py-0.5 rounded border border-dashed text-[10px] font-bold flex items-center justify-between ${
+                                  v.isReturn
+                                    ? 'border-sky-300 bg-sky-50 text-sky-900'
+                                    : 'border-amber-300 bg-amber-50/70 text-amber-900'
+                                }`}
                               >
-                                <span>{v}</span>
-                                <span className="text-[9px] text-amber-700">Vago</span>
+                                <span>{v.time}</span>
+                                <span className="text-[9px] font-semibold">{v.isReturn ? 'Retorno' : 'Vago'}</span>
                               </div>
                             ))}
                           </div>
@@ -1262,7 +1364,7 @@ export default function GoogleCalendarView({
                           const d = new Date(a.startTime);
                           return d.getHours() === hour;
                         });
-                        const hasVacant = daySlots.vacantSlots.some((v) => parseInt(v.split(':')[0], 10) === hour);
+                        const hasVacant = daySlots.vacantSlots.some((v) => parseInt(v.time.split(':')[0], 10) === hour);
 
                         return (
                           <div

@@ -233,8 +233,11 @@ export async function buscarHorariosDisponiveis(
       };
     }
 
-    // Gerar grade de horários baseados no expediente e intervalo de almoço
-    const slotDuration = clinic.slotDurationMinutes || 30;
+    // Gerar grade de horários considerando Retornos dinâmicos e intervalo de almoço
+    const normDur = Number(metaAgenda?.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
+    const retDur = Number(metaAgenda?.returnSlotDurationMinutes) || 25;
+    const returnSlotTimesList: string[] = Array.isArray(metaAgenda?.returnSlotTimes) ? metaAgenda.returnSlotTimes : [];
+    const returnSet = new Set(returnSlotTimesList);
     const slots: string[] = [];
 
     const [startH, startM] = dayConfig.start.split(':').map(Number);
@@ -267,16 +270,38 @@ export async function buscarHorariosDisponiveis(
     let currentTime = new Date(startTimeBRT);
 
     while (isBefore(currentTime, endTimeBRT)) {
-      const slotEnd = addMinutes(currentTime, slotDuration);
+      // Pular intervalo se dentro do almoço
+      if (
+        lunchStartTime &&
+        lunchEndTime &&
+        (isAfter(currentTime, lunchStartTime) || currentTime.getTime() === lunchStartTime.getTime()) &&
+        isBefore(currentTime, lunchEndTime)
+      ) {
+        currentTime = new Date(lunchEndTime);
+        continue;
+      }
+
+      const timeStr = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(currentTime);
+
+      const isReturn = returnSet.has(timeStr);
+      const currentDur = isReturn ? retDur : normDur;
+      const slotEnd = addMinutes(currentTime, currentDur);
+
+      // Se ultrapassar início do almoço
+      if (lunchStartTime && isBefore(currentTime, lunchStartTime) && isAfter(slotEnd, lunchStartTime)) {
+        if (lunchEndTime) {
+          currentTime = new Date(lunchEndTime);
+          continue;
+        }
+      }
+
       if (isAfter(slotEnd, endTimeBRT)) break;
 
-      // Verificar se não cai no horário de almoço
-      const isLunchTime =
-        lunchStartTime && lunchEndTime &&
-        (isAfter(currentTime, lunchStartTime) || currentTime.getTime() === lunchStartTime.getTime()) &&
-        isBefore(currentTime, lunchEndTime);
-
-      // Verificar se slot é no futuro
       const isFutureSlot = isAfter(currentTime, now);
 
       // Verificar se não colide com agendamento existente
@@ -289,15 +314,7 @@ export async function buscarHorariosDisponiveis(
         );
       });
 
-      if (!isLunchTime && isFutureSlot && !isOccupied) {
-        // Horário formatado em BRT
-        const timeStr = new Intl.DateTimeFormat('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        }).format(currentTime);
-
+      if (isFutureSlot && !isOccupied) {
         const hourInt = parseInt(timeStr.split(':')[0], 10);
 
         let matchesPeriod = true;
