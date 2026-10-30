@@ -59,18 +59,19 @@ function ensureDataDirectory() {
 }
 
 export function loadWaitlist(): WaitlistEntry[] {
-  if (inMemoryWaitlist) {
-    return inMemoryWaitlist;
-  }
   ensureDataDirectory();
+  // Sempre lê do arquivo: rotas diferentes do Next (webhook, API, cancelamento) rodam em
+  // bundles separados e um cache em memória ficaria desatualizado entre elas.
   try {
     if (fs.existsSync(WAITLIST_FILE_PATH)) {
       const data = fs.readFileSync(WAITLIST_FILE_PATH, 'utf-8');
-      inMemoryWaitlist = JSON.parse(data);
-      return inMemoryWaitlist || [];
+      const parsed = JSON.parse(data);
+      inMemoryWaitlist = Array.isArray(parsed) ? parsed : [];
+      return inMemoryWaitlist;
     }
   } catch (err) {
-    console.warn('⚠️ [Waitlist] Erro ao ler arquivo, usando inicial:', err);
+    console.warn('⚠️ [Waitlist] Erro ao ler arquivo:', err);
+    if (inMemoryWaitlist) return inMemoryWaitlist;
   }
   inMemoryWaitlist = [...INITIAL_WAITLIST];
   saveWaitlist(inMemoryWaitlist);

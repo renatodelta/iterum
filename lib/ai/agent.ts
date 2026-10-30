@@ -589,6 +589,13 @@ async function runPOPWorkflow(
         const bookRes = await confirmWaitlistBooking(entry.id, clinicId);
         toolsExecuted.push({ name: 'confirmar_encaixe_fila', args: { waitlistId: entry.id }, result: bookRes });
 
+        if (!bookRes.success) {
+          return {
+            reply: `Não foi possível concluir o agendamento deste horário no momento. Nossa equipe da recepção entrará em contato para ajudar. 🙏`,
+            toolsExecuted,
+          };
+        }
+
         let slotDisplay = 'horário combinado';
         if (entry.offeredSlot) {
           slotDisplay = entry.offeredSlot.timeDisplay.includes('às')
