@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/waitlist - Listar todos os pacientes na fila de espera
 export async function GET() {
   try {
-    const list = loadWaitlist();
+    const list = await loadWaitlist();
     return NextResponse.json({
       success: true,
       count: list.length,
@@ -81,7 +81,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const updated = updateWaitlistEntry(id, {
+    const updated = await updateWaitlistEntry(id, {
       ...(status ? { status } : {}),
       ...(notes !== undefined ? { notes } : {}),
     });
@@ -100,7 +100,7 @@ export async function DELETE(req: NextRequest) {
     const all = searchParams.get('all');
 
     if (all === 'true' || id === 'all') {
-      clearWaitlist();
+      await clearWaitlist();
       return NextResponse.json({ success: true, message: 'Fila de espera zerada com sucesso.' });
     }
 
@@ -108,7 +108,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID é obrigatório.' }, { status: 400 });
     }
 
-    const removed = removeFromWaitlist(id);
+    const removed = await removeFromWaitlist(id);
     return NextResponse.json({ success: removed });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

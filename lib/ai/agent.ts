@@ -511,7 +511,7 @@ async function runPOPWorkflow(
   // ETAPA FILA DE ESPERA 1: OFERTA DE VAGA LIBERADA POR REMARCAÇÃO / CANCELAMENTO
   // Pergunta anterior: "Você tem interesse em agendar neste horário?"
   // =========================================================================
-  const waitlist = loadWaitlist();
+  const waitlist = await loadWaitlist();
   const phoneDigits = patientPhone.replace(/\D/g, '');
   const last8 = phoneDigits.slice(-8);
   const notifiedEntry = waitlist.find(
@@ -562,7 +562,7 @@ async function runPOPWorkflow(
               };
               if (entry) {
                 entry.offeredSlot = slotData;
-                updateWaitlistEntry(entry.id, { offeredSlot: slotData });
+                await updateWaitlistEntry(entry.id, { offeredSlot: slotData });
               }
               break;
             }
@@ -609,7 +609,8 @@ async function runPOPWorkflow(
     lastAssistantMsg.includes('Resumo do seu agendamento para a vaga liberada');
 
   if (isWaitlistConfirmationContext) {
-    const entry = waitlist.find(
+    const freshWaitlist = await loadWaitlist();
+    const entry = freshWaitlist.find(
       (w) =>
         (w.patientPhone.replace(/\D/g, '').slice(-8) === last8 ||
          w.patientPhone.replace(/\D/g, '') === phoneDigits) &&
@@ -640,7 +641,7 @@ async function runPOPWorkflow(
             };
             if (entry) {
               entry.offeredSlot = slotData;
-              updateWaitlistEntry(entry.id, { offeredSlot: slotData });
+              await updateWaitlistEntry(entry.id, { offeredSlot: slotData });
             }
             break;
           }

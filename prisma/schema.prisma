@@ -27,6 +27,7 @@ model Clinic {
   patients     Patient[]
   appointments Appointment[]
   messages     Message[]
+  waitlists    Waitlist[]
 
   @@map("clinics")
 }
@@ -50,6 +51,7 @@ model Patient {
   clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   messages     Message[]
+  waitlists    Waitlist[]
 
   @@unique([clinicId, phone])
   @@map("patients")
@@ -104,5 +106,26 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("users")
+}
+
+model Waitlist {
+  id             String    @id @default(uuid())
+  clinicId       String    @map("clinic_id")
+  patientId      String?   @map("patient_id")
+  patientName    String    @map("patient_name")
+  patientPhone   String    @map("patient_phone")
+  preferredShift String?   @default("Qualquer Horário") @map("preferred_shift")
+  preferredDays  String?   @default("Qualquer dia útil") @map("preferred_days")
+  status         String    @default("AGUARDANDO") // AGUARDANDO, NOTIFICADO, AGENDADO, RECUSADO
+  notes          String?
+  notifiedAt     DateTime? @map("notified_at")
+  offeredSlot    String?   @map("offered_slot") // JSON string: { startTime, endTime, dateDisplay, timeDisplay }
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient        Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@map("waitlist")
 }
 
