@@ -203,19 +203,39 @@ export async function buscarHorariosDisponiveis(
       workingHoursConfig = {};
     }
 
-    // Verificar se a agenda possui configurações de período
+    // Verificar se a agenda possui configurações de período deliberadas pelo profissional
     const metaAgenda = (workingHoursConfig as any)?.meta;
     const selectedDaysList: string[] = Array.isArray(metaAgenda?.selectedDays)
       ? metaAgenda.selectedDays
       : (Array.isArray((workingHoursConfig as any)?.selectedDays) ? (workingHoursConfig as any).selectedDays : []);
 
-    // Se houver limite de agenda no futuro, respeita. Mas se expirou no passado ou não existe, agenda continua aberta para dias úteis normais
-    if (metaAgenda?.scheduleEndDate && metaAgenda.scheduleEndDate >= todayISO) {
+    // GOVERNANÇA DA AGENDA MÉDICA: Apenas o médico/equipe humana define o período de abertura
+    if (metaAgenda?.scheduleStartDate && cleanDateStr < metaAgenda.scheduleStartDate) {
+      const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
+      return {
+        success: true,
+        message: `A agenda de atendimentos do profissional para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade.`,
+        data: { slots: [] },
+      };
+    }
+
+    if (metaAgenda?.scheduleEndDate) {
+      // Se a data final configurada pelo médico já passou, o período encerrou e o médico precisa abrir o próximo
+      if (metaAgenda.scheduleEndDate < todayISO) {
+        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+        return {
+          success: true,
+          message: `O período de agendamentos aberto pelo profissional foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pelo médico no sistema. Gostaria de entrar na lista de espera para ser avisado(a) assim que o profissional liberar novas vagas?`,
+          data: { slots: [] },
+        };
+      }
+
+      // Se a data solicitada for além da data final deliberada pelo profissional
       if (cleanDateStr > metaAgenda.scheduleEndDate) {
         const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
         return {
           success: true,
-          message: `A agenda aberta pelo consultório vai até o dia ${ed}/${em}/${ey}. Para datas posteriores, posso colocar você na lista de espera.`,
+          message: `A agenda deliberada pelo profissional para este período está aberta para atendimentos até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas pelo médico. Se desejar, posso adicionar você à nossa lista de espera prioritária para ser notificado(a) assim que novas datas forem abertas!`,
           data: { slots: [] },
         };
       }
@@ -612,14 +632,38 @@ export async function buscarProximosHorariosDisponiveis(
       };
     }
 
-    // UMA ÚNICA QUERY PARA O INTERVALO INTEIRO DOS PRÓXIMOS 21 DIAS:
+    // UMA ÚNICA QUERY PARA O INTERVALO DOS PRÓXIMOS DIAS RESPEITANDO A AGENDA DO MÉDICO:
     const now = new Date();
-    const future21Days = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    let whConfig: any = {};
+    try {
+      whConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
+    } catch {}
+
+    const meta = whConfig?.meta;
+
+    // Se o médico configurou uma data final e ela já passou, a agenda está aguardando nova liberação pelo profissional
+    if (meta?.scheduleEndDate && meta.scheduleEndDate < todayISO) {
+      const [ey, em, ed] = meta.scheduleEndDate.split('-');
+      return {
+        success: true,
+        message: `O período de agendamentos aberto pelo profissional foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas pelo médico.`,
+        data: {
+          days: [],
+          formattedText: `No momento, a agenda de atendimentos do profissional para este período já foi encerrada e novas datas ainda não foram liberadas na grade pelo médico. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir as novas datas!`,
+        },
+      };
+    }
+
+    const futureLimit = meta?.scheduleEndDate
+      ? new Date(parseBRT(`${meta.scheduleEndDate}T23:59:59`))
+      : new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
 
     const allAppointments = await prisma.appointment.findMany({
       where: {
         clinicId: clinic.id,
-        startTime: { gte: now, lte: future21Days },
+        startTime: { gte: now, lte: futureLimit },
         status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
       },
     });
@@ -639,6 +683,10 @@ export async function buscarProximosHorariosDisponiveis(
       const month = String(checkDate.getMonth() + 1).padStart(2, '0');
       const day = String(checkDate.getDate()).padStart(2, '0');
       const dateISO = `${year}-${month}-${day}`;
+
+      if (meta?.scheduleEndDate && dateISO > meta.scheduleEndDate) {
+        break; // Respeita estritamente o limite de data deliberado pelo médico
+      }
 
       const res = await buscarHorariosDisponiveis(dateISO, 'qualquer', clinic.id, allAppointments);
       if (res.success && res.data?.slots && res.data.slots.length > 0) {
@@ -660,10 +708,16 @@ export async function buscarProximosHorariosDisponiveis(
     }
 
     if (daysWithSlots.length === 0) {
+      const dataLimiteTexto = meta?.scheduleEndDate
+        ? ` dentro do período aberto pelo médico (até ${meta.scheduleEndDate.split('-').reverse().join('/')})`
+        : '';
       return {
         success: true,
-        message: 'Não há horários disponíveis nos próximos dias úteis.',
-        data: { days: [], formattedText: 'No momento, não localizamos horários livres na agenda nos próximos dias.' },
+        message: `Não há horários disponíveis nos próximos dias úteis${dataLimiteTexto}.`,
+        data: {
+          days: [],
+          formattedText: `No momento, não localizamos horários livres na agenda${dataLimiteTexto}. Se desejar, posso adicionar você à nossa lista de espera para avisarmos caso surja uma desistência ou assim que novas datas forem abertas!`,
+        },
       };
     }
 
