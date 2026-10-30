@@ -1,8 +1,16 @@
+import OpenAI, { toFile } from 'openai';
+
 export type SendResult = { success: boolean; data?: any; error?: string };
 
 export interface WhatsAppButton {
   id: string;
   title: string;
+}
+
+export interface WhatsAppCredentials {
+  accessToken?: string;
+  phoneNumberId?: string;
+  graphVersion?: string;
 }
 
 /**
@@ -12,11 +20,12 @@ export interface WhatsAppButton {
 async function sendViaMetaCloudApi(
   cleanPhone: string,
   messageText: string,
-  buttons?: WhatsAppButton[]
+  buttons?: WhatsAppButton[],
+  customCreds?: WhatsAppCredentials
 ): Promise<SendResult> {
-  const accessToken = (process.env.META_ACCESS_TOKEN || '').replace(/['"]/g, '').trim();
-  const phoneNumberId = (process.env.META_PHONE_NUMBER_ID || '').replace(/['"]/g, '').trim();
-  const graphVersion = (process.env.META_GRAPH_VERSION || 'v21.0').replace(/['"]/g, '').trim();
+  const accessToken = (customCreds?.accessToken || process.env.META_ACCESS_TOKEN || '').replace(/['"]/g, '').trim();
+  const phoneNumberId = (customCreds?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '').replace(/['"]/g, '').trim();
+  const graphVersion = (customCreds?.graphVersion || process.env.META_GRAPH_VERSION || 'v21.0').replace(/['"]/g, '').trim();
 
   try {
     let payload: any = {
@@ -60,7 +69,7 @@ async function sendViaMetaCloudApi(
       // Fallback: se falhou com botões interativos, tenta reenviar como texto simples
       if (buttons && buttons.length > 0) {
         console.warn('⚠️ Tentando fallback para texto simples na Meta Cloud API...');
-        return sendViaMetaCloudApi(cleanPhone, messageText);
+        return sendViaMetaCloudApi(cleanPhone, messageText, undefined, customCreds);
       }
       return { success: false, error: `Meta API Error ${response.status}: ${data?.error?.message || 'desconhecido'}`, data };
     }
@@ -74,12 +83,13 @@ async function sendViaMetaCloudApi(
 /**
  * Utilitário para envio de mensagens via API de WhatsApp
  * Suporta botões interativos clicáveis e texto simples com detecção automática de opções SIM/NÃO.
- * Prioridade: Meta Cloud API oficial -> Evolution API / Z-API -> Simulação
+ * Suporta credenciais dinâmicas do Tenant e fallback para variáveis de ambiente.
  */
 export async function sendWhatsAppMessage(
   toPhone: string,
   messageText: string,
-  explicitButtons?: WhatsAppButton[]
+  explicitButtons?: WhatsAppButton[],
+  customCreds?: WhatsAppCredentials
 ): Promise<SendResult> {
   const apiKey = process.env.WHATSAPP_API_KEY;
   const instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'default';
@@ -109,9 +119,9 @@ export async function sendWhatsAppMessage(
     }`
   );
 
-  // 1. Meta Cloud API oficial (usada se configurada)
-  if (process.env.META_ACCESS_TOKEN && process.env.META_PHONE_NUMBER_ID) {
-    return sendViaMetaCloudApi(cleanPhone, textToSend, buttonsToSend);
+  // 1. Meta Cloud API oficial (dinâmica por tenant ou via .env)
+  if (customCreds?.accessToken || (process.env.META_ACCESS_TOKEN && process.env.META_PHONE_NUMBER_ID)) {
+    return sendViaMetaCloudApi(cleanPhone, textToSend, buttonsToSend, customCreds);
   }
 
   let formattedApiUrl = process.env.WHATSAPP_API_URL || '';
@@ -188,3 +198,88 @@ export async function sendWhatsAppMessage(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Baixa mídia (áudio, imagem, documento) da Meta WhatsApp Cloud API a partir do mediaId
+ */
+export async function downloadMetaMedia(
+  mediaId: string,
+  customCreds?: WhatsAppCredentials
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const accessToken = (customCreds?.accessToken || process.env.META_ACCESS_TOKEN || '').replace(/['"]/g, '').trim();
+  const graphVersion = (customCreds?.graphVersion || process.env.META_GRAPH_VERSION || 'v21.0').replace(/['"]/g, '').trim();
+
+  if (!accessToken || !mediaId) {
+    console.warn('⚠️ [Meta Media] Access token ou mediaId ausente.');
+    return null;
+  }
+
+  try {
+    // 1. Obter URL temporária de download do arquivo
+    const metaMediaUrl = `https://graph.facebook.com/${graphVersion}/${mediaId}`;
+    const metaRes = await fetch(metaMediaUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!metaRes.ok) {
+      console.error(`❌ [Meta Media] Erro ao obter URL de mídia: ${metaRes.status} ${await metaRes.text()}`);
+      return null;
+    }
+
+    const metaData = await metaRes.json();
+    const directUrl = metaData.url;
+    const mimeType = metaData.mime_type || 'audio/ogg';
+
+    if (!directUrl) {
+      console.error('❌ [Meta Media] URL de download não retornada pela Meta.');
+      return null;
+    }
+
+    // 2. Fazer o download binário do arquivo
+    const downloadRes = await fetch(directUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!downloadRes.ok) {
+      console.error(`❌ [Meta Media] Falha no download do binário: ${downloadRes.status}`);
+      return null;
+    }
+
+    const arrayBuffer = await downloadRes.arrayBuffer();
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      mimeType,
+    };
+  } catch (err: any) {
+    console.error('❌ [Meta Media] Exceção ao baixar mídia da Meta:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Transcreve áudio do WhatsApp (OGG / OPUS / MP3 / M4A) para texto usando OpenAI Whisper
+ */
+export async function transcribeAudioWithWhisper(audioBuffer: Buffer, mimeType: string = 'audio/ogg'): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.includes('sua-chave')) {
+    console.warn('⚠️ [Whisper] OPENAI_API_KEY não configurada para transcrição de áudio.');
+    return null;
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey });
+    const file = await toFile(audioBuffer, 'audio.ogg', { type: mimeType });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
+      language: 'pt',
+    });
+
+    return transcription.text?.trim() || null;
+  } catch (err: any) {
+    console.error('❌ [Whisper] Erro na transcrição de áudio:', err.message);
+    return null;
+  }
+}
+

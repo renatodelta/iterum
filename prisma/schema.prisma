@@ -9,6 +9,7 @@ generator client {
 
 model Clinic {
   id                  String   @id @default(uuid())
+  tenantId            String?  @map("tenant_id")
   name                String
   doctorName          String?  @map("doctor_name")
   specialty           String
@@ -24,6 +25,7 @@ model Clinic {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   patients     Patient[]
   appointments Appointment[]
   messages     Message[]
@@ -32,8 +34,41 @@ model Clinic {
   @@map("clinics")
 }
 
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  document  String?  @unique
+  email     String   @unique
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  whatsappConfig TenantWhatsAppConfig?
+  clinics        Clinic[]
+  patients       Patient[]
+  appointments   Appointment[]
+
+  @@map("tenants")
+}
+
+model TenantWhatsAppConfig {
+  id                 String   @id @default(uuid())
+  tenantId           String   @unique @map("tenant_id")
+  wabaId             String   @map("waba_id")
+  phoneNumberId      String   @unique @map("phone_number_id")
+  displayPhoneNumber String   @map("display_phone_number")
+  systemUserToken    String   @map("system_user_token")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_whatsapp_configs")
+}
+
 model Patient {
   id        String   @id @default(uuid())
+  tenantId  String?  @map("tenant_id")
   clinicId  String   @map("clinic_id")
   name      String
   phone     String   // E.164 Ex: +5511999999999
@@ -46,8 +81,11 @@ model Patient {
   neighborhood String?  @map("neighborhood")
   city         String?  @map("city")
   notes        String?
+  humanHandoff Boolean  @default(false) @map("human_handoff")
+  humanHandoffAt DateTime? @map("human_handoff_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   messages     Message[]
@@ -59,6 +97,7 @@ model Patient {
 
 model Appointment {
   id            String   @id @default(uuid())
+  tenantId      String?  @map("tenant_id")
   clinicId      String   @map("clinic_id")
   patientId     String   @map("patient_id")
   startTime     DateTime @map("start_time")
@@ -69,8 +108,9 @@ model Appointment {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clinic  Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("appointments")
 }

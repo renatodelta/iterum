@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { addMinutes, isAfter, isBefore } from 'date-fns';
-import { notifyFirstInWaitlistForVacatedSlot } from '@/lib/waitlist';
+import { notifyFirstInWaitlistForVacatedSlot, addToWaitlist } from '@/lib/waitlist';
 
 export interface ToolResult {
   success: boolean;
@@ -876,4 +876,136 @@ export async function criarNovoAgendamento(
     };
   }
 }
+
+/**
+ * 7. TRANSFERIR ATENDIMENTO PARA ATENDENTE HUMANO (RECEPCIONISTA)
+ */
+export async function transferirParaHumano(telefonePaciente: string, motivo?: string, clinicId?: string): Promise<ToolResult> {
+  try {
+    const cleanPhone = telefonePaciente.replace(/\D/g, '');
+    const patient = await prisma.patient.findFirst({
+      where: {
+        phone: { contains: cleanPhone.slice(-8) },
+        ...(clinicId ? { clinicId } : {}),
+      },
+    });
+
+    if (patient) {
+      await (prisma.patient as any).update({
+        where: { id: patient.id },
+        data: {
+          humanHandoff: true,
+          humanHandoffAt: new Date(),
+        },
+      });
+      console.log(`🙋‍♂️ [Transbordo Humano] Paciente ${patient.name} (${telefonePaciente}) transferido para recepcionista. Motivo: ${motivo || 'Solicitação direta'}`);
+    }
+
+    return {
+      success: true,
+      message: 'Atendimento transferido com sucesso para a equipe humana da recepção.',
+      data: { transferido: true, motivo },
+    };
+  } catch (error: any) {
+    console.error('Erro em transferirParaHumano:', error);
+    return {
+      success: false,
+      message: `Falha ao transferir para humano: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * 8. ADICIONAR PACIENTE À LISTA DE ESPERA
+ */
+export async function adicionarFilaEspera(
+  telefonePaciente: string,
+  pacienteNome: string,
+  turnoPreferido?: string,
+  diasPreferidos?: string,
+  clinicId?: string
+): Promise<ToolResult> {
+  try {
+    let targetClinicId = clinicId;
+    if (!targetClinicId) {
+      const clinic = await prisma.clinic.findFirst();
+      targetClinicId = clinic?.id;
+    }
+    if (!targetClinicId) {
+      return { success: false, message: 'Clínica não encontrada.' };
+    }
+
+    const cleanPhone = telefonePaciente.replace(/\D/g, '');
+    const patient = await prisma.patient.findFirst({
+      where: {
+        phone: { contains: cleanPhone.slice(-8) },
+        clinicId: targetClinicId,
+      },
+    });
+
+    let shift: 'Manhã' | 'Tarde' | 'Qualquer Horário' = 'Qualquer Horário';
+    if (turnoPreferido?.toLowerCase().includes('manh')) shift = 'Manhã';
+    else if (turnoPreferido?.toLowerCase().includes('tard')) shift = 'Tarde';
+
+    const entry = await addToWaitlist({
+      patientId: patient?.id,
+      patientName: pacienteNome || patient?.name || 'Paciente',
+      patientPhone: telefonePaciente,
+      preferredShift: shift,
+      preferredDays: diasPreferidos || 'Qualquer dia útil',
+      notes: 'Adicionado pelo Secretário Virtual IA',
+    });
+
+    return {
+      success: true,
+      message: `Você foi adicionado à nossa lista de espera com sucesso! Assim que houver uma desistência no período informado, você será avisado prioritariamente aqui no WhatsApp.`,
+      data: entry,
+    };
+  } catch (error: any) {
+    console.error('Erro em adicionarFilaEspera:', error);
+    return {
+      success: false,
+      message: `Erro ao adicionar à lista de espera: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * 9. OBTER INFORMAÇÕES E REGRAS INSTITUCIONAIS DA CLÍNICA
+ */
+export async function obterInformacoesClinica(clinicId?: string): Promise<ToolResult> {
+  try {
+    let clinic = clinicId ? await prisma.clinic.findUnique({ where: { id: clinicId } }) : await prisma.clinic.findFirst();
+    if (!clinic) {
+      return { success: false, message: 'Informações da clínica não localizadas.' };
+    }
+
+    const doctor = await prisma.user.findFirst({
+      where: { role: 'MEDICO', status: 'ACTIVE' },
+    });
+
+    return {
+      success: true,
+      message: 'Informações da clínica recuperadas com sucesso.',
+      data: {
+        nomeClinica: clinic.name,
+        medicoNome: doctor?.name || clinic.doctorName || 'Dra. Mariana Souza',
+        especialidade: doctor?.specialty || clinic.specialty || 'Pediatria',
+        crm: doctor?.crm || clinic.crm || 'CRM/SP 148.910',
+        telefone: clinic.phone,
+        email: clinic.email,
+        endereco: clinic.address || 'Consultório Iterum - Atendimento presencial e telemedicina',
+        tempoConsultaMinutos: clinic.slotDurationMinutes,
+        prazoMinimoCancelamentoHoras: clinic.minCancelHours,
+      },
+    };
+  } catch (error: any) {
+    console.error('Erro em obterInformacoesClinica:', error);
+    return {
+      success: false,
+      message: `Erro ao obter dados da clínica: ${error.message}`,
+    };
+  }
+}
+
 

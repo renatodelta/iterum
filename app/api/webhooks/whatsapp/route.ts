@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processAgentMessage } from '@/lib/ai/agent';
 import { sendWhatsAppMessage } from '@/lib/whatsapp/client';
+import { enqueueWhatsAppMessage } from '@/lib/queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,26 +53,52 @@ export async function POST(req: NextRequest) {
     let userText = '';
     let pushName = 'Paciente';
 
-    // 0. Parser para a Meta WhatsApp Cloud API Oficial
+    // 0. Parser para a Meta WhatsApp Cloud API Oficial (Conforme Especificação Técnica)
     if (body.object === 'whatsapp_business_account') {
-      const entry = body.entry?.[0]?.changes?.[0]?.value;
+      const change = body.entry?.[0]?.changes?.[0];
+      const entryVal = change?.value;
 
       // Ignora eventos de status (entregue, lido, etc.)
-      if (!entry?.messages || entry.messages.length === 0) {
-        return NextResponse.json({ status: 'ignored', reason: 'Evento de status/sem mensagens' });
+      if (!entryVal?.messages || entryVal.messages.length === 0) {
+        return new NextResponse('EVENT_RECEIVED', { status: 200 });
       }
 
-      const msg = entry.messages[0];
+      const msg = entryVal.messages[0];
+      const metadata = entryVal.metadata;
       senderPhone = msg.from?.replace(/\D/g, '') || '';
-      pushName = entry.contacts?.[0]?.profile?.name || 'Paciente';
+      pushName = entryVal.contacts?.[0]?.profile?.name || 'Paciente';
 
-      // Extrai texto de mensagens normais ou respostas interativas
+      const isAudio = msg.type === 'audio' && msg.audio?.id;
+      const audioId = isAudio ? msg.audio.id : undefined;
+
+      // Extrai texto de mensagens normais, respostas interativas ou marca áudio
       userText =
         msg.text?.body ||
         msg.interactive?.button_reply?.title ||
         msg.interactive?.list_reply?.title ||
         msg.button?.text ||
-        '';
+        (isAudio ? '[Mensagem de Áudio]' : '');
+
+      if (senderPhone && (userText.trim() || isAudio)) {
+        const hostUrl = req.headers.get('host') || undefined;
+
+        // Despacha para a fila assíncrona / worker imediatamente
+        await enqueueWhatsAppMessage({
+          phoneNumberId: metadata?.phone_number_id || process.env.META_PHONE_NUMBER_ID || '',
+          patientPhone: senderPhone,
+          patientName: pushName,
+          messageId: msg.id,
+          text: userText,
+          audioId,
+          timestamp: msg.timestamp,
+          rawPayload: msg,
+        }, hostUrl);
+
+        console.log(`⚡ [Webhook Meta] Mensagem (${isAudio ? 'Áudio' : 'Texto'}) de ${senderPhone} enfileirada com sucesso. Respondendo 200 OK.`);
+
+        // Retorna HTTP 200 instantâneo para a Meta não realizar retentativas
+        return new NextResponse('EVENT_RECEIVED', { status: 200 });
+      }
     }
     // 1. Parser para Evolution API (v1 / v2, case-insensitive)
     else {

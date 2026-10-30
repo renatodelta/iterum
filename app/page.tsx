@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { MetaEmbeddedSignupButton } from '@/components/whatsapp/MetaEmbeddedSignupButton';
 import CareHubDashboard from '@/components/dashboard/CareHubDashboard';
 import GoogleCalendarView, { AgendaViewMode } from '@/components/calendar/GoogleCalendarView';
 import {
@@ -3928,6 +3929,11 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
+
+              {/* INTEGRAÇÃO WHATSAPP MULTI-TENANT (META EMBEDDED SIGNUP) */}
+              <div className="mb-6 max-w-4xl">
+                <MetaEmbeddedSignupButton />
+              </div>
 
               {/* FORMULÁRIO DE DADOS PROFISSIONAIS */}
               <form onSubmit={handleSaveProfissionais} className="space-y-6 max-w-4xl text-sm">

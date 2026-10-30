@@ -14,6 +14,9 @@ import {
   cancelarConsulta,
   confirmarRemarcacao,
   criarNovoAgendamento,
+  transferirParaHumano,
+  adicionarFilaEspera,
+  obterInformacoesClinica,
   formatBRT,
   formatBRTShort,
   parseBRT,
@@ -53,75 +56,46 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
   };
 }
 
-export const SYSTEM_PROMPT = `Você é a assistente virtual inteligente de atendimento e gestão de consultas do consultório médico Iterum.
+export const SYSTEM_PROMPT = `Você é a Sofia, secretária virtual humana, inteligente, acolhedora e altamente profissional do consultório médico Iterum.
+Seu objetivo é conduzir o atendimento no WhatsApp com extrema empatia e fluidez, realizando agendamentos, remarcações, cancelamentos e tirando dúvidas de forma resolutiva e elegante.
 
-MANUAL OPERACIONAL PADRONIZADO (POP) - FLUXO DE ATENDIMENTO E AGENDAMENTO VIA WHATSAPP (1º CONTATO):
-Você deve seguir estritamente a árvore de decisão condicional e os scripts do POP:
+DIRETRIZES DE COMUNICAÇÃO:
+1. **Linguagem Natural e Humanizada:**
+   - NUNCA envie opções robóticas como "[1] SIM / [2] NÃO" ou menus numéricos engessados. Converse como uma recepcionista atenciosa em tempo real.
+   - Seja calorosa, empática e prestativa. Use emojis moderados (😊, 🩺, 📅).
+   - Use parágrafos curtos e mensagens bem formatadas, ideais para leitura no WhatsApp.
+   - Use negrito para destacar *datas*, *horários* e *nomes de médicos*.
 
-1. **MENSAGEM DE BOAS-VINDAS E TRIAGEM INICIAL (M-01):**
-   - Para primeiro contato ou início de atendimento:
-   "Olá [Nome da Pessoa], seja bem-vindo(a) ao consultório da Dra. [Nome da Médica]. Esse é um canal exclusivo para agendamentos, reagendamentos e remarcações.
+2. **Fluxo Natural de Agendamento:**
+   - Cumprimente o paciente chamando-o pelo primeiro nome se souber.
+   - Se o paciente não especificou data ou horário, pergunte com gentileza qual dia da semana ou período (manhã ou tarde) ele prefere.
+   - Ao receber a preferência do paciente, consulte a disponibilidade chamando a ferramenta 'buscar_horarios_disponiveis' ou 'buscar_proximos_horarios_disponiveis'.
+   - NUNCA invente horários. Sempre use os horários reais retornados pelas ferramentas.
+   - Apresente de 2 a 4 opções de horários de forma limpa.
+   - Ao paciente escolher o horário desejado, **solicite a confirmação ativa** resumindo claramente os detalhes:
+     "Perfeito! Vou confirmar seu agendamento:
+     • *Paciente:* [Nome do Paciente]
+     • *Data:* [Dia da semana, DD/MM/AAAA]
+     • *Horário:* [HH:mm]
+     • *Profissional:* [Nome da médica/médico]
+     Posso confirmar para você?"
+   - Assim que o paciente confirmar (ex: "sim", "pode confirmar", "ok", "perfeito"), invoque a ferramenta 'criar_novo_agendamento'.
+   - Finalize com uma mensagem carinhosa e as orientações básicas de comparecimento.
 
-   Você deseja agendar uma consulta?
+3. **Remarcação e Cancelamento:**
+   - Se o paciente desejar remarcar ou cancelar, use 'buscar_consulta_atual' para localizar o agendamento futuro.
+   - Valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
-   [1] SIM
-   [2] NÃO"
+4. **Lista de Espera:**
+   - Se não houver vagas no dia ou turno solicitado pelo paciente, ou se a agenda estiver lotada, informe com delicadeza e ofereça colocá-lo na Lista de Espera através da ferramenta 'adicionar_fila_espera' para ser avisado com prioridade se houver desistência.
 
-2. **FLUXO A - AGENDAMENTO DE CONSULTA (RESPOSTA: SIM):**
-   - **Etapa A.1: Identificação do Titular do Atendimento (M-02):**
-     "O atendimento é para você mesmo?
+5. **Dúvidas Institucionais:**
+   - Você pode usar 'obter_informacoes_clinica' para informar endereço, especialidade e dados de contato.
+   - Se perguntarem sobre planos de saúde: informe que os atendimentos são particulares com emissão de recibo detalhado para solicitação de reembolso no convênio.
+   - NUNCA realize diagnóstico médico nem prescreva remédios. Em caso de emergências relatadas pelo paciente, oriente a procurar o pronto-socorro imediatamente.
 
-     [1] SIM
-     [2] NÃO"
-   - Se o paciente responder SIM:
-     Avança diretamente para a Etapa A.2.
-   - Se o paciente responder NÃO:
-     1. Solicita (M-03): "Informe o nome da pessoa para a qual deseja atendimento."
-     2. Ao receber o nome, confirma (M-04): "Gostaria de atendimento para o(a) Sr.(a) [Nome do Paciente]?
-
-     [1] SIM
-     [2] NÃO"
-     - Se SIM: Avança para a Etapa A.2 com o nome do titular confirmado.
-     - Se NÃO: Retorna para M-03 solicitando o nome novamente.
-
-3. **ETAPA A.2 (ENVIO DO LINK DA AGENDA DIGITAL - 4 MESES):**
-   - Texto exato de A.2:
-     "[Nome], para agilizar seu atendimento você pode acessar os horários disponíveis de forma rápida e prática clicando no link abaixo:
-     [Link da página de agendamento]"
-   - O link direciona para a página /agendamento com a grade de horários disponíveis dos próximos 4 meses, com confirmação em pop-up e envio automático de mensagem de confirmação para o WhatsApp do paciente.
-
-4. **ETAPAS A.3 a A.5 - ESCOLHA E CONFIRMAÇÃO DO HORÁRIO:**
-   - Ao receber o horário desejado pelo paciente, valide a disponibilidade.
-   - Solicite a confirmação final (Etapa A.5):
-     "Você confirma o agendamento em [Data (DD/MM/AAAA)] às [Horário (HH:mm)]?
-
-     [1] SIM
-     [2] NÃO"
-   - Ao receber [SIM]:
-     Invoque a ferramenta criar_novo_agendamento para cadastrar a consulta e responda com a mensagem final (M-09):
-     "Agendamento confirmado com sucesso!
-
-     Dra. [Nome da Médica] agradece o contato e deseja um ótimo dia!"
-   - Ao receber [NÃO]:
-     "Sem problemas! O agendamento não foi realizado. Qual outra data ou horário você prefere?"
-
-5. **FLUXO B - INFORMAÇÕES INSTITUCIONAIS E RETENÇÃO (RESPOSTA: NÃO NO M-01):**
-   - Pergunta institucional (M-06):
-     "Deseja conhecer um pouco mais sobre a Dra. [Nome da Médica]?
-
-     [1] SIM
-     [2] NÃO"
-   - Se o paciente responder SIM (M-07):
-     "É com imensa satisfação que recebemos você aqui pela 1ª vez. Para conhecer um pouco mais sobre a Dra. [Nome da Médica], clique no link abaixo: [Link]"
-   - Se o paciente responder NÃO (M-08):
-     "Esse é um canal exclusivo para agendamentos, reagendamentos ou remarcações. Esperamos vê-lo(a) aqui novamente em breve."
-
-6. **RECOMENDAÇÕES TÉCNICAS E REGRAS OPERACIONAIS:**
-   - **Transbordo para Atendente Humano:** Palavras-chave de escape como 'falar com secretária', 'atendente', 'ajuda', 'falar com alguém' ativam a transferência imediata:
-     "Com certeza! Estou transferindo seu atendimento para nossa equipe da recepção. Um momento, por favor, que uma de nossas secretárias já irá lhe atender."
-   - **Tratamento de Erros:** Caso o paciente digite texto inválido onde se espera [SIM/NÃO], reenvie amigavelmente a pergunta.
-   - **Remarcações e Cancelamentos:** Caso o paciente mencione querer remarcar ou cancelar consulta existente, atenda com as ferramentas correspondentes.
-   - **Formatação para WhatsApp:** Use negritos em *datas* e *horários*, emojis moderados e mensagens limpas.`;
+6. **Transbordo para Atendente Humano:**
+   - Se o paciente expressar desejo explícito de falar com uma pessoa ("quero falar com atendente", "falar com secretária humana", "falar com alguém"), ou estiver muito irritado/com caso complexo, acione a ferramenta 'transferir_para_humano' e informe com acolhimento que a equipe da recepção assumirá o atendimento a seguir.`;
 
 // Definição das ferramentas no formato OpenAI JSON Schema
 const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -146,7 +120,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'buscar_proximos_horarios_disponiveis',
-      description: 'Consulta os próximos dias e horários livres disponíveis na grade da clínica para listar diretamente no WhatsApp na Etapa A.2.',
+      description: 'Consulta os próximos dias e horários livres disponíveis na grade da clínica.',
       parameters: {
         type: 'object',
         properties: {},
@@ -179,13 +153,13 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'criar_novo_agendamento',
-      description: 'Efetiva um novo agendamento de consulta na clínica após a confirmação do paciente na Etapa A.5.',
+      description: 'Efetiva um novo agendamento de consulta na clínica após a confirmação clara do paciente.',
       parameters: {
         type: 'object',
         properties: {
           nova_data_hora: {
             type: 'string',
-            description: 'Data e horário da consulta no formato AAAA-MM-DD HH:mm (ex: 2026-10-14 09:00).',
+            description: 'Data e horário da consulta no formato AAAA-MM-DD HH:mm (ex: 2026-10-31 14:00).',
           },
           beneficiario_nome: {
             type: 'string',
@@ -238,18 +212,76 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'adicionar_fila_espera',
+      description: 'Insere o paciente na lista de espera para ser notificado caso surja desistência.',
+      parameters: {
+        type: 'object',
+        properties: {
+          paciente_nome: {
+            type: 'string',
+            description: 'Nome completo do paciente.',
+          },
+          turno_preferido: {
+            type: 'string',
+            description: 'Preferência de turno: Manhã, Tarde ou Qualquer Horário.',
+          },
+          dias_preferidos: {
+            type: 'string',
+            description: 'Dias da semana de preferência.',
+          },
+        },
+        required: ['paciente_nome'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'transferir_para_humano',
+      description: 'Transfere o atendimento para a equipe humana da recepção e pausa as respostas do assistente virtual.',
+      parameters: {
+        type: 'object',
+        properties: {
+          motivo: {
+            type: 'string',
+            description: 'Motivo da transferência.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'obter_informacoes_clinica',
+      description: 'Retorna informações cadastrais da clínica (endereço, especialidade, médico responsável, horários).',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
 ];
 
 /**
  * Executa uma Tool chamada pela IA
  */
-async function executeToolCall(toolName: string, toolArgs: any, clinicId?: string, patientId?: string) {
+async function executeToolCall(
+  toolName: string,
+  toolArgs: any,
+  clinicId?: string,
+  patientId?: string,
+  patientPhone?: string
+) {
   console.log(`🤖 Executando ferramenta IA [${toolName}] com argumentos:`, toolArgs);
   switch (toolName) {
     case 'buscar_consulta_atual':
-      return await buscarConsultaAtual(toolArgs.telefone_paciente, clinicId);
+      return await buscarConsultaAtual(toolArgs.telefone_paciente || patientPhone || '', clinicId);
     case 'buscar_proximos_horarios_disponiveis':
-      return await buscarProximosHorariosDisponiveis(clinicId, 2);
+      return await buscarProximosHorariosDisponiveis(clinicId, 3);
     case 'buscar_horarios_disponiveis':
       return await buscarHorariosDisponiveis(toolArgs.data_desejada, toolArgs.periodo, clinicId);
     case 'criar_novo_agendamento':
@@ -258,10 +290,23 @@ async function executeToolCall(toolName: string, toolArgs: any, clinicId?: strin
       return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo);
     case 'confirmar_remarcacao':
       return await confirmarRemarcacao(toolArgs.agendamento_id, toolArgs.nova_data_hora);
+    case 'adicionar_fila_espera':
+      return await adicionarFilaEspera(
+        patientPhone || '',
+        toolArgs.paciente_nome,
+        toolArgs.turno_preferido,
+        toolArgs.dias_preferidos,
+        clinicId
+      );
+    case 'transferir_para_humano':
+      return await transferirParaHumano(patientPhone || '', toolArgs.motivo, clinicId);
+    case 'obter_informacoes_clinica':
+      return await obterInformacoesClinica(clinicId);
     default:
       return { success: false, message: `Ferramenta desconhecida: ${toolName}` };
   }
 }
+
 
 export interface ProcessMessageOptions {
   patientPhone: string;
@@ -1122,24 +1167,56 @@ export async function processAgentMessage({
     console.warn('Alerta ao consultar dados do paciente no banco:', e.message);
   }
 
-  // 1. EXECUTA O MOTOR OFICIAL DO POP (Garante 100% de aderência aos scripts M-01 a M-09)
-  const popResult = await runPOPWorkflow(patientPhone, userMessage, conversationHistory, clinicId, patientName, patientId, pushName);
-  if (popResult) {
-    return popResult;
+  // 1. VERIFICAÇÃO DE VAGA DA FILA DE ESPERA (Prioridade máxima caso o paciente esteja respondendo a um aviso de vaga)
+  const waitlist = await loadWaitlist();
+  const phoneDigits = patientPhone.replace(/\D/g, '');
+  const last8 = phoneDigits.slice(-8);
+  const notifiedEntry = waitlist.find(
+    (w) =>
+      (w.patientPhone.replace(/\D/g, '').slice(-8) === last8 ||
+        w.patientPhone.replace(/\D/g, '') === phoneDigits) &&
+      w.status === 'NOTIFICADO'
+  );
+
+  if (notifiedEntry && (isYes(userMessage) || isNo(userMessage))) {
+    const popResult = await runPOPWorkflow(patientPhone, userMessage, conversationHistory, clinicId, patientName, patientId, pushName);
+    if (popResult) {
+      return popResult;
+    }
   }
 
-  // 2. OPENAI GPT-4o-mini (Para perguntas livres, dúvidas clínicas gerais ou informações institucionais)
+  // 2. MOTOR PRINCIPAL DE IA (OPENAI GPT-4o-mini com Function Calling Humanizado)
   const apiKey = process.env.OPENAI_API_KEY;
   const doctorInfo = await getDoctorInfo(clinicId);
 
   if (apiKey && apiKey.startsWith('sk-') && !apiKey.includes('sua-chave')) {
     try {
       const openai = new OpenAI({ apiKey });
+      const nowBrt = formatBRT(new Date(), true);
+
+      // Buscar se o paciente já tem consulta futura para contextualizar o assistente
+      let consultaAtualInfo = 'Nenhuma consulta futura agendada.';
+      try {
+        const consultaAtual = await buscarConsultaAtual(patientPhone, clinicId);
+        if (consultaAtual.success && consultaAtual.data) {
+          consultaAtualInfo = `Consulta agendada para: ${consultaAtual.data.dataFormatada} (${consultaAtual.data.status})`;
+        }
+      } catch (e) {}
+
+      const effectiveName = pushName && pushName !== 'Paciente' ? pushName : patientName;
+
+      const systemContent = `${SYSTEM_PROMPT}
+
+CONTEXTO TEMPORAL E DO ATENDIMENTO:
+- Data e Hora Atual de Brasília: ${nowBrt} (Fuso horário America/Sao_Paulo).
+- Profissional de Saúde: ${doctorInfo.name}
+- Paciente em atendimento: ${effectiveName || 'Paciente'} (Telefone: ${patientPhone})
+- Situação atual de agendamento: ${consultaAtualInfo}`;
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: 'system',
-          content: `${SYSTEM_PROMPT}\nNome do médico(a): ${doctorInfo.name}\nNome do paciente atual: ${patientName}\nTelefone do paciente atual: ${patientPhone}`,
+          content: systemContent,
         },
         ...conversationHistory.map((msg) => ({
           role: msg.role === 'tool' ? ('assistant' as const) : msg.role,
@@ -1153,11 +1230,15 @@ export async function processAgentMessage({
         messages,
         tools: openaiTools,
         tool_choice: 'auto',
+        temperature: 0.5,
       });
 
       let responseMessage = response.choices[0].message;
 
-      while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+      // Execução de ferramentas em loop enquanto a IA solicitar
+      let iterations = 0;
+      while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0 && iterations < 5) {
+        iterations++;
         messages.push(responseMessage);
 
         for (const toolCall of responseMessage.tool_calls) {
@@ -1168,7 +1249,7 @@ export async function processAgentMessage({
             toolArgs.telefone_paciente = patientPhone;
           }
 
-          const toolResult = await executeToolCall(toolName, toolArgs, clinicId, patientId);
+          const toolResult = await executeToolCall(toolName, toolArgs, clinicId, patientId, patientPhone);
           toolsExecuted.push({ name: toolName, args: toolArgs, result: toolResult });
 
           messages.push({
@@ -1182,25 +1263,28 @@ export async function processAgentMessage({
           model: 'gpt-4o-mini',
           messages,
           tools: openaiTools,
+          temperature: 0.5,
         });
         responseMessage = response.choices[0].message;
       }
 
-      return {
-        reply: responseMessage.content || 'Desculpe, não consegui processar a resposta.',
-        toolsExecuted,
-      };
+      if (responseMessage.content) {
+        return {
+          reply: responseMessage.content,
+          toolsExecuted,
+        };
+      }
     } catch (err: any) {
-      console.warn('Alerta na chamada da OpenAI API (usando fallback interno):', err.message);
+      console.error('❌ Erro na chamada da OpenAI API:', err.message);
     }
   }
 
-  // 3. Fallback padrão amigável (orienta o paciente de volta ao menu M-01)
+  // 3. Fallback acolhedor e humanizado caso a API de IA esteja indisponível
   const displayName = patientName && patientName !== 'Paciente' ? patientName.split(' ')[0] : '';
-  const greetingName = displayName ? `${displayName}, ` : '';
+  const greeting = displayName ? `Olá ${displayName}! ` : 'Olá! ';
 
   return {
-    reply: `Olá ${greetingName}seja bem-vindo(a) ao consultório da ${doctorInfo.name}. Esse é um canal exclusivo para agendamentos, reagendamentos e remarcações.\n\nVocê deseja agendar uma consulta?\n\n[1] SIM\n[2] NÃO`,
+    reply: `${greeting}Seja muito bem-vindo(a) ao consultório da ${doctorInfo.name}. Como posso ajudar você hoje com seus agendamentos ou dúvidas?`,
     toolsExecuted,
   };
 }
