@@ -134,9 +134,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 5.1 DEBOUNCE INTELIGENTE (1.5 segundos):
-    // Se o paciente enviou várias mensagens picadas em sequência, aguardamos para não encavalar respostas
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // 5.1 DEBOUNCE OTIMIZADO (500ms):
+    // Aguarda brevemente para consolidar mensagens rápidas em sequência sem gerar atraso perceptível
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Verificar se existe uma mensagem mais recente deste paciente criada durante o intervalo
     const newerMsg = await prisma.message.findFirst({
@@ -193,6 +193,7 @@ export async function POST(req: NextRequest) {
       conversationHistory: history,
       clinicId: clinic.id,
       pushName: patientName || undefined,
+      patientId: patient.id,
     });
 
     // 8. Salvar resposta do assistente

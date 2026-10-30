@@ -7,6 +7,7 @@ import {
   cancelarConsulta,
   confirmarRemarcacao,
   criarNovoAgendamento,
+  confirmarPresencaConsulta,
   transferirParaHumano,
   adicionarFilaEspera,
   obterInformacoesClinica,
@@ -82,20 +83,25 @@ DIRETRIZES DE COMUNICAÇÃO:
      Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
-4. **Governança da Agenda Médica:**
+4. **Governança da Agenda Médica & Horários de Retorno:**
    - Apenas o médico(a) ou sua equipe humana decidem e abrem os períodos e datas disponíveis. Você JAMAIS deve abrir ou prometer horários em datas que o profissional não abriu na grade do sistema.
    - Se a data solicitada for posterior ao período aberto pelo médico, ou se a agenda para o período estiver encerrada, informe com delicadeza e respeito a data limite deliberada pelo profissional e convide o paciente a entrar na Lista de Espera prioritária.
+   - **CONSULTAS DE RETORNO:** NUNCA ofereça horários de retorno para novos agendamentos via WhatsApp. Os horários de retorno são de uso exclusivo para pacientes que acabaram de consultar e retornarão em menos de 30 dias, sendo gerenciados internamente pela recepção ou pelo próprio médico.
 
-5. **Remarcação e Cancelamento:**
+5. **Lembrete de Véspera & Confirmação de Presença (D-1):**
+   - Se o paciente já possui consulta agendada e estiver respondendo ao lembrete de véspera (ex: "Sim", "Confirmo minha presença", "Vou sim", "1", "Confirmado"):
+     Execute IMEDIATAMENTE a ferramenta 'confirmar_presenca_consulta' e confirme carinhosamente que a presença dele está 100% garantida na agenda!
+
+6. **Remarcação e Cancelamento:**
    - Se o paciente desejar remarcar ou cancelar, use 'buscar_consulta_atual' para localizar o agendamento futuro.
    - Valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
-6. **Dúvidas Institucionais:**
+7. **Dúvidas Institucionais:**
    - Você pode usar 'obter_informacoes_clinica' para informar endereço, especialidade e dados de contato.
    - Se perguntarem sobre planos de saúde: informe que os atendimentos são particulares com emissão de recibo detalhado para solicitação de reembolso no convênio.
    - NUNCA realize diagnóstico médico nem prescreva remédios. Em caso de emergências relatadas pelo paciente, oriente a procurar o pronto-socorro imediatamente.
 
-7. **Transbordo para Atendente Humano:**
+8. **Transbordo para Atendente Humano:**
    - Se o paciente expressar desejo explícito de falar com uma pessoa ("quero falar com atendente", "falar com secretária humana", "falar com alguém"), ou estiver muito irritado/com caso complexo, acione a ferramenta 'transferir_para_humano' e informe com acolhimento que a equipe da recepção assumirá o atendimento a seguir.`;
 
 // Definição das ferramentas no formato OpenAI JSON Schema
@@ -265,6 +271,22 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'confirmar_presenca_consulta',
+      description: 'Confirma a presença do paciente para a consulta agendada quando este responde ao lembrete de véspera (D-1) ou expressa confirmação de presença.',
+      parameters: {
+        type: 'object',
+        properties: {
+          agendamento_id: {
+            type: 'string',
+            description: 'ID do agendamento a ser confirmado (opcional se puder ser localizado pelo telefone).',
+          },
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -291,6 +313,8 @@ async function executeToolCall(
       return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo);
     case 'confirmar_remarcacao':
       return await confirmarRemarcacao(toolArgs.agendamento_id, toolArgs.nova_data_hora);
+    case 'confirmar_presenca_consulta':
+      return await confirmarPresencaConsulta(patientPhone || '', toolArgs.agendamento_id, clinicId);
     case 'adicionar_fila_espera':
       return await adicionarFilaEspera(
         patientPhone || '',
@@ -315,6 +339,7 @@ export interface ProcessMessageOptions {
   conversationHistory?: Array<{ role: 'user' | 'assistant' | 'system' | 'tool'; content: string }>;
   clinicId?: string;
   pushName?: string;
+  patientId?: string;
 }
 
 export interface AgentProcessResult {
@@ -333,50 +358,53 @@ export async function processAgentMessage({
   conversationHistory = [],
   clinicId,
   pushName,
+  patientId: initialPatientId,
 }: ProcessMessageOptions): Promise<AgentProcessResult> {
   const toolsExecuted: Array<{ name: string; args: any; result: any }> = [];
 
   // 0. Localizar ou cadastrar o paciente garantindo que patientId sempre exista
   let patientName = pushName && pushName !== 'Paciente' ? pushName : 'Paciente';
-  let patientId = '';
-  try {
-    const cleanPhone = patientPhone.replace(/\D/g, '');
-    let clinic = clinicId ? await prisma.clinic.findUnique({ where: { id: clinicId } }) : await prisma.clinic.findFirst();
-    if (!clinic) {
-      clinic = await prisma.clinic.create({
-        data: {
-          name: 'Consultório Dra. Mariana Souza',
-          doctorName: 'Dra. Mariana Souza',
-          specialty: 'Pediatria',
-          email: 'dra.mariana@iterum.med.br',
-          phone: '+5511999999999',
-          slotDurationMinutes: 30,
-          minCancelHours: 2,
-        },
-      });
-    }
+  let patientId = initialPatientId || '';
+  if (!patientId) {
+    try {
+      const cleanPhone = patientPhone.replace(/\D/g, '');
+      let clinic = clinicId ? await prisma.clinic.findUnique({ where: { id: clinicId } }) : await prisma.clinic.findFirst();
+      if (!clinic) {
+        clinic = await prisma.clinic.create({
+          data: {
+            name: 'Consultório Dra. Mariana Souza',
+            doctorName: 'Dra. Mariana Souza',
+            specialty: 'Pediatria',
+            email: 'dra.mariana@iterum.med.br',
+            phone: '+5511999999999',
+            slotDurationMinutes: 30,
+            minCancelHours: 2,
+          },
+        });
+      }
 
-    let patient = await prisma.patient.findFirst({
-      where: {
-        clinicId: clinic.id,
-        phone: { contains: cleanPhone.slice(-8) },
-      },
-    });
-
-    if (!patient) {
-      patient = await prisma.patient.create({
-        data: {
+      let patient = await prisma.patient.findFirst({
+        where: {
           clinicId: clinic.id,
-          name: patientName,
-          phone: patientPhone,
+          phone: { contains: cleanPhone.slice(-8) },
         },
       });
-    }
 
-    patientId = patient.id;
-    patientName = patient.name;
-  } catch (e: any) {
-    console.warn('Alerta ao consultar/criar dados do paciente no banco:', e.message);
+      if (!patient) {
+        patient = await prisma.patient.create({
+          data: {
+            clinicId: clinic.id,
+            name: patientName,
+            phone: patientPhone,
+          },
+        });
+      }
+
+      patientId = patient.id;
+      patientName = patient.name;
+    } catch (e: any) {
+      console.warn('Alerta ao consultar/criar dados do paciente no banco:', e.message);
+    }
   }
 
   // 1. MOTOR PRINCIPAL DE IA (OPENAI GPT-4o-mini ou GOOGLE GEMINI via Function Calling)
@@ -440,6 +468,7 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
         tools: openaiTools,
         tool_choice: 'auto',
         temperature: 0.5,
+        max_tokens: 450,
       });
 
       let responseMessage = response.choices[0].message;
@@ -473,6 +502,7 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
           messages,
           tools: openaiTools,
           temperature: 0.5,
+          max_tokens: 450,
         });
         responseMessage = response.choices[0].message;
       }

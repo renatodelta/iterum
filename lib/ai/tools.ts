@@ -350,7 +350,9 @@ export async function buscarHorariosDisponiveis(
         );
       });
 
-      if (isFutureSlot && !isOccupied) {
+      // REGRA DE OURO: Horários de Retorno (isReturn) NÃO são oferecidos no WhatsApp.
+      // São de uso exclusivo e restrito para acompanhamento interno pelo médico ou recepcionista.
+      if (isFutureSlot && !isOccupied && !isReturn) {
         const hourInt = parseInt(timeStr.split(':')[0], 10);
 
         let matchesPeriod = true;
@@ -901,6 +903,22 @@ export async function criarNovoAgendamento(
             message: 'O profissional não atende neste dia da semana.',
           };
         }
+
+        // REGRA DE RETORNO: Bloquear agendamento de horários de retorno via WhatsApp
+        const returnSlotTimesList: string[] = Array.isArray(meta?.returnSlotTimes) ? meta.returnSlotTimes : [];
+        const requestedTimeStr = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).format(newStart);
+
+        if (returnSlotTimesList.includes(requestedTimeStr)) {
+          return {
+            success: false,
+            message: `O horário das ${requestedTimeStr} é reservado exclusivamente para consultas de retorno de pacientes em acompanhamento. Por favor, escolha outro horário disponível para nova consulta.`,
+          };
+        }
       } catch (e) {
         // Ignora erro de parsing
       }
@@ -1094,6 +1112,83 @@ export async function obterInformacoesClinica(clinicId?: string): Promise<ToolRe
     return {
       success: false,
       message: `Erro ao obter dados da clínica: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * 10. CONFIRMAR PRESENÇA NA CONSULTA (Lembrete de Véspera D-1)
+ */
+export async function confirmarPresencaConsulta(
+  telefonePaciente: string,
+  agendamentoId?: string,
+  clinicId?: string
+): Promise<ToolResult> {
+  try {
+    const cleanPhone = telefonePaciente.replace(/\D/g, '');
+    let appointment = null;
+
+    if (agendamentoId) {
+      appointment = await prisma.appointment.findUnique({
+        where: { id: agendamentoId },
+        include: { patient: true, clinic: true },
+      });
+    } else {
+      const patient = await prisma.patient.findFirst({
+        where: {
+          phone: { contains: cleanPhone.slice(-8) },
+          ...(clinicId ? { clinicId } : {}),
+        },
+      });
+
+      if (patient) {
+        appointment = await prisma.appointment.findFirst({
+          where: {
+            patientId: patient.id,
+            startTime: { gte: new Date() },
+            status: { in: ['AGENDADO', 'SCHEDULED'] },
+          },
+          orderBy: { startTime: 'asc' },
+          include: { patient: true, clinic: true },
+        });
+      }
+    }
+
+    if (!appointment) {
+      return {
+        success: false,
+        message: 'Nenhum agendamento futuro pendente de confirmação foi localizado para este paciente.',
+      };
+    }
+
+    const updated = await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: {
+        status: 'CONFIRMADO',
+        notes: appointment.notes
+          ? `${appointment.notes} | Presença confirmada pelo paciente via WhatsApp`
+          : 'Presença confirmada pelo paciente via WhatsApp',
+      },
+      include: { patient: true, clinic: true },
+    });
+
+    const dataFormatada = formatBRT(new Date(updated.startTime), true);
+
+    return {
+      success: true,
+      message: `Presença confirmada com sucesso para a consulta de ${updated.patient.name} em ${dataFormatada}!`,
+      data: {
+        appointmentId: updated.id,
+        patientName: updated.patient.name,
+        startTime: updated.startTime.toISOString(),
+        status: updated.status,
+      },
+    };
+  } catch (error: any) {
+    console.error('Erro em confirmarPresencaConsulta:', error);
+    return {
+      success: false,
+      message: `Erro ao confirmar presença: ${error.message}`,
     };
   }
 }

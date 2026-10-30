@@ -156,8 +156,8 @@ function getStatusLabel(status: string | undefined | null): string {
   if (!status) return 'Agendado';
   const s = status.toUpperCase();
   if (s === 'ENCAIXE') return '⚡ Consulta de Encaixe';
-  if (s === 'CONFIRMED' || s === 'CONFIRMADO') return 'Confirmado';
-  if (s === 'SCHEDULED' || s === 'AGENDADO') return 'Aguardando Confirmação';
+  if (s === 'CONFIRMED' || s === 'CONFIRMADO') return 'Confirmado (Presença Garantida)';
+  if (s === 'SCHEDULED' || s === 'AGENDADO') return 'Agendado (Aguardando Confirmação de Véspera)';
   if (s === 'RESCHEDULED' || s === 'REMARCADO') return 'Remarcado';
   if (s === 'CANCELED' || s === 'CANCELADO') return 'Cancelado';
   return status;
@@ -1466,6 +1466,33 @@ export default function Dashboard() {
         setTimeout(() => setWaitlistNotice(null), 8000);
       } else {
         alert(data.error || 'Erro ao cancelar consulta.');
+      }
+    } catch (err: any) {
+      alert(`Erro: ${err.message}`);
+    }
+  }
+
+  async function handleConfirmPresence(apptId: string) {
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: apptId,
+          status: 'CONFIRMADO',
+          notes: selectedApptDetails?.notes
+            ? `${selectedApptDetails.notes} | Presença confirmada manualmente pela recepção`
+            : 'Presença confirmada manualmente pela recepção',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedApptDetails((prev: any) => (prev ? { ...prev, status: 'CONFIRMADO' } : null));
+        fetchData();
+        setWaitlistNotice('✅ Presença da consulta confirmada com sucesso!');
+        setTimeout(() => setWaitlistNotice(null), 5000);
+      } else {
+        alert(data.error || 'Erro ao confirmar presença.');
       }
     } catch (err: any) {
       alert(`Erro: ${err.message}`);
@@ -4521,14 +4548,31 @@ export default function Dashboard() {
                   {new Date(selectedApptDetails.startTime).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} às{' '}
                   {new Date(selectedApptDetails.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-slate-500">Status atual:</span>
-                  {(selectedApptDetails.status === 'ENCAIXE' || (selectedApptDetails.notes && selectedApptDetails.notes.includes('ENCAIXE'))) ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 font-extrabold text-[11px] shadow-2xs flex items-center gap-1">
-                      ⚡ Consulta de Encaixe
-                    </span>
-                  ) : (
-                    <span className="font-bold text-slate-800">{getStatusLabel(selectedApptDetails.status)}</span>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-500 font-semibold">Status:</span>
+                    {(selectedApptDetails.status === 'ENCAIXE' || (selectedApptDetails.notes && selectedApptDetails.notes.includes('ENCAIXE'))) ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300 font-extrabold text-[11px] shadow-2xs flex items-center gap-1">
+                        ⚡ Consulta de Encaixe
+                      </span>
+                    ) : (selectedApptDetails.status === 'CONFIRMADO' || selectedApptDetails.status === 'CONFIRMED') ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-[11px] shadow-2xs flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        Confirmado (Presença Garantida D-1)
+                      </span>
+                    ) : (selectedApptDetails.status === 'AGENDADO' || selectedApptDetails.status === 'SCHEDULED') ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-[#1a73e8] border border-blue-200 font-extrabold text-[11px] shadow-2xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#1a73e8]"></span>
+                        Agendado (Vaga Garantida)
+                      </span>
+                    ) : (
+                      <span className="font-bold text-slate-800">{getStatusLabel(selectedApptDetails.status)}</span>
+                    )}
+                  </div>
+                  {(selectedApptDetails.status === 'AGENDADO' || selectedApptDetails.status === 'SCHEDULED') && (
+                    <p className="text-[11px] text-slate-500 pl-0.5 leading-snug">
+                      ℹ️ O paciente está marcado e a vaga está reservada na grade. O lembrete de confirmação de presença será enviado ao paciente via WhatsApp 24h antes da consulta.
+                    </p>
                   )}
                 </div>
               </div>
@@ -4540,7 +4584,18 @@ export default function Dashboard() {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {(selectedApptDetails.status === 'AGENDADO' || selectedApptDetails.status === 'SCHEDULED') && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmPresence(selectedApptDetails.id)}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Confirmar Presença (D-1)</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
