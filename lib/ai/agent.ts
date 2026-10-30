@@ -17,6 +17,7 @@ import {
   formatBRT,
   formatBRTShort,
   parseBRT,
+  verificarAgendaTemHorariosDisponiveis,
 } from './tools';
 
 /**
@@ -585,17 +586,23 @@ async function runPOPWorkflow(
   if (
     lastAssistantMsg.includes('Fila de Espera*?') ||
     lastAssistantMsg.includes('fila de espera*?') ||
-    lastAssistantMsg.includes('Fila de Espera?')
+    lastAssistantMsg.includes('Fila de Espera?') ||
+    lastAssistantMsg.includes('fila de espera?') ||
+    lastAssistantMsg.includes('Fila de Espera')
   ) {
     if (isYes(userMessage)) {
-      const targetName = effectiveName && effectiveName !== 'Paciente' ? effectiveName : 'Paciente WhatsApp';
+      const targetName =
+        currentBeneficiary && currentBeneficiary !== 'Paciente'
+          ? currentBeneficiary
+          : (effectiveName && effectiveName !== 'Paciente' ? effectiveName : (patientName !== 'Paciente' ? patientName : 'Paciente WhatsApp'));
+
       const added = await addToWaitlist({
         patientName: targetName,
         patientPhone,
         preferredShift: 'Qualquer Horário',
         notes: 'Adicionado via WhatsApp Bot por indisponibilidade de agenda',
       });
-      toolsExecuted.push({ name: 'adicionar_fila_espera', args: { patientPhone }, result: added });
+      toolsExecuted.push({ name: 'adicionar_fila_espera', args: { patientPhone, patientName: targetName }, result: added });
 
       return {
         reply: `Perfeito, ${greetingName}! Você foi adicionado(a) à nossa *Fila de Espera* com prioridade. Logo que um paciente remarcar ou cancelar uma consulta, você receberá uma mensagem automática por aqui para aproveitar o horário liberado! 📲`,
@@ -680,6 +687,15 @@ async function runPOPWorkflow(
     const beneficiaryName = matchName ? matchName[1].trim() : 'Paciente';
 
     if (isYes(userMessage)) {
+      // Verificar se há vagas disponíveis antes de mandar o link
+      const agendaCheck = await verificarAgendaTemHorariosDisponiveis(clinicId);
+      if (!agendaCheck.hasSlots) {
+        return {
+          reply: `No momento, todos os horários da nossa agenda estão preenchidos (sem vagas disponíveis para ${beneficiaryName}).\n\nVocê gostaria de colocar o(a) Sr.(a) *${beneficiaryName}* na nossa *Fila de Espera*? Assim que surgir um horário liberado por cancelamento ou remarcação, avisaremos você imediatamente por aqui com prioridade! 📲\n\n[1] SIM, colocar na Fila de Espera\n[2] NÃO`,
+          toolsExecuted,
+        };
+      }
+
       // Avança para a Etapa A.2 (Envio do Link de Agendamento com a Agenda Digital de 4 meses)
       const baseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
@@ -726,6 +742,15 @@ async function runPOPWorkflow(
   // =========================================================================
   if (lastAssistantMsg.includes('O atendimento é para você mesmo?')) {
     if (isYes(userMessage)) {
+      // Verificar se há vagas disponíveis antes de mandar o link
+      const agendaCheck = await verificarAgendaTemHorariosDisponiveis(clinicId);
+      if (!agendaCheck.hasSlots) {
+        return {
+          reply: `Olá ${greetingName}! No momento, todos os horários da nossa agenda estão preenchidos (sem vagas disponíveis no momento).\n\nVocê gostaria de entrar na nossa *Fila de Espera*? Assim que surgir uma desistência ou horário liberado por cancelamento ou remarcação, avisaremos você imediatamente por aqui com prioridade para garantir seu atendimento! 📲\n\n[1] SIM, quero entrar na Fila de Espera\n[2] NÃO`,
+          toolsExecuted,
+        };
+      }
+
       // Titular é o próprio paciente! Avança para a Etapa A.2 com link da agenda de 4 meses
       const targetDisplayName = displayName || 'Paciente';
       const baseUrl =
@@ -784,7 +809,18 @@ async function runPOPWorkflow(
   // =========================================================================
   if (lastAssistantMsg.includes('Você deseja agendar uma consulta?')) {
     if (isYes(userMessage)) {
-      // Encaminha para o Fluxo A (M-02)
+      // 1. Verificar se a agenda possui horários disponíveis no período configurado
+      const agendaCheck = await verificarAgendaTemHorariosDisponiveis(clinicId);
+      if (!agendaCheck.hasSlots) {
+        // NÃO HÁ VAGAS DISPONÍVEIS NA AGENDA:
+        // Não envia link sem vagas, pergunta se o paciente quer entrar na Fila de Espera
+        return {
+          reply: `Olá ${greetingName}! No momento, todos os horários da nossa agenda estão preenchidos (sem vagas disponíveis no momento).\n\nVocê gostaria de entrar na nossa *Fila de Espera*? Assim que um paciente cancelar ou remarcar, avisaremos você imediatamente por aqui com prioridade para garantir seu atendimento! 📲\n\n[1] SIM, quero entrar na Fila de Espera\n[2] NÃO`,
+          toolsExecuted,
+        };
+      }
+
+      // Se há vagas na agenda, segue para a Etapa M-02 (Identificação do Titular)
       return {
         reply: 'O atendimento é para você mesmo?\n\n[1] SIM\n[2] NÃO',
         toolsExecuted,

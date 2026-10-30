@@ -60,6 +60,34 @@ export default function AgendamentoOnlinePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any | null>(null);
 
+  // Fila de Espera na página de agendamento
+  const [joinedWaitlist, setJoinedWaitlist] = useState(false);
+  const [joiningWaitlist, setJoiningWaitlist] = useState(false);
+
+  async function handleJoinWaitlist() {
+    try {
+      setJoiningWaitlist(true);
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientName: patientName || patientNameParam || 'Paciente Agendamento Web',
+          patientPhone: patientPhone || patientPhoneParam || '',
+          preferredShift: 'Qualquer Horário',
+          notes: `Interesse em vaga (solicitado via página web no mês ${activeMonth?.label})`,
+        }),
+      });
+      const data = await res.json();
+      if (data.success || data.id) {
+        setJoinedWaitlist(true);
+      }
+    } catch (e) {
+      console.error('Erro ao entrar na fila de espera:', e);
+    } finally {
+      setJoiningWaitlist(false);
+    }
+  }
+
   // Inicializar parâmetros da URL
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -404,6 +432,33 @@ export default function AgendamentoOnlinePage() {
                     );
                   })}
                 </div>
+
+                {/* Banner de Fila de Espera se o mês não tiver vagas */}
+                {!days.some((d) => d.hasSlots) && (
+                  <div className="mt-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex flex-col gap-2">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <span>⚠️</span>
+                      <span>Não há vagas abertas para este mês.</span>
+                    </p>
+                    <p className="text-[11px] text-amber-800 leading-snug">
+                      Você pode selecionar outro mês acima ou entrar na nossa Fila de Espera para ser avisado(a) imediatamente se surgir uma desistência!
+                    </p>
+                    {joinedWaitlist ? (
+                      <div className="py-2 px-3 rounded-xl bg-emerald-600 text-white font-extrabold text-center text-xs">
+                        ✅ Você foi adicionado(a) à Fila de Espera!
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={joiningWaitlist}
+                        onClick={handleJoinWaitlist}
+                        className="py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-center text-xs transition active:scale-95 cursor-pointer shadow-xs"
+                      >
+                        {joiningWaitlist ? 'Adicionando...' : 'Entrar na Fila de Espera'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -425,10 +480,36 @@ export default function AgendamentoOnlinePage() {
                 <p className="text-sm">Clique em uma data verde no calendário para ver os horários livres.</p>
               </div>
             ) : !currentSelectedDay?.hasSlots ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-12 text-center">
-                <AlertCircle className="w-10 h-10 stroke-1 mb-2 text-amber-500" />
-                <p className="text-sm text-slate-600 font-medium">Não há horários livres para este dia.</p>
-                <p className="text-xs text-slate-400 mt-1">Por favor, selecione outra data.</p>
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-8 text-center space-y-3">
+                <AlertCircle className="w-10 h-10 stroke-1 text-amber-500" />
+                <div>
+                  <p className="text-sm text-slate-800 font-bold">Sem vagas livres nesta data</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Todos os horários deste dia já foram preenchidos.</p>
+                </div>
+
+                <div className="w-full max-w-xs p-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-left space-y-2">
+                  <div className="flex items-center gap-1.5 text-sky-950 font-extrabold text-xs">
+                    <span>📲</span>
+                    <span>Deseja entrar na Fila de Espera?</span>
+                  </div>
+                  <p className="text-[11px] text-sky-800 leading-snug">
+                    Assim que surgir uma desistência ou cancelamento, você será avisado(a) imediatamente pelo WhatsApp!
+                  </p>
+                  {joinedWaitlist ? (
+                    <div className="py-2 px-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs text-center">
+                      ✅ Você está na Fila de Espera!
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={joiningWaitlist}
+                      onClick={handleJoinWaitlist}
+                      className="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-extrabold text-xs text-center shadow-xs transition cursor-pointer"
+                    >
+                      {joiningWaitlist ? 'Adicionando...' : 'Entrar na Fila de Espera'}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 space-y-5 overflow-y-auto max-h-[380px] pr-1">

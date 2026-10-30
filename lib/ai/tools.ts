@@ -666,6 +666,83 @@ export async function buscarProximosHorariosDisponiveis(
 }
 
 /**
+ * Verifica se a agenda do profissional possui pelo menos uma vaga livre disponível em todo o período aberto
+ */
+export async function verificarAgendaTemHorariosDisponiveis(clinicId?: string): Promise<{
+  hasSlots: boolean;
+  sampleDate?: string;
+  sampleSlots?: string[];
+}> {
+  try {
+    const clinic = clinicId
+      ? await prisma.clinic.findUnique({ where: { id: clinicId } })
+      : await prisma.clinic.findFirst();
+
+    if (!clinic) return { hasSlots: false };
+
+    let whConfig: any = {};
+    try {
+      whConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
+    } catch {
+      return { hasSlots: false };
+    }
+
+    const meta = whConfig?.meta;
+    const selectedDaysList: string[] = Array.isArray(meta?.selectedDays)
+      ? meta.selectedDays
+      : (Array.isArray(whConfig?.selectedDays) ? whConfig.selectedDays : []);
+
+    if (!meta?.scheduleStartDate || !meta?.scheduleEndDate || selectedDaysList.length === 0) {
+      return { hasSlots: false };
+    }
+
+    const now = new Date();
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    // A verificação deve iniciar na data de hoje ou no início do período configurado
+    const startDateStr = todayISO > meta.scheduleStartDate ? todayISO : meta.scheduleStartDate;
+    const endDateStr = meta.scheduleEndDate;
+
+    if (startDateStr > endDateStr) {
+      return { hasSlots: false };
+    }
+
+    const [sy, sm, sd] = startDateStr.split('-').map(Number);
+    const [ey, em, ed] = endDateStr.split('-').map(Number);
+    const curDate = new Date(sy, sm - 1, sd);
+    const endDate = new Date(ey, em - 1, ed);
+
+    let daysChecked = 0;
+    while (curDate <= endDate && daysChecked < 90) {
+      const y = curDate.getFullYear();
+      const m = String(curDate.getMonth() + 1).padStart(2, '0');
+      const d = String(curDate.getDate()).padStart(2, '0');
+      const dateISO = `${y}-${m}-${d}`;
+      const dow = curDate.getDay().toString();
+
+      if (selectedDaysList.includes(dow)) {
+        const res = await buscarHorariosDisponiveis(dateISO, 'qualquer', clinic.id);
+        if (res.success && res.data?.slots && res.data.slots.length > 0) {
+          return {
+            hasSlots: true,
+            sampleDate: dateISO,
+            sampleSlots: res.data.slots,
+          };
+        }
+      }
+
+      curDate.setDate(curDate.getDate() + 1);
+      daysChecked++;
+    }
+
+    return { hasSlots: false };
+  } catch (err) {
+    console.warn('⚠️ [verificarAgendaTemHorariosDisponiveis] Erro ao verificar agenda:', err);
+    return { hasSlots: false };
+  }
+}
+
+/**
  * 6. CRIAR NOVO AGENDAMENTO DE CONSULTA
  */
 export async function criarNovoAgendamento(
