@@ -24,6 +24,24 @@ export interface WaitlistEntry {
 
 const WAITLIST_FILE_PATH = path.join(process.cwd(), 'data', 'waitlist.json');
 
+/**
+ * Normaliza e converte strings/Dates para objeto Date garantindo fuso horário correto (Brasília / America/Sao_Paulo)
+ */
+export function toBRTDate(val: string | Date): Date {
+  if (val instanceof Date) return val;
+  if (typeof val === 'string') {
+    if (val.includes('Z') || /[+-]\d{2}:\d{2}$/.test(val)) {
+      return new Date(val);
+    }
+    let s = val.trim().replace(' ', 'T');
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ':00';
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) s += '-03:00';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? new Date(val) : d;
+  }
+  return new Date(val);
+}
+
 // Lista inicial zerada (começa sem nenhum paciente para testes limpos)
 const INITIAL_WAITLIST: WaitlistEntry[] = [];
 
@@ -191,22 +209,43 @@ export async function notifyFirstInWaitlistForVacatedSlot(vacatedSlot: {
   const patient = list[targetIndex];
   const doctorName = await getDoctorName();
 
-  // Formatar data e hora
-  const startDate = new Date(vacatedSlot.startTime);
-  const dateDisplay = startDate.toLocaleDateString('pt-BR', {
+  // Formatar data e hora com fuso de Brasília (America/Sao_Paulo)
+  const startDate = toBRTDate(vacatedSlot.startTime);
+
+  const timeFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
-  const timeDisplay = startDate.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
+  const weekDayFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    weekday: 'long',
   });
-  const weekDayDisplay = startDate.toLocaleDateString('pt-BR', { weekday: 'long' });
+
+  const startFormatted = timeFormatter.format(startDate);
+  let timeDisplay = startFormatted;
+  let endDateISO: string | undefined = undefined;
+
+  if (vacatedSlot.endTime) {
+    const endDate = toBRTDate(vacatedSlot.endTime);
+    endDateISO = endDate.toISOString();
+    const endFormatted = timeFormatter.format(endDate);
+    timeDisplay = `${startFormatted} às ${endFormatted}`;
+  }
+
+  const dateDisplay = dateFormatter.format(startDate);
+  const weekDayDisplay = weekDayFormatter.format(startDate);
 
   const offeredSlot = {
     startTime: startDate.toISOString(),
-    endTime: vacatedSlot.endTime ? new Date(vacatedSlot.endTime).toISOString() : undefined,
+    endTime: endDateISO,
     dateDisplay,
     timeDisplay,
   };
@@ -229,6 +268,42 @@ export async function notifyFirstInWaitlistForVacatedSlot(vacatedSlot: {
     offeredSlot,
   };
   saveWaitlist(list);
+
+  // Registrar a mensagem no histórico do WhatsApp para garantir continuidade no bot
+  try {
+    const cleanP = patient.patientPhone.replace(/\D/g, '').slice(-8);
+    let dbPatient = await prisma.patient.findFirst({
+      where: {
+        phone: { contains: cleanP },
+      },
+    });
+
+    const clinic = await prisma.clinic.findFirst();
+
+    if (!dbPatient && clinic) {
+      dbPatient = await prisma.patient.create({
+        data: {
+          clinicId: clinic.id,
+          name: patient.patientName,
+          phone: patient.patientPhone,
+        },
+      });
+    }
+
+    if (dbPatient && clinic) {
+      await prisma.message.create({
+        data: {
+          clinicId: clinic.id,
+          patientId: dbPatient.id,
+          role: 'assistant',
+          content: messageText,
+        },
+      });
+      console.log(`📝 [Fila de Espera] Mensagem de oferta salva no histórico do paciente ${dbPatient.name}`);
+    }
+  } catch (msgErr) {
+    console.warn('⚠️ [Fila de Espera] Não foi possível salvar mensagem de oferta no histórico:', msgErr);
+  }
 
   return {
     contacted: true,

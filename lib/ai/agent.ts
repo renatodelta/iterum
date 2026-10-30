@@ -292,7 +292,14 @@ function isYes(text: string): boolean {
     t.startsWith('1.') ||
     t.startsWith('[1]') ||
     t === 'ok' ||
-    t === 'claro'
+    t === 'claro' ||
+    t.startsWith('sim') ||
+    t.includes('tenho interesse') ||
+    t.includes('btn_waitlist_sim') ||
+    t.includes('confirmar') ||
+    t.includes('pode confirmar') ||
+    t.includes('pode agendar') ||
+    t.includes('tenho sim')
   );
 }
 
@@ -309,7 +316,15 @@ function isNo(text: string): boolean {
     t === 'negativo' ||
     t.startsWith('2 -') ||
     t.startsWith('2.') ||
-    t.startsWith('[2]')
+    t.startsWith('[2]') ||
+    t.startsWith('não') ||
+    t.startsWith('nao') ||
+    t.includes('btn_waitlist_nao') ||
+    t.includes('não tenho interesse') ||
+    t.includes('nao tenho interesse') ||
+    t.includes('passar a vez') ||
+    t.includes('dispensar') ||
+    t.includes('cancelar')
   );
 }
 
@@ -496,21 +511,40 @@ async function runPOPWorkflow(
   // ETAPA FILA DE ESPERA 1: OFERTA DE VAGA LIBERADA POR REMARCAÇÃO / CANCELAMENTO
   // Pergunta anterior: "Você tem interesse em agendar neste horário?"
   // =========================================================================
-  if (
+  const waitlist = loadWaitlist();
+  const phoneDigits = patientPhone.replace(/\D/g, '');
+  const last8 = phoneDigits.slice(-8);
+  const notifiedEntry = waitlist.find(
+    (w) =>
+      (w.patientPhone.replace(/\D/g, '').slice(-8) === last8 ||
+       w.patientPhone.replace(/\D/g, '') === phoneDigits) &&
+      w.status === 'NOTIFICADO'
+  );
+
+  const isWaitlistOfferContext =
     lastAssistantMsg.includes('Você tem interesse em agendar neste horário?') ||
-    lastAssistantMsg.includes('Você tem interesse nesse horário?')
-  ) {
-    const waitlist = loadWaitlist();
-    const cleanPhone = patientPhone.replace(/\D/g, '');
-    const entry = waitlist.find(
-      (w) => w.patientPhone.replace(/\D/g, '') === cleanPhone && (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
-    );
+    lastAssistantMsg.includes('Você tem interesse nesse horário?') ||
+    lastAssistantMsg.includes('este horário foi reservado com prioridade para você') ||
+    Boolean(notifiedEntry && (isYes(userMessage) || isNo(userMessage)));
+
+  if (isWaitlistOfferContext) {
+    const entry =
+      notifiedEntry ||
+      waitlist.find(
+        (w) =>
+          (w.patientPhone.replace(/\D/g, '').slice(-8) === last8 ||
+           w.patientPhone.replace(/\D/g, '') === phoneDigits) &&
+          (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
+      );
 
     if (isYes(userMessage)) {
       // Paciente tem interesse! Resumir o agendamento e pedir confirmação final
-      const slotDisplay = entry?.offeredSlot
-        ? `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`
-        : 'horário liberado';
+      let slotDisplay = 'horário liberado';
+      if (entry?.offeredSlot) {
+        slotDisplay = entry.offeredSlot.timeDisplay.includes('às')
+          ? `${entry.offeredSlot.dateDisplay} das ${entry.offeredSlot.timeDisplay}`
+          : `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`;
+      }
       const patientTargetName = entry?.patientName || displayName || 'Paciente';
 
       return {
@@ -538,11 +572,16 @@ async function runPOPWorkflow(
   // ETAPA FILA DE ESPERA 2: CONFIRMAÇÃO FINAL DO ENCAIXE & PREENCHIMENTO DA LACUNA
   // Pergunta anterior: "Podemos confirmar o seu agendamento para preencher este horário?"
   // =========================================================================
-  if (lastAssistantMsg.includes('Podemos confirmar o seu agendamento para preencher este horário?')) {
-    const waitlist = loadWaitlist();
-    const cleanPhone = patientPhone.replace(/\D/g, '');
+  const isWaitlistConfirmationContext =
+    lastAssistantMsg.includes('Podemos confirmar o seu agendamento para preencher este horário?') ||
+    lastAssistantMsg.includes('Resumo do seu agendamento para a vaga liberada');
+
+  if (isWaitlistConfirmationContext) {
     const entry = waitlist.find(
-      (w) => w.patientPhone.replace(/\D/g, '') === cleanPhone && (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
+      (w) =>
+        (w.patientPhone.replace(/\D/g, '').slice(-8) === last8 ||
+         w.patientPhone.replace(/\D/g, '') === phoneDigits) &&
+        (w.status === 'NOTIFICADO' || w.status === 'AGUARDANDO')
     );
 
     if (isYes(userMessage)) {
@@ -550,9 +589,12 @@ async function runPOPWorkflow(
         const bookRes = await confirmWaitlistBooking(entry.id, clinicId);
         toolsExecuted.push({ name: 'confirmar_encaixe_fila', args: { waitlistId: entry.id }, result: bookRes });
 
-        const slotDisplay = entry.offeredSlot
-          ? `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`
-          : 'horário combinado';
+        let slotDisplay = 'horário combinado';
+        if (entry.offeredSlot) {
+          slotDisplay = entry.offeredSlot.timeDisplay.includes('às')
+            ? `${entry.offeredSlot.dateDisplay} das ${entry.offeredSlot.timeDisplay}`
+            : `${entry.offeredSlot.dateDisplay} às ${entry.offeredSlot.timeDisplay}`;
+        }
         return {
           reply: `🎉 Agendamento confirmado com sucesso!\n\nA vaga foi garantida e a lacuna da agenda foi preenchida. Sua consulta está marcada para o dia *${slotDisplay}* com ${doctorInfo.name}.\n\nAgradecemos a sua confirmação e esperamos você!`,
           toolsExecuted,
@@ -583,13 +625,17 @@ async function runPOPWorkflow(
   // ETAPA FILA DE ESPERA 3: RESPOSTA SOBRE ENTRAR NA FILA DE ESPERA
   // Pergunta anterior: "Gostaria de entrar na nossa *Fila de Espera*?" ou "Gostaria de ficar na nossa *Fila de Espera*?"
   // =========================================================================
-  if (
-    lastAssistantMsg.includes('Fila de Espera*?') ||
-    lastAssistantMsg.includes('fila de espera*?') ||
-    lastAssistantMsg.includes('Fila de Espera?') ||
-    lastAssistantMsg.includes('fila de espera?') ||
-    lastAssistantMsg.includes('Fila de Espera')
-  ) {
+  const isWaitlistInviteQuestion =
+    lastAssistantMsg.includes('entrar na nossa *Fila de Espera*') ||
+    lastAssistantMsg.includes('entrar na nossa fila de espera') ||
+    lastAssistantMsg.includes('entrar na fila de espera') ||
+    lastAssistantMsg.includes('ficar na nossa *Fila de Espera*') ||
+    lastAssistantMsg.includes('ficar na nossa fila de espera') ||
+    lastAssistantMsg.includes('ficar na fila de espera') ||
+    lastAssistantMsg.includes('entrar na Fila de Espera') ||
+    lastAssistantMsg.includes('ficar na Fila de Espera');
+
+  if (isWaitlistInviteQuestion) {
     if (isYes(userMessage)) {
       const targetName =
         currentBeneficiary && currentBeneficiary !== 'Paciente'
