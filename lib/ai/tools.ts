@@ -860,7 +860,7 @@ export async function criarNovoAgendamento(
     const slotDuration = clinic.slotDurationMinutes || 30;
     const newEnd = addMinutes(newStart, slotDuration);
 
-    // Verificar se o horário solicitado está dentro dos dias e período da agenda criada
+    // Verificar se o horário solicitado está dentro dos dias e período da agenda deliberada pelo profissional
     if (clinic.workingHours) {
       try {
         const whConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
@@ -868,28 +868,37 @@ export async function criarNovoAgendamento(
         const selectedDaysList: string[] = Array.isArray(meta?.selectedDays)
           ? meta.selectedDays
           : (Array.isArray(whConfig?.selectedDays) ? whConfig.selectedDays : []);
+
+        let activeDays: string[] = selectedDaysList;
+        if (!activeDays || activeDays.length === 0) {
+          activeDays = Object.keys(whConfig).filter((k) => whConfig[k]?.active);
+        }
+        if (activeDays.length === 0) {
+          activeDays = ['1', '2', '3', '4', '5'];
+        }
+
         const year = newStart.getFullYear();
         const month = String(newStart.getMonth() + 1).padStart(2, '0');
         const day = String(newStart.getDate()).padStart(2, '0');
         const dateISO = `${year}-${month}-${day}`;
         const dow = newStart.getDay().toString();
 
-        if (!meta?.scheduleStartDate || !meta?.scheduleEndDate || selectedDaysList.length === 0) {
+        if (meta?.scheduleStartDate && dateISO < meta.scheduleStartDate) {
           return {
             success: false,
-            message: 'A agenda do médico ainda não foi aberta para novas consultas.',
+            message: `A data desejada é anterior à abertura da agenda do profissional (${meta.scheduleStartDate}).`,
           };
         }
-        if (dateISO < meta.scheduleStartDate || dateISO > meta.scheduleEndDate) {
+        if (meta?.scheduleEndDate && dateISO > meta.scheduleEndDate) {
           return {
             success: false,
-            message: 'A data desejada está fora do período de abertura da agenda do profissional.',
+            message: `A agenda do profissional para este período está aberta até ${meta.scheduleEndDate}.`,
           };
         }
-        if (!selectedDaysList.includes(dow)) {
+        if (!activeDays.includes(dow)) {
           return {
             success: false,
-            message: 'O médico não atende neste dia da semana.',
+            message: 'O profissional não atende neste dia da semana.',
           };
         }
       } catch (e) {
