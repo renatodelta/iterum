@@ -49,7 +49,7 @@ interface GoogleCalendarViewProps {
   currentTimeStr: string;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  onOpenNewAppt: (date: Date, hourStr?: string) => void;
+  onOpenNewAppt: (date: Date, hourStr?: string, isReturn?: boolean, duration?: number) => void;
   onOpenApptDetails: (appt: any) => void;
   onSwitchTab?: (tab: 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings' | 'profissionais') => void;
   activeDoctor?: {
@@ -535,14 +535,26 @@ export default function GoogleCalendarView({
   const getAppointmentBadge = (appt: any) => {
     const s = (appt.status || '').toUpperCase();
     const isEncaixe = s === 'ENCAIXE' || (appt.notes && appt.notes.toUpperCase().includes('ENCAIXE'));
+    const isRetorno = Boolean(appt.isReturn) || (appt.notes && appt.notes.toUpperCase().includes('RETORNO'));
 
     if (isEncaixe) {
       return {
         bg: 'bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-300 ring-offset-1',
         border: 'border-l-4 border-l-purple-950',
         softBg: 'bg-purple-50 text-purple-900 border-purple-200',
-        tag: '⚡ Encaixe',
+        tag: isRetorno ? '⚡ Encaixe (Retorno)' : '⚡ Encaixe',
         isEncaixe: true,
+        isRetorno,
+      };
+    }
+    if (isRetorno) {
+      return {
+        bg: 'bg-sky-600 hover:bg-sky-700 text-white shadow-xs',
+        border: 'border-l-4 border-l-sky-800',
+        softBg: 'bg-sky-50 text-sky-900 border-sky-200',
+        tag: 'Retorno',
+        isEncaixe: false,
+        isRetorno: true,
       };
     }
     if (s === 'CONFIRMADO' || s === 'CONFIRMED') {
@@ -552,6 +564,7 @@ export default function GoogleCalendarView({
         softBg: 'bg-emerald-50 text-emerald-900 border-emerald-200',
         tag: 'Confirmado',
         isEncaixe: false,
+        isRetorno: false,
       };
     }
     if (s === 'REMARCADO' || s === 'RESCHEDULED') {
@@ -561,6 +574,7 @@ export default function GoogleCalendarView({
         softBg: 'bg-sky-50 text-sky-900 border-sky-200',
         tag: 'Remarcado',
         isEncaixe: false,
+        isRetorno: false,
       };
     }
     if (s === 'CANCELADO' || s === 'CANCELED') {
@@ -570,6 +584,7 @@ export default function GoogleCalendarView({
         softBg: 'bg-rose-50 text-rose-900 border-rose-200',
         tag: 'Cancelado',
         isEncaixe: false,
+        isRetorno: false,
       };
     }
     // Padrão: Aguardando / Agendado (Google Blue)
@@ -577,8 +592,9 @@ export default function GoogleCalendarView({
       bg: 'bg-[#1a73e8] text-white',
       border: 'border-l-4 border-l-blue-800',
       softBg: 'bg-blue-50 text-blue-900 border-blue-200',
-      tag: 'Agendado',
+      tag: '1ª Vez • Agendado',
       isEncaixe: false,
+      isRetorno: false,
     };
   };
 
@@ -1102,7 +1118,13 @@ export default function GoogleCalendarView({
                                   <span className="font-extrabold text-sm truncate">
                                     {appt.patient?.name || 'Paciente sem nome'}
                                   </span>
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${badge.isEncaixe ? 'bg-amber-300 text-purple-950 font-black shadow-xs' : 'bg-white/20 text-white'} shrink-0`}>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                    badge.isEncaixe
+                                      ? 'bg-amber-300 text-purple-950 font-black shadow-xs'
+                                      : badge.isRetorno
+                                      ? 'bg-sky-100 text-sky-950 font-black shadow-xs'
+                                      : 'bg-white/20 text-white'
+                                  } shrink-0`}>
                                     {badge.tag}
                                   </span>
                                 </div>
@@ -1132,7 +1154,7 @@ export default function GoogleCalendarView({
                         {vacantInHour.map((vacSlot) => (
                           <div
                             key={vacSlot.time}
-                            onClick={() => onOpenNewAppt(selectedDate, vacSlot.time)}
+                            onClick={() => onOpenNewAppt(selectedDate, vacSlot.time, vacSlot.isReturn, vacSlot.duration)}
                             className={`p-2.5 rounded-xl border border-dashed transition active:scale-[0.99] group/slot cursor-pointer flex items-center justify-between ${
                               vacSlot.isReturn
                                 ? 'border-sky-300 bg-sky-50/70 hover:bg-sky-100/80 hover:border-sky-400 text-sky-950 shadow-2xs'
@@ -1287,7 +1309,7 @@ export default function GoogleCalendarView({
                                 key={v.time}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onOpenNewAppt(colDate, v.time);
+                                  onOpenNewAppt(colDate, v.time, v.isReturn, v.duration);
                                 }}
                                 className={`px-1.5 py-0.5 rounded border border-dashed text-[10px] font-bold flex items-center justify-between ${
                                   v.isReturn

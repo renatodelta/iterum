@@ -245,13 +245,18 @@ export default function Dashboard() {
   const [newApptName, setNewApptName] = useState('');
   const [newApptTime, setNewApptTime] = useState('');
   const [newApptNotes, setNewApptNotes] = useState('');
+  const [newApptIsReturn, setNewApptIsReturn] = useState(false);
+  const [newApptDuration, setNewApptDuration] = useState<number | null>(null);
 
   // Identificar se o horário escolhido colide com uma consulta existente (Encaixe)
   const conflictingAppt = useMemo(() => {
     if (!newApptTime) return null;
     const chosenStart = new Date(newApptTime).getTime();
     if (isNaN(chosenStart)) return null;
-    const dur = (clinic?.slotDurationMinutes || 30) * 60 * 1000;
+    const durMinutes = newApptIsReturn
+      ? Number(returnSlotDurationMinutes) || 25
+      : Number(clinic?.slotDurationMinutes || slotDurationMinutes) || 45;
+    const dur = durMinutes * 60 * 1000;
     const chosenEnd = chosenStart + dur;
 
     return appointments.find((a) => {
@@ -260,7 +265,23 @@ export default function Dashboard() {
       const aEnd = a.endTime ? new Date(a.endTime).getTime() : aStart + dur;
       return aStart < chosenEnd && aEnd > chosenStart;
     });
-  }, [newApptTime, appointments, clinic?.slotDurationMinutes]);
+  }, [newApptTime, appointments, newApptIsReturn, returnSlotDurationMinutes, clinic?.slotDurationMinutes, slotDurationMinutes]);
+
+  // Previsão do término da consulta no modal de agendamento
+  const newApptEndTimeFormatted = useMemo(() => {
+    if (!newApptTime) return '';
+    try {
+      const dur = newApptIsReturn
+        ? Number(returnSlotDurationMinutes) || 25
+        : Number(slotDurationMinutes) || 45;
+      const d = new Date(newApptTime);
+      if (isNaN(d.getTime())) return '';
+      const endD = new Date(d.getTime() + dur * 60000);
+      return `${String(endD.getHours()).padStart(2, '0')}:${String(endD.getMinutes()).padStart(2, '0')}`;
+    } catch {
+      return '';
+    }
+  }, [newApptTime, newApptIsReturn, returnSlotDurationMinutes, slotDurationMinutes]);
 
   // Modal de Detalhes do Agendamento
   const [selectedApptDetails, setSelectedApptDetails] = useState<any | null>(null);
@@ -459,6 +480,12 @@ export default function Dashboard() {
     }
 
     try {
+      const finalNotesWithReturn = newApptIsReturn
+        ? (newApptNotes && !newApptNotes.toUpperCase().includes('RETORNO')
+            ? `[RETORNO] ${newApptNotes}`
+            : (newApptNotes || '[RETORNO] Consulta de Retorno'))
+        : newApptNotes;
+
       const res = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -467,7 +494,11 @@ export default function Dashboard() {
           patientName: newApptName,
           patientPhone: newApptPhone,
           startTime: newApptTime,
-          notes: newApptNotes,
+          notes: finalNotesWithReturn,
+          isReturn: newApptIsReturn,
+          durationMinutes: newApptIsReturn
+            ? Number(returnSlotDurationMinutes) || 25
+            : Number(slotDurationMinutes) || 45,
           isEncaixe,
           status: isEncaixe ? 'ENCAIXE' : 'AGENDADO',
         }),
@@ -480,6 +511,8 @@ export default function Dashboard() {
         setNewApptPhone('');
         setNewApptTime('');
         setNewApptNotes('');
+        setNewApptIsReturn(false);
+        setNewApptDuration(null);
         fetchData();
         fetchPatients();
       } else if (data.isConflict) {
@@ -497,8 +530,13 @@ export default function Dashboard() {
     }
   }
 
-  // Abrir Modal com Slot pré-selecionado
-  function openNewApptModalWithSlot(dateObj: Date, hourStr?: string) {
+  // Abrir Modal com Slot pré-selecionado (preservando tipo de consulta e duração do retorno)
+  function openNewApptModalWithSlot(
+    dateObj: Date,
+    hourStr?: string,
+    isReturn?: boolean,
+    duration?: number
+  ) {
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
@@ -508,6 +546,15 @@ export default function Dashboard() {
     setSelectedPatientId('');
     setNewApptName('');
     setNewApptPhone('');
+    setNewApptNotes('');
+
+    const isRet =
+      isReturn !== undefined
+        ? Boolean(isReturn)
+        : returnSlotTimes.includes(time);
+
+    setNewApptIsReturn(isRet);
+    setNewApptDuration(duration || (isRet ? Number(returnSlotDurationMinutes) : Number(slotDurationMinutes)));
     setShowModalNewAppt(true);
   }
 
@@ -4252,8 +4299,57 @@ export default function Dashboard() {
                 </select>
               </div>
 
+              {/* SELEÇÃO DO TIPO DE CONSULTA: 1ª VEZ OU RETORNO */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Data e Horário *</label>
+                <label className="block font-bold text-slate-700 mb-1">Tipo de Consulta *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewApptIsReturn(false)}
+                    className={`p-2.5 rounded-2xl border text-xs font-black flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                      !newApptIsReturn
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-2 ring-emerald-400 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      {!newApptIsReturn && <Check className="w-3.5 h-3.5 text-emerald-700 stroke-[3]" />}
+                      <span>1ª Vez / Nova</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                      {slotDurationMinutes} minutos
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewApptIsReturn(true)}
+                    className={`p-2.5 rounded-2xl border text-xs font-black flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                      newApptIsReturn
+                        ? 'bg-sky-50 border-sky-500 text-sky-950 ring-2 ring-sky-400 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      {newApptIsReturn && <Check className="w-3.5 h-3.5 text-sky-700 stroke-[3]" />}
+                      <span>Retorno</span>
+                    </span>
+                    <span className="text-[10px] text-sky-700 font-extrabold bg-sky-100/60 px-1.5 py-0.5 rounded">
+                      {returnSlotDurationMinutes} minutos
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">Data e Horário de Início *</label>
+                  {newApptEndTimeFormatted && (
+                    <span className="text-[11px] font-extrabold text-[#005a43] bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Término: {newApptEndTimeFormatted} ({newApptIsReturn ? returnSlotDurationMinutes : slotDurationMinutes}m)
+                    </span>
+                  )}
+                </div>
                 <input
                   type="datetime-local"
                   required

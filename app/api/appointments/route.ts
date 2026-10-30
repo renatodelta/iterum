@@ -165,31 +165,36 @@ export async function POST(req: NextRequest) {
     }
 
     // Determinar duração da consulta considerando se é Retorno ou 1ª Vez
+    const timePartFromStr = typeof startTime === 'string' && startTime.includes('T')
+      ? startTime.split('T')[1].substring(0, 5)
+      : '';
+
+    let isReturnConsultation = Boolean(body.isReturn) || (notes && notes.toUpperCase().includes('RETORNO'));
     let durationMinutes = Number(body.durationMinutes) || 0;
-    if (!durationMinutes) {
-      try {
-        const workingHoursConfig = typeof clinic.workingHours === 'string'
-          ? JSON.parse(clinic.workingHours)
-          : clinic.workingHours;
-        const meta = workingHoursConfig?.meta || {};
-        const normDur = Number(meta.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
-        const retDur = Number(meta.returnSlotDurationMinutes || 25);
-        const returnSlotTimesList: string[] = Array.isArray(meta.returnSlotTimes)
-          ? meta.returnSlotTimes
-          : [];
 
-        const apptHour = String(start.getHours()).padStart(2, '0');
-        const apptMin = String(start.getMinutes()).padStart(2, '0');
-        const apptTimeStr = `${apptHour}:${apptMin}`;
+    try {
+      const workingHoursConfig = typeof clinic.workingHours === 'string'
+        ? JSON.parse(clinic.workingHours)
+        : clinic.workingHours;
+      const meta = workingHoursConfig?.meta || {};
+      const normDur = Number(meta.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
+      const retDur = Number(meta.returnSlotDurationMinutes || 25);
+      const returnSlotTimesList: string[] = Array.isArray(meta.returnSlotTimes)
+        ? meta.returnSlotTimes
+        : [];
 
-        const isReturn =
-          Boolean(body.isReturn) ||
-          returnSlotTimesList.includes(apptTimeStr) ||
-          (notes && notes.toLowerCase().includes('retorno'));
+      const apptTimeStr = timePartFromStr || `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
 
-        durationMinutes = isReturn ? retDur : normDur;
-      } catch (e) {
-        durationMinutes = clinic.slotDurationMinutes || 45;
+      if (returnSlotTimesList.includes(apptTimeStr)) {
+        isReturnConsultation = true;
+      }
+
+      if (!durationMinutes) {
+        durationMinutes = isReturnConsultation ? retDur : normDur;
+      }
+    } catch (e) {
+      if (!durationMinutes) {
+        durationMinutes = isReturnConsultation ? 25 : (clinic.slotDurationMinutes || 45);
       }
     }
 
@@ -225,6 +230,9 @@ export async function POST(req: NextRequest) {
 
     const finalStatus = (conflict || isEncaixeRequested) ? 'ENCAIXE' : (status || 'AGENDADO');
     let finalNotes = notes || 'Agendamento manual criado pelo painel';
+    if (isReturnConsultation && !finalNotes.toUpperCase().includes('RETORNO')) {
+      finalNotes = `[RETORNO] ${finalNotes}`;
+    }
     if ((conflict || isEncaixeRequested) && !finalNotes.toUpperCase().includes('ENCAIXE')) {
       finalNotes = conflict?.patient?.name
         ? `[ENCAIXE] ${finalNotes} (Sobreposto ao agendamento de ${conflict.patient.name})`
