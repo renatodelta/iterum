@@ -1185,13 +1185,28 @@ export async function processAgentMessage({
     }
   }
 
-  // 2. MOTOR PRINCIPAL DE IA (OPENAI GPT-4o-mini com Function Calling Humanizado)
-  const apiKey = process.env.OPENAI_API_KEY;
+  // 2. MOTOR PRINCIPAL DE IA (OPENAI GPT-4o-mini ou GOOGLE GEMINI via Function Calling)
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
   const doctorInfo = await getDoctorInfo(clinicId);
 
-  if (apiKey && apiKey.startsWith('sk-') && !apiKey.includes('sua-chave')) {
+  let aiClient: OpenAI | null = null;
+  let modelName = 'gpt-4o-mini';
+
+  // Prioriza Gemini se configurado ou se OpenAI estiver sem saldo/chave
+  if (geminiKey && geminiKey.startsWith('AIza') && !geminiKey.includes('sua-chave')) {
+    aiClient = new OpenAI({
+      apiKey: geminiKey,
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    });
+    modelName = 'gemini-1.5-flash';
+  } else if (openaiKey && openaiKey.startsWith('sk-') && !openaiKey.includes('sua-chave')) {
+    aiClient = new OpenAI({ apiKey: openaiKey });
+    modelName = 'gpt-4o-mini';
+  }
+
+  if (aiClient) {
     try {
-      const openai = new OpenAI({ apiKey });
       const nowBrt = formatBRT(new Date(), true);
 
       // Buscar se o paciente já tem consulta futura para contextualizar o assistente
@@ -1225,8 +1240,8 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
         { role: 'user', content: userMessage },
       ];
 
-      let response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+      let response = await aiClient.chat.completions.create({
+        model: modelName,
         messages,
         tools: openaiTools,
         tool_choice: 'auto',
@@ -1259,8 +1274,8 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
           });
         }
 
-        response = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+        response = await aiClient.chat.completions.create({
+          model: modelName,
           messages,
           tools: openaiTools,
           temperature: 0.5,
@@ -1275,7 +1290,7 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
         };
       }
     } catch (err: any) {
-      console.error('❌ Erro na chamada da OpenAI API:', err.message);
+      console.error(`❌ Erro na chamada da API de IA (${modelName}):`, err.message);
     }
   }
 
