@@ -185,7 +185,7 @@ export async function buscarHorariosDisponiveis(
     let workingHoursConfig: Record<string, { active: boolean; start: string; end: string; lunchStart: string; lunchEnd: string }>;
 
     try {
-      workingHoursConfig = JSON.parse(clinic.workingHours);
+      workingHoursConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
     } catch (e) {
       return { success: false, message: 'Erro na configuração do expediente da clínica.' };
     }
@@ -688,7 +688,7 @@ export async function criarNovoAgendamento(
     // Verificar se o horário solicitado está dentro dos dias e período da agenda criada
     if (clinic.workingHours) {
       try {
-        const whConfig = JSON.parse(clinic.workingHours);
+        const whConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
         const meta = whConfig?.meta;
         const selectedDaysList: string[] = Array.isArray(meta?.selectedDays)
           ? meta.selectedDays

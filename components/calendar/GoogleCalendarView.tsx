@@ -183,14 +183,19 @@ export default function GoogleCalendarView({
     return hours;
   }, []);
 
-  // Extrair configuração de expediente da clínica
+  // Extrair configuração de expediente da clínica (suporta tanto string JSON quanto objeto já parsed)
   const clinicWorkingHours = useMemo(() => {
-    if (!clinic?.workingHours) return null;
-    try {
-      return JSON.parse(clinic.workingHours);
-    } catch {
-      return null;
+    if (!clinic) return null;
+    let wh = clinic.workingHours;
+    if (typeof wh === 'string') {
+      try {
+        wh = JSON.parse(wh);
+      } catch {
+        wh = null;
+      }
     }
+    if (wh && typeof wh === 'object') return wh;
+    return null;
   }, [clinic?.workingHours]);
 
   const slotDuration = clinic?.slotDurationMinutes || 30;
@@ -217,12 +222,17 @@ export default function GoogleCalendarView({
     });
 
     const meta = clinicWorkingHours?.meta;
-    const selectedDays: string[] = Array.isArray(meta?.selectedDays)
+    const selectedDays: string[] = (Array.isArray(meta?.selectedDays) && meta.selectedDays.length > 0)
       ? meta.selectedDays.map(String)
-      : (Array.isArray(clinicWorkingHours?.selectedDays) ? clinicWorkingHours.selectedDays.map(String) : []);
+      : ((Array.isArray(clinicWorkingHours?.selectedDays) && clinicWorkingHours.selectedDays.length > 0)
+        ? clinicWorkingHours.selectedDays.map(String)
+        : (Array.isArray(clinic?.selectedDays) ? clinic.selectedDays.map(String) : []));
+
+    const scheduleStartDate = meta?.scheduleStartDate || clinicWorkingHours?.scheduleStartDate || clinic?.scheduleStartDate || '';
+    const scheduleEndDate = meta?.scheduleEndDate || clinicWorkingHours?.scheduleEndDate || clinic?.scheduleEndDate || '';
 
     // Se não há dias selecionados ou o período não foi configurado, a agenda está inativa (sem vagas)
-    if (selectedDays.length === 0 || !meta?.scheduleStartDate || !meta?.scheduleEndDate) {
+    if (selectedDays.length === 0 || !scheduleStartDate || !scheduleEndDate) {
       return {
         isActive: false,
         allSlots: [],
@@ -238,7 +248,7 @@ export default function GoogleCalendarView({
     const m = String(targetDate.getMonth() + 1).padStart(2, '0');
     const d = String(targetDate.getDate()).padStart(2, '0');
     const targetISO = `${y}-${m}-${d}`;
-    if (targetISO < meta.scheduleStartDate || targetISO > meta.scheduleEndDate) {
+    if (targetISO < scheduleStartDate || targetISO > scheduleEndDate) {
       return {
         isActive: false,
         allSlots: [],
@@ -290,22 +300,21 @@ export default function GoogleCalendarView({
         lunchEndH = parseInt(cfg.lunchEnd.split(':')[0], 10);
       }
     } else {
-      // Se está em selectedDays mas não tem objeto específico no JSON, ativa com padrão do meta
+      // Se está em selectedDays mas não tem objeto específico no JSON, ativa com padrão do meta ou clinic
       dayActive = true;
-      if (meta?.workStartTime) {
-        const [sh, sm] = meta.workStartTime.split(':').map(Number);
-        startH = sh;
-        startM = sm || 0;
-      }
-      if (meta?.workEndTime) {
-        const [eh, em] = meta.workEndTime.split(':').map(Number);
-        endH = eh;
-        endM = em || 0;
-      }
-      if (meta?.breakStartTime && meta?.breakEndTime) {
-        lunchStartH = parseInt(meta.breakStartTime.split(':')[0], 10);
-        lunchEndH = parseInt(meta.breakEndTime.split(':')[0], 10);
-      }
+      const wStart = meta?.workStartTime || clinic?.workStartTime || '08:00';
+      const wEnd = meta?.workEndTime || clinic?.workEndTime || '17:00';
+      const bStart = meta?.breakStartTime || clinic?.breakStartTime || '12:00';
+      const bEnd = meta?.breakEndTime || clinic?.breakEndTime || '13:00';
+
+      const [sh, sm] = wStart.split(':').map(Number);
+      startH = sh;
+      startM = sm || 0;
+      const [eh, em] = wEnd.split(':').map(Number);
+      endH = eh;
+      endM = em || 0;
+      lunchStartH = parseInt(bStart.split(':')[0], 10);
+      lunchEndH = parseInt(bEnd.split(':')[0], 10);
     }
 
     // Gerar slots regulares
@@ -453,12 +462,12 @@ export default function GoogleCalendarView({
     }
 
     return days;
-  }, [viewMonthDate, appointments, clinicWorkingHours, slotDuration, searchQuery]);
+  }, [viewMonthDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic]);
 
   // Informações do dia atualmente selecionado
   const currentDayInfo = useMemo(() => {
     return getDaySlotsInfo(selectedDate);
-  }, [selectedDate, appointments, clinicWorkingHours, slotDuration, searchQuery]);
+  }, [selectedDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic]);
 
   // Estilo de status das consultas (estilo Google Calendar + Saúde)
   const getAppointmentBadge = (appt: any) => {

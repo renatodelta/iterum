@@ -822,17 +822,28 @@ export default function Dashboard() {
 
   function applyDatePreset(days: number) {
     const today = new Date();
-    const startStr = today.toISOString().split('T')[0];
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const startStr = `${y}-${m}-${d}`;
+
     const endDate = new Date(today);
     endDate.setDate(endDate.getDate() + days);
-    const endStr = endDate.toISOString().split('T')[0];
+    const ey = endDate.getFullYear();
+    const em = String(endDate.getMonth() + 1).padStart(2, '0');
+    const ed = String(endDate.getDate()).padStart(2, '0');
+    const endStr = `${ey}-${em}-${ed}`;
+
     setScheduleStartDate(startStr);
     setScheduleEndDate(endStr);
   }
 
   function applyEndOfYearPreset() {
     const today = new Date();
-    const startStr = today.toISOString().split('T')[0];
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const startStr = `${y}-${m}-${d}`;
     const year = today.getFullYear();
     const endStr = `${year}-12-31`;
     setScheduleStartDate(startStr);
@@ -955,6 +966,7 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.success) {
         setClinic(data.clinic);
+        fetchData();
         if (conflictingAppts.length > 0) {
           setSaveSuccessMsg(
             `Agenda criada com sucesso! ⚠️ Aviso: ${conflictingAppts.length} consulta(s) já agendada(s) anteriormente neste período foram preservadas intactas e mantidas na agenda (nenhum horário marcado foi substituído).`
