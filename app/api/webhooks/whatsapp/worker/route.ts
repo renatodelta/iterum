@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Salvar mensagem do usuário
-    await prisma.message.create({
+    const currentMsg = await prisma.message.create({
       data: {
         clinicId: clinic.id,
         patientId: patient.id,
@@ -134,7 +134,46 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 6. Carregar histórico recente
+    // 5.1 DEBOUNCE INTELIGENTE (1.5 segundos):
+    // Se o paciente enviou várias mensagens picadas em sequência, aguardamos para não encavalar respostas
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Verificar se existe uma mensagem mais recente deste paciente criada durante o intervalo
+    const newerMsg = await prisma.message.findFirst({
+      where: {
+        patientId: patient.id,
+        role: 'user',
+        id: { not: currentMsg.id },
+        createdAt: { gt: currentMsg.createdAt },
+      },
+    });
+
+    if (newerMsg) {
+      console.log(`⏭️ [Debounce] Nova mensagem recebida de ${patient.name}. O worker seguinte responderá o lote consolidado.`);
+      return NextResponse.json({ status: 'debounced', supersededBy: newerMsg.id });
+    }
+
+    // 5.2 CONSOLIDAÇÃO DE MENSAGENS PENDENTES:
+    // Localiza a última resposta do assistente para recuperar todas as mensagens pendentes do usuário
+    const lastAssistantMsg = await prisma.message.findFirst({
+      where: { patientId: patient.id, role: 'assistant' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pendingUserMessages = await prisma.message.findMany({
+      where: {
+        patientId: patient.id,
+        role: 'user',
+        ...(lastAssistantMsg ? { createdAt: { gt: lastAssistantMsg.createdAt } } : {}),
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const consolidatedUserMessage = pendingUserMessages.length > 0
+      ? pendingUserMessages.map((m) => m.content).join('\n')
+      : text;
+
+    // 6. Carregar histórico recente para a IA
     const rawMessages = await prisma.message.findMany({
       where: { patientId: patient.id },
       orderBy: { createdAt: 'desc' },
@@ -150,7 +189,7 @@ export async function POST(req: NextRequest) {
     // 7. Processar com o motor de IA
     const agentResult = await processAgentMessage({
       patientPhone: formattedPhone,
-      userMessage: text,
+      userMessage: consolidatedUserMessage,
       conversationHistory: history,
       clinicId: clinic.id,
       pushName: patientName || undefined,

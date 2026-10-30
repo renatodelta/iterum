@@ -156,7 +156,8 @@ export async function buscarConsultaAtual(telefonePaciente: string, clinicId?: s
 export async function buscarHorariosDisponiveis(
   dataDesejada: string, // YYYY-MM-DD
   periodo: 'manha' | 'tarde' | 'noite' | 'qualquer' = 'qualquer',
-  clinicId?: string
+  clinicId?: string,
+  preloadedAppointments?: any[]
 ): Promise<ToolResult> {
   try {
     // Obter primeira clínica se não fornecida
@@ -179,69 +180,79 @@ export async function buscarHorariosDisponiveis(
     const day = String(targetDateStart.getDate()).padStart(2, '0');
     const cleanDateStr = `${year}-${month}-${day}`;
 
+    const today = new Date();
+    const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    // 1. Data no passado
+    if (cleanDateStr < todayISO) {
+      return {
+        success: true,
+        message: 'A data solicitada já passou. Por favor, escolha uma data a partir de hoje.',
+        data: { slots: [] },
+      };
+    }
+
     // Obter dia da semana em BRT (0 = Domingo, 1 = Segunda... 6 = Sábado)
     const dayOfWeek = targetDateStart.getDay().toString();
 
-    let workingHoursConfig: Record<string, { active: boolean; start: string; end: string; lunchStart: string; lunchEnd: string }>;
+    let workingHoursConfig: Record<string, { active: boolean; start: string; end: string; lunchStart: string; lunchEnd: string }> = {};
 
     try {
       workingHoursConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
     } catch (e) {
-      return { success: false, message: 'Erro na configuração do expediente da clínica.' };
+      workingHoursConfig = {};
     }
 
-    // Verificar se a agenda está aberta e se a data está dentro do período configurado
+    // Verificar se a agenda possui configurações de período
     const metaAgenda = (workingHoursConfig as any)?.meta;
     const selectedDaysList: string[] = Array.isArray(metaAgenda?.selectedDays)
       ? metaAgenda.selectedDays
       : (Array.isArray((workingHoursConfig as any)?.selectedDays) ? (workingHoursConfig as any).selectedDays : []);
 
-    if (!metaAgenda?.scheduleStartDate || !metaAgenda?.scheduleEndDate || selectedDaysList.length === 0) {
-      return {
-        success: true,
-        message: 'A agenda ainda não foi aberta para atendimentos pelo profissional. Por favor, entre em contato mais tarde.',
-        data: { slots: [] },
-      };
+    // Se houver limite de agenda no futuro, respeita. Mas se expirou no passado ou não existe, agenda continua aberta para dias úteis normais
+    if (metaAgenda?.scheduleEndDate && metaAgenda.scheduleEndDate >= todayISO) {
+      if (cleanDateStr > metaAgenda.scheduleEndDate) {
+        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+        return {
+          success: true,
+          message: `A agenda aberta pelo consultório vai até o dia ${ed}/${em}/${ey}. Para datas posteriores, posso colocar você na lista de espera.`,
+          data: { slots: [] },
+        };
+      }
     }
 
-    if (cleanDateStr < metaAgenda.scheduleStartDate || cleanDateStr > metaAgenda.scheduleEndDate) {
-      const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
-      const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
-      return {
-        success: true,
-        message: `A agenda está aberta para atendimentos exclusivamente de ${sd}/${sm}/${sy} até ${ed}/${em}/${ey}. A data solicitada (${cleanDateStr}) está fora do período de atendimento configurado.`,
-        data: { slots: [] },
-      };
+    // Determinar dias da semana atendidos: prioriza metaAgenda.selectedDays se houver, ou os dias com active: true em workingHoursConfig
+    let activeDays: string[] = selectedDaysList;
+    if (!activeDays || activeDays.length === 0) {
+      activeDays = Object.keys(workingHoursConfig).filter((k) => workingHoursConfig[k]?.active);
+    }
+    if (activeDays.length === 0) {
+      activeDays = ['1', '2', '3', '4', '5']; // Segunda a sexta por padrão
     }
 
-    if (!selectedDaysList.includes(dayOfWeek)) {
+    if (!activeDays.includes(dayOfWeek)) {
       const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
       return {
         success: true,
-        message: `O profissional não atende aos ${diasNomes[parseInt(dayOfWeek)]}s. Por favor escolha outro dia da semana.`,
+        message: `O consultório não atende aos ${diasNomes[parseInt(dayOfWeek)]}s. Atendemos nos dias úteis (segunda a sexta).`,
         data: { slots: [] },
       };
     }
 
-    const dayConfig = workingHoursConfig[dayOfWeek];
+    let dayConfig = workingHoursConfig[dayOfWeek];
     if (!dayConfig || !dayConfig.active) {
-      const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-      return {
-        success: true,
-        message: `O profissional não atende aos ${diasNomes[parseInt(dayOfWeek)]}s. Por favor escolha outro dia da semana.`,
-        data: { slots: [] },
-      };
+      dayConfig = { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' };
     }
 
     // Gerar grade de horários considerando Retornos dinâmicos e intervalo de almoço
-    const normDur = Number(metaAgenda?.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
-    const retDur = Number(metaAgenda?.returnSlotDurationMinutes) || 25;
+    const normDur = Number(metaAgenda?.slotDurationMinutes || clinic.slotDurationMinutes) || 30;
+    const retDur = Number(metaAgenda?.returnSlotDurationMinutes) || 20;
     const returnSlotTimesList: string[] = Array.isArray(metaAgenda?.returnSlotTimes) ? metaAgenda.returnSlotTimes : [];
     const returnSet = new Set(returnSlotTimesList);
     const slots: string[] = [];
 
-    const [startH, startM] = dayConfig.start.split(':').map(Number);
-    const [endH, endM] = dayConfig.end.split(':').map(Number);
+    const [startH, startM] = (dayConfig.start || '08:00').split(':').map(Number);
+    const [endH, endM] = (dayConfig.end || '18:00').split(':').map(Number);
 
     const startTimeBRT = parseBRT(`${cleanDateStr}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00`);
     const endTimeBRT = parseBRT(`${cleanDateStr}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`);
@@ -254,17 +265,22 @@ export async function buscarHorariosDisponiveis(
       lunchEndTime = parseBRT(`${cleanDateStr}T${dayConfig.lunchEnd}:00`);
     }
 
-    // Buscar agendamentos existentes no dia
+    // Buscar agendamentos existentes no dia (usa pré-carregados se fornecido para velocidade extrema)
     const startOfDay = parseBRT(`${cleanDateStr}T00:00:00`);
     const endOfDay = parseBRT(`${cleanDateStr}T23:59:59`);
 
-    const existingAppointments = await prisma.appointment.findMany({
-      where: {
-        clinicId: clinic.id,
-        startTime: { gte: startOfDay, lte: endOfDay },
-        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
-      },
-    });
+    let existingAppointments = preloadedAppointments
+      ? preloadedAppointments.filter((a) => {
+          const st = new Date(a.startTime);
+          return st >= startOfDay && st <= endOfDay;
+        })
+      : await prisma.appointment.findMany({
+          where: {
+            clinicId: clinic.id,
+            startTime: { gte: startOfDay, lte: endOfDay },
+            status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
+          },
+        });
 
     const now = new Date();
     let currentTime = new Date(startTimeBRT);
@@ -335,7 +351,7 @@ export async function buscarHorariosDisponiveis(
     if (slots.length === 0) {
       return {
         success: true,
-        message: `Não encontramos horários livres disponíveis para o dia ${dataExtenso}${periodo !== 'qualquer' ? ` no período da ${periodo}` : ''}.`,
+        message: `Não encontramos horários livres disponíveis para ${dataExtenso}${periodo !== 'qualquer' ? ` no período da ${periodo}` : ''}.`,
         data: { date: dataDesejada, slots: [] },
       };
     }
@@ -566,11 +582,11 @@ export async function confirmarRemarcacao(
 }
 
 /**
- * 5. BUSCAR PRÓXIMOS DIAS E HORÁRIOS DISPONÍVEIS NA GRADE
+ * 5. BUSCAR PRÓXIMOS DIAS E HORÁRIOS DISPONÍVEIS NA GRADE (ALTA VELOCIDADE)
  */
 export async function buscarProximosHorariosDisponiveis(
   clinicId?: string,
-  diasDesejados: number = 2
+  diasDesejados: number = 3
 ): Promise<{
   success: boolean;
   message: string;
@@ -596,16 +612,27 @@ export async function buscarProximosHorariosDisponiveis(
       };
     }
 
+    // UMA ÚNICA QUERY PARA O INTERVALO INTEIRO DOS PRÓXIMOS 21 DIAS:
+    const now = new Date();
+    const future21Days = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+
+    const allAppointments = await prisma.appointment.findMany({
+      where: {
+        clinicId: clinic.id,
+        startTime: { gte: now, lte: future21Days },
+        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
+      },
+    });
+
     const daysWithSlots: Array<{
       dateISO: string;
       formattedDate: string;
       slots: string[];
     }> = [];
 
-    const now = new Date();
     const checkDate = new Date(now);
 
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 21; i++) {
       if (daysWithSlots.length >= diasDesejados) break;
 
       const year = checkDate.getFullYear();
@@ -613,7 +640,7 @@ export async function buscarProximosHorariosDisponiveis(
       const day = String(checkDate.getDate()).padStart(2, '0');
       const dateISO = `${year}-${month}-${day}`;
 
-      const res = await buscarHorariosDisponiveis(dateISO, 'qualquer', clinic.id);
+      const res = await buscarHorariosDisponiveis(dateISO, 'qualquer', clinic.id, allAppointments);
       if (res.success && res.data?.slots && res.data.slots.length > 0) {
         const formattedDate = checkDate.toLocaleDateString('pt-BR', {
           weekday: 'long',
@@ -635,15 +662,15 @@ export async function buscarProximosHorariosDisponiveis(
     if (daysWithSlots.length === 0) {
       return {
         success: true,
-        message: 'Não há horários disponíveis nos próximos dias.',
+        message: 'Não há horários disponíveis nos próximos dias úteis.',
         data: { days: [], formattedText: 'No momento, não localizamos horários livres na agenda nos próximos dias.' },
       };
     }
 
     const lines: string[] = [];
     for (const d of daysWithSlots) {
-      const displaySlots = d.slots.slice(0, 6).join(', ');
-      const maisSlots = d.slots.length > 6 ? ` e mais ${d.slots.length - 6} horários` : '';
+      const displaySlots = d.slots.slice(0, 4).join(', ');
+      const maisSlots = d.slots.length > 4 ? ` (e mais ${d.slots.length - 4} opções)` : '';
       lines.push(`📅 *${d.formattedDate}:*\n• ${displaySlots}${maisSlots}`);
     }
 
