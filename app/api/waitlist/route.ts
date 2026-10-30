@@ -7,6 +7,7 @@ import {
   notifyFirstInWaitlistForVacatedSlot,
   confirmWaitlistBooking,
   declineWaitlistSlot,
+  clearWaitlist,
 } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
@@ -91,11 +92,17 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE /api/waitlist - Remover da fila
+// DELETE /api/waitlist - Remover da fila ou zerar fila
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const all = searchParams.get('all');
+
+    if (all === 'true' || id === 'all') {
+      clearWaitlist();
+      return NextResponse.json({ success: true, message: 'Fila de espera zerada com sucesso.' });
+    }
 
     if (!id) {
       return NextResponse.json({ error: 'ID é obrigatório.' }, { status: 400 });

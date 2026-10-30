@@ -356,10 +356,10 @@ export default function Dashboard() {
     fetchWaitlist();
   }, [filterDate, filterStatus]);
 
-  async function fetchWaitlist() {
+  async function fetchWaitlist(silent = false) {
     try {
-      setLoadingWaitlist(true);
-      const res = await fetch('/api/waitlist');
+      if (!silent) setLoadingWaitlist(true);
+      const res = await fetch('/api/waitlist', { cache: 'no-store' });
       const data = await res.json();
       if (data.waitlist) {
         setWaitlist(data.waitlist);
@@ -367,9 +367,31 @@ export default function Dashboard() {
     } catch (e) {
       console.error('Erro ao buscar fila de espera:', e);
     } finally {
-      setLoadingWaitlist(false);
+      if (!silent) setLoadingWaitlist(false);
     }
   }
+
+  // Polling automático da Fila de Espera em tempo real (atualiza sem precisar dar F5)
+  useEffect(() => {
+    fetchWaitlist(true);
+
+    // Quando na aba 'fila', atualiza a cada 2.5 segundos; nas outras, a cada 10 segundos
+    const intervalMs = activeTab === 'fila' ? 2500 : 10000;
+    const interval = setInterval(() => {
+      fetchWaitlist(true);
+    }, intervalMs);
+
+    // Re-busca imediatamente se o usuário voltar para a janela/aba
+    const handleFocus = () => {
+      fetchWaitlist(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeTab]);
 
   async function fetchData() {
     try {
@@ -1353,6 +1375,23 @@ export default function Dashboard() {
       setTimeout(() => setWaitlistNotice(null), 8000);
     } catch (err: any) {
       alert(`Erro: ${err.message}`);
+    }
+  }
+
+  async function handleClearAllWaitlist() {
+    if (!window.confirm('Deseja realmente apagar e zerar todos os pacientes da Fila de Espera para iniciar novos testes?')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/waitlist?all=true', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchWaitlist();
+        setWaitlistNotice('Fila de espera zerada com sucesso!');
+        setTimeout(() => setWaitlistNotice(null), 6000);
+      }
+    } catch (err: any) {
+      alert(`Erro ao zerar fila: ${err.message}`);
     }
   }
 
@@ -2360,7 +2399,29 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Tempo Real
+                  </span>
+
+                  <button
+                    onClick={() => fetchWaitlist()}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                    title="Atualizar lista agora"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingWaitlist ? 'animate-spin text-teal-600' : ''}`} />
+                  </button>
+
+                  <button
+                    onClick={handleClearAllWaitlist}
+                    className="px-3 py-2 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer shadow-2xs"
+                    title="Apagar e zerar todos os pacientes da fila de espera"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Zerar Fila</span>
+                  </button>
+
                   <button
                     onClick={handleTriggerWaitlistTest}
                     className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 cursor-pointer"

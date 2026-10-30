@@ -24,57 +24,8 @@ export interface WaitlistEntry {
 
 const WAITLIST_FILE_PATH = path.join(process.cwd(), 'data', 'waitlist.json');
 
-// Mock inicial realista se o arquivo não existir
-const INITIAL_WAITLIST: WaitlistEntry[] = [
-  {
-    id: 'wait-1',
-    patientName: 'Maria Helena Ribeiro',
-    patientPhone: '+5511987654321',
-    preferredShift: 'Tarde',
-    preferredDays: 'Segundas e Quartas',
-    status: 'AGUARDANDO',
-    notes: 'Prioridade: retorno pós-exame. Pode a partir das 14h.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    notifiedAt: null,
-    offeredSlot: null,
-  },
-  {
-    id: 'wait-2',
-    patientName: 'Carlos Eduardo Santos',
-    patientPhone: '+5511976543210',
-    preferredShift: 'Manhã',
-    preferredDays: 'Qualquer dia útil',
-    status: 'AGUARDANDO',
-    notes: 'Queixa de dor no peito recorrente. Urgente se liberar vaga.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
-    notifiedAt: null,
-    offeredSlot: null,
-  },
-  {
-    id: 'wait-3',
-    patientName: 'Ana Beatriz Souza',
-    patientPhone: '+5511965432109',
-    preferredShift: 'Qualquer Horário',
-    preferredDays: 'Terças e Quintas',
-    status: 'AGUARDANDO',
-    notes: 'Paciente flexível, mora próximo à clínica.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    notifiedAt: null,
-    offeredSlot: null,
-  },
-  {
-    id: 'wait-4',
-    patientName: 'Roberto Alencar Filho',
-    patientPhone: '+5511954321098',
-    preferredShift: 'Tarde',
-    preferredDays: 'Sexta-feira',
-    status: 'AGUARDANDO',
-    notes: 'Aguardando encaixe para check-up de rotina.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-    notifiedAt: null,
-    offeredSlot: null,
-  },
-];
+// Lista inicial zerada (começa sem nenhum paciente para testes limpos)
+const INITIAL_WAITLIST: WaitlistEntry[] = [];
 
 let inMemoryWaitlist: WaitlistEntry[] | null = null;
 
@@ -116,6 +67,14 @@ export function saveWaitlist(list: WaitlistEntry[]): void {
   } catch (err) {
     console.warn('⚠️ [Waitlist] Erro ao salvar arquivo:', err);
   }
+}
+
+/**
+ * Zera completamente a fila de espera
+ */
+export function clearWaitlist(): void {
+  inMemoryWaitlist = [];
+  saveWaitlist([]);
 }
 
 /**
