@@ -76,7 +76,8 @@ import {
 
 function formatPhoneBR(phone: string | null | undefined): string {
   if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
+  const cleanBase = phone.split('-')[0].split('#')[0];
+  const digits = cleanBase.replace(/\D/g, '');
   const localDigits = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
 
   if (localDigits.length === 11) {
@@ -84,7 +85,7 @@ function formatPhoneBR(phone: string | null | undefined): string {
   } else if (localDigits.length === 10) {
     return `(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 6)}-${localDigits.slice(6)}`;
   }
-  return phone;
+  return cleanBase;
 }
 
 function applyPhoneMask(value: string): string {
@@ -4537,9 +4538,17 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase font-bold text-slate-400">Paciente</span>
                 <p className="font-bold text-slate-900 text-sm">{selectedApptDetails.patient?.name}</p>
                 <p className="text-slate-600 font-mono">{formatPhoneBR(selectedApptDetails.patient?.phone)}</p>
-                {selectedApptDetails.patient?.cpf && (
-                  <p className="text-slate-500 font-mono text-[11px]">CPF: {applyCPFMask(selectedApptDetails.patient.cpf)}</p>
-                )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-500 text-[11px] font-mono">
+                  {selectedApptDetails.patient?.birthDate && (
+                    <span>Nascimento: {selectedApptDetails.patient.birthDate}</span>
+                  )}
+                  {selectedApptDetails.patient?.cep && (
+                    <span>CEP: {selectedApptDetails.patient.cep}</span>
+                  )}
+                  {selectedApptDetails.patient?.cpf && (
+                    <span>CPF: {applyCPFMask(selectedApptDetails.patient.cpf)}</span>
+                  )}
+                </div>
               </div>
 
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
@@ -5003,13 +5012,13 @@ export default function Dashboard() {
               {/* BLOCO 3: OBSERVAÇÕES */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Observações Clínicas / Preferências <span className="text-slate-400 font-normal">(opcional)</span>
+                  Observações <span className="text-slate-400 font-normal">(opcional)</span>
                 </label>
                 <textarea
                   rows={2}
                   value={patNotes}
                   onChange={(e) => setPatNotes(e.target.value)}
-                  placeholder="Ex: Alergias, histórico familiar ou observações relevantes..."
+                  placeholder="Ex: Histórico, preferências ou anotações cadastrais relevantes..."
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 font-medium text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
                 />
               </div>

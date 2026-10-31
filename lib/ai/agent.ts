@@ -8,6 +8,7 @@ import {
   confirmarRemarcacao,
   criarNovoAgendamento,
   confirmarPresencaConsulta,
+  cadastrarPaciente,
   transferirParaHumano,
   adicionarFilaEspera,
   obterInformacoesClinica,
@@ -60,25 +61,43 @@ DIRETRIZES DE COMUNICAÇÃO:
    - Use parágrafos curtos e mensagens bem formatadas, ideais para leitura no WhatsApp.
    - Use negrito para destacar *datas*, *horários* e *nomes de médicos*.
 
-2. **Fluxo Natural e Resolutivo de Agendamento:**
+2. **Cadastro Obrigatório de Paciente (REGRA IMPERATIVA):**
+   - NENHUMA pessoa pode ter uma consulta marcada sem estar devidamente cadastrada no sistema da clínica.
+   - Os dados principais e obrigatórios para o cadastro são:
+     • **Nome completo**
+     • **Data de nascimento** (formato DD/MM/AAAA)
+     • **CEP de onde mora**
+   - **Agendamento para OUTRA PESSOA (Terceiro / Familiar):**
+     Se o titular do WhatsApp estiver marcando para outra pessoa (filho, pai, mãe, cônjuge, etc., como "Quero marcar para o Edyr José"):
+     - Peça com gentileza os 3 dados obrigatórios dessa pessoa:
+       "Com certeza! Para realizarmos o cadastro do(a) [Nome] no sistema da clínica e garantirmos a consulta, você poderia me informar:
+       • *Nome completo dele(a)*
+       • *Data de nascimento*
+       • *CEP de onde mora*?"
+     - Assim que o usuário informar os dados, acione IMEDIATAMENTE a ferramenta 'cadastrar_paciente' com 'e_para_outra_pessoa: true'.
+   - **Agendamento para o PRÓPRIO TITULAR:**
+     Se o titular estiver marcando para si mesmo e for o primeiro contato ou ainda não tiver informado data de nascimento e CEP, solicite esses 3 dados de forma acolhedora e chame 'cadastrar_paciente' com 'e_para_outra_pessoa: false'.
+   - *Importante:* No consultório, caso o médico queira, o cadastro poderá ser complementado presencialmente com outros dados.
+
+3. **Fluxo Natural e Resolutivo de Agendamento:**
    - Cumprimente o paciente chamando-o pelo primeiro nome se souber.
    - **Próximo Horário / Vaga Mais Breve:** Se o paciente perguntar pelo *próximo horário*, *horário mais breve*, *vaga mais próxima* ou similar: NUNCA faça perguntas adicionais como "que dia prefere?". Execute IMEDIATAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' e apresente os dias e horários livres mais próximos!
    - Se o paciente indicar um dia ou período ("quinta-feira à tarde", "segunda pela manhã"), chame 'buscar_horarios_disponiveis' para a data solicitada.
    - NUNCA invente horários. Sempre consulte as ferramentas reais.
    - Apresente de 2 a 4 opções de horários de forma limpa.
-   - Ao paciente escolher o horário desejado, **solicite a confirmação ativa** resumindo claramente os detalhes:
+   - Ao paciente escolher o horário desejado e os dados cadastrais estiverem preenchidos, **solicite a confirmação ativa** resumindo claramente os detalhes:
      "Perfeito! Vou confirmar seu agendamento:
-     • *Paciente:* [Nome do Paciente]
+     • *Paciente:* [Nome Completo do Paciente]
      • *Data:* [Dia da semana, DD/MM/AAAA]
      • *Horário:* [HH:mm]
      • *Profissional:* [Nome da médica/médico]
      Posso confirmar para você?"
    - **EXECUÇÃO IMEDIATA DA GRAVAÇÃO:** Assim que o paciente confirmar (ex: "sim", "sim. obrigado!", "pode confirmar", "ok", "perfeito", "confirmado"):
-     Você DEVE OBRIGATORIAMENTE executar a ferramenta 'criar_novo_agendamento' enviando 'nova_data_hora' (no formato AAAA-MM-DD HH:mm, por exemplo: '2026-11-18 14:15') e 'beneficiario_nome'.
+     Você DEVE OBRIGATORIAMENTE executar a ferramenta 'criar_novo_agendamento' enviando 'nova_data_hora' (no formato AAAA-MM-DD HH:mm, por exemplo: '2026-11-18 14:15') e 'beneficiario_nome' (o nome completo da pessoa que vai consultar).
      NUNCA reenvie perguntas de confirmação se ele já confirmou. Grave imediatamente no banco de dados através da ferramenta.
    - Após a execução com sucesso da ferramenta, conclua confirmando com carinho que a consulta foi agendada e registrada com sucesso no sistema, informando o endereço do consultório e desejando um ótimo dia!
 
-3. **Continuidade de Contexto & Lista de Espera:**
+4. **Continuidade de Contexto & Lista de Espera:**
    - Se você perguntou ou ofereceu colocar o paciente na Lista de Espera (ex: "Se você preferir, posso colocar seu nome na lista de espera... O que você acha?") e o paciente responder "Pode ser", "Sim", "Ok", "Quero", "Pode colocar" ou similar:
      Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
@@ -159,8 +178,41 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'cadastrar_paciente',
+      description: 'Cadastra ou atualiza um paciente no sistema da clínica com os dados obrigatórios (Nome completo, Data de nascimento e CEP). OBRIGATÓRIO executar antes de criar qualquer agendamento.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome_completo: {
+            type: 'string',
+            description: 'Nome completo da pessoa que passará pela consulta médica.',
+          },
+          data_nascimento: {
+            type: 'string',
+            description: 'Data de nascimento da pessoa no formato DD/MM/AAAA (ex: 15/05/1980).',
+          },
+          cep: {
+            type: 'string',
+            description: 'CEP de residência da pessoa (ex: 12245-000).',
+          },
+          e_para_outra_pessoa: {
+            type: 'boolean',
+            description: 'True se o titular do WhatsApp estiver agendando para outra pessoa (filho, cônjuge, pai, etc.); False se for para si mesmo.',
+          },
+          telefone_proprio: {
+            type: 'string',
+            description: 'Telefone próprio do paciente (opcional caso tenha número diferente do titular).',
+          },
+        },
+        required: ['nome_completo', 'data_nascimento', 'cep'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'criar_novo_agendamento',
-      description: 'Efetiva um novo agendamento de consulta na clínica após a confirmação clara do paciente.',
+      description: 'Efetiva um novo agendamento de consulta na clínica após a confirmação clara do paciente e após os dados cadastrais estarem preenchidos.',
       parameters: {
         type: 'object',
         properties: {
@@ -170,7 +222,15 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           beneficiario_nome: {
             type: 'string',
-            description: 'Nome da pessoa que receberá o atendimento médico.',
+            description: 'Nome completo da pessoa que receberá o atendimento médico.',
+          },
+          beneficiario_nascimento: {
+            type: 'string',
+            description: 'Data de nascimento do paciente (DD/MM/AAAA).',
+          },
+          beneficiario_cep: {
+            type: 'string',
+            description: 'CEP de residência do paciente.',
           },
         },
         required: ['nova_data_hora'],
@@ -307,8 +367,25 @@ async function executeToolCall(
       return await buscarProximosHorariosDisponiveis(clinicId, 3);
     case 'buscar_horarios_disponiveis':
       return await buscarHorariosDisponiveis(toolArgs.data_desejada, toolArgs.periodo, clinicId);
+    case 'cadastrar_paciente':
+      return await cadastrarPaciente({
+        telefoneTitular: patientPhone || '',
+        nomeCompleto: toolArgs.nome_completo,
+        dataNascimento: toolArgs.data_nascimento,
+        cep: toolArgs.cep,
+        eParaOutraPessoa: Boolean(toolArgs.e_para_outra_pessoa),
+        telefoneProprio: toolArgs.telefone_proprio,
+        clinicId,
+      });
     case 'criar_novo_agendamento':
-      return await criarNovoAgendamento(patientId || '', toolArgs.nova_data_hora, clinicId, toolArgs.beneficiario_nome);
+      return await criarNovoAgendamento(
+        patientId || '',
+        toolArgs.nova_data_hora,
+        clinicId,
+        toolArgs.beneficiario_nome,
+        toolArgs.beneficiario_nascimento,
+        toolArgs.beneficiario_cep
+      );
     case 'cancelar_consulta':
       return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo);
     case 'confirmar_remarcacao':

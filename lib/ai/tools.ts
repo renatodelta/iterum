@@ -832,7 +832,10 @@ export async function criarNovoAgendamento(
   patientId: string,
   novaDataHora: string, // YYYY-MM-DD HH:mm
   clinicId?: string,
-  beneficiarioNome?: string
+  beneficiarioNome?: string,
+  beneficiarioNascimento?: string,
+  beneficiarioCep?: string,
+  beneficiarioTelefone?: string
 ): Promise<ToolResult> {
   try {
     const patient = await prisma.patient.findUnique({
@@ -840,7 +843,7 @@ export async function criarNovoAgendamento(
     });
 
     if (!patient) {
-      return { success: false, message: 'Paciente não encontrado para realizar o agendamento.' };
+      return { success: false, message: 'Paciente titular não encontrado para realizar o agendamento.' };
     }
 
     const clinic = clinicId
@@ -949,15 +952,86 @@ export async function criarNovoAgendamento(
       };
     }
 
-    const notes =
-      beneficiarioNome && beneficiarioNome.toLowerCase() !== patient.name.toLowerCase()
-        ? `Agendamento para: ${beneficiarioNome} (Titular WhatsApp: ${patient.name})`
-        : 'Agendado via WhatsApp Bot (1º Contato)';
+    // GESTÃO CADASTRO DO PACIENTE: Vincular ao paciente real (titular ou terceiro)
+    let targetPatient = patient;
+    let notes = 'Agendado via WhatsApp Bot (1º Contato)';
+
+    if (beneficiarioNome && beneficiarioNome.trim().toLowerCase() !== patient.name.trim().toLowerCase()) {
+      const cleanBeneficiario = beneficiarioNome.trim();
+      let beneficiary = await prisma.patient.findFirst({
+        where: {
+          clinicId: clinic.id,
+          name: { equals: cleanBeneficiario, mode: 'insensitive' },
+        },
+      });
+
+      if (!beneficiary) {
+        // Gerar telefone identificador seguro com sufixo caso compartilhe o telefone do titular
+        const basePhone = patient.phone.split('-')[0];
+        let candidatePhone = basePhone;
+        let suffix = 2;
+        while (await prisma.patient.findFirst({ where: { clinicId: clinic.id, phone: candidatePhone } })) {
+          candidatePhone = `${basePhone}-${suffix}`;
+          suffix++;
+        }
+
+        beneficiary = await prisma.patient.create({
+          data: {
+            clinicId: clinic.id,
+            name: cleanBeneficiario,
+            phone: beneficiarioTelefone ? beneficiarioTelefone.replace(/\D/g, '') : candidatePhone,
+            birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : null,
+            cep: beneficiarioCep ? beneficiarioCep.trim() : null,
+            notes: `Cadastrado via WhatsApp por titular: ${patient.name} (${patient.phone})`,
+          },
+        });
+      } else {
+        if (beneficiarioNascimento || beneficiarioCep) {
+          beneficiary = await prisma.patient.update({
+            where: { id: beneficiary.id },
+            data: {
+              birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : beneficiary.birthDate,
+              cep: beneficiarioCep ? beneficiarioCep.trim() : beneficiary.cep,
+            },
+          });
+        }
+      }
+
+      targetPatient = beneficiary;
+      notes = `Agendamento para: ${cleanBeneficiario} (Titular WhatsApp: ${patient.name})`;
+    } else {
+      // Agendamento para o próprio titular
+      if (beneficiarioNascimento || beneficiarioCep) {
+        targetPatient = await prisma.patient.update({
+          where: { id: patient.id },
+          data: {
+            birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : patient.birthDate,
+            cep: beneficiarioCep ? beneficiarioCep.trim() : patient.cep,
+          },
+        });
+      }
+    }
+
+    // REGRA DE OURO: Nenhuma pessoa pode marcar consulta sem estar cadastrada (Nome, Nascimento e CEP)
+    if (!targetPatient.birthDate || !targetPatient.cep) {
+      return {
+        success: false,
+        message: `Para registrar a consulta de ${targetPatient.name}, precisamos concluir o cadastro obrigatório no sistema com: Nome completo, Data de nascimento e CEP de onde mora. Por favor, solicite esses dados ao paciente antes de finalizar o agendamento.`,
+        data: {
+          needsRegistration: true,
+          patientName: targetPatient.name,
+          missingFields: [
+            ...(!targetPatient.birthDate ? ['data_nascimento'] : []),
+            ...(!targetPatient.cep ? ['cep'] : []),
+          ],
+        },
+      };
+    }
 
     const newAppointment = await prisma.appointment.create({
       data: {
         clinicId: clinic.id,
-        patientId: patient.id,
+        patientId: targetPatient.id, // VINCULADO DIRETAMENTE AO PACIENTE DA CONSULTA!
         startTime: newStart,
         endTime: newEnd,
         status: 'AGENDADO',
@@ -968,12 +1042,12 @@ export async function criarNovoAgendamento(
     const dataFormatada = formatBRT(newStart, true);
     return {
       success: true,
-      message: `Agendamento confirmado para ${dataFormatada}!`,
+      message: `Agendamento confirmado para ${dataFormatada}! Paciente: ${targetPatient.name}.`,
       data: {
         appointmentId: newAppointment.id,
         startTime: newStart.toISOString(),
         endTime: newEnd.toISOString(),
-        patientName: beneficiarioNome || patient.name,
+        patientName: targetPatient.name,
       },
     };
   } catch (error: any) {
@@ -1189,6 +1263,149 @@ export async function confirmarPresencaConsulta(
     return {
       success: false,
       message: `Erro ao confirmar presença: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * 11. CADASTRAR OU ATUALIZAR PACIENTE NO SISTEMA
+ * Obrigatório: Nome completo, Data de Nascimento e CEP antes de qualquer agendamento.
+ */
+export async function cadastrarPaciente({
+  telefoneTitular,
+  nomeCompleto,
+  dataNascimento,
+  cep,
+  eParaOutraPessoa = false,
+  telefoneProprio,
+  clinicId,
+}: {
+  telefoneTitular: string;
+  nomeCompleto: string;
+  dataNascimento: string;
+  cep: string;
+  eParaOutraPessoa?: boolean;
+  telefoneProprio?: string;
+  clinicId?: string;
+}): Promise<ToolResult> {
+  try {
+    const clinic = clinicId
+      ? await prisma.clinic.findUnique({ where: { id: clinicId } })
+      : await prisma.clinic.findFirst();
+
+    if (!clinic) {
+      return { success: false, message: 'Clínica não encontrada no sistema.' };
+    }
+
+    const cleanTitularPhone = telefoneTitular.replace(/\D/g, '');
+    const formattedTitularPhone = cleanTitularPhone.startsWith('55')
+      ? `+${cleanTitularPhone}`
+      : `+55${cleanTitularPhone}`;
+
+    // Localizar ou registrar o paciente titular do WhatsApp
+    let titular = await prisma.patient.findFirst({
+      where: {
+        clinicId: clinic.id,
+        phone: { contains: cleanTitularPhone.slice(-8) },
+      },
+    });
+
+    if (!titular) {
+      titular = await prisma.patient.create({
+        data: {
+          clinicId: clinic.id,
+          name: eParaOutraPessoa ? 'Titular WhatsApp' : nomeCompleto.trim(),
+          phone: formattedTitularPhone,
+        },
+      });
+    }
+
+    // CASO 1: O titular está se cadastrando para si mesmo
+    if (!eParaOutraPessoa) {
+      const updatedTitular = await prisma.patient.update({
+        where: { id: titular.id },
+        data: {
+          name: nomeCompleto.trim(),
+          birthDate: dataNascimento.trim(),
+          cep: cep.trim(),
+        },
+      });
+
+      return {
+        success: true,
+        message: `Cadastro de ${updatedTitular.name} atualizado com sucesso no sistema da clínica! (Nascimento: ${updatedTitular.birthDate}, CEP: ${updatedTitular.cep})`,
+        data: {
+          patientId: updatedTitular.id,
+          patientName: updatedTitular.name,
+          birthDate: updatedTitular.birthDate,
+          cep: updatedTitular.cep,
+          phone: updatedTitular.phone,
+        },
+      };
+    }
+
+    // CASO 2: O titular está cadastrando OUTRA pessoa (beneficiário / terceiro)
+    const cleanNome = nomeCompleto.trim();
+    let beneficiary = await prisma.patient.findFirst({
+      where: {
+        clinicId: clinic.id,
+        name: { equals: cleanNome, mode: 'insensitive' },
+      },
+    });
+
+    if (beneficiary) {
+      beneficiary = await prisma.patient.update({
+        where: { id: beneficiary.id },
+        data: {
+          birthDate: dataNascimento ? dataNascimento.trim() : beneficiary.birthDate,
+          cep: cep ? cep.trim() : beneficiary.cep,
+        },
+      });
+    } else {
+      let phoneToUse = telefoneProprio ? telefoneProprio.replace(/\D/g, '') : '';
+      if (phoneToUse) {
+        phoneToUse = phoneToUse.startsWith('55') ? `+${phoneToUse}` : `+55${phoneToUse}`;
+      } else {
+        const basePhone = formattedTitularPhone.split('-')[0];
+        let candidatePhone = basePhone;
+        let suffix = 2;
+        while (await prisma.patient.findFirst({ where: { clinicId: clinic.id, phone: candidatePhone } })) {
+          candidatePhone = `${basePhone}-${suffix}`;
+          suffix++;
+        }
+        phoneToUse = candidatePhone;
+      }
+
+      beneficiary = await prisma.patient.create({
+        data: {
+          clinicId: clinic.id,
+          name: cleanNome,
+          phone: phoneToUse,
+          birthDate: dataNascimento ? dataNascimento.trim() : null,
+          cep: cep ? cep.trim() : null,
+          notes: `Cadastrado via WhatsApp por titular: ${titular.name} (${titular.phone})`,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Paciente ${beneficiary.name} cadastrado(a) com sucesso no sistema da clínica! (Nascimento: ${beneficiary.birthDate}, CEP: ${beneficiary.cep})`,
+      data: {
+        patientId: beneficiary.id,
+        patientName: beneficiary.name,
+        birthDate: beneficiary.birthDate,
+        cep: beneficiary.cep,
+        phone: beneficiary.phone,
+        titularName: titular.name,
+        titularPhone: titular.phone,
+      },
+    };
+  } catch (error: any) {
+    console.error('Erro em cadastrarPaciente:', error);
+    return {
+      success: false,
+      message: `Erro ao cadastrar paciente: ${error.message}`,
     };
   }
 }
