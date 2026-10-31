@@ -395,10 +395,30 @@ export default function Dashboard() {
     };
   }, [activeTab]);
 
-  async function fetchData() {
+  // Polling automático da Agenda e Consultas em tempo real (atualiza instantaneamente sem precisar dar F5)
+  useEffect(() => {
+    // Sincroniza a cada 3.5 segundos na aba de agenda (10s em outras abas)
+    const intervalMs = activeTab === 'agenda' ? 3500 : 10000;
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, intervalMs);
+
+    const handleFocus = () => {
+      fetchData(true);
+      fetchPatients(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeTab, filterDate, filterStatus]);
+
+  async function fetchData(silent = false) {
     try {
-      setLoading(true);
-      const resSettings = await fetch('/api/clinic/settings');
+      if (!silent) setLoading(true);
+      const resSettings = await fetch('/api/clinic/settings', { cache: 'no-store' });
       const dataSettings = await resSettings.json();
       if (dataSettings.clinic) {
         setClinic(dataSettings.clinic);
@@ -421,7 +441,7 @@ export default function Dashboard() {
       if (filterDate) apptUrl += `date=${filterDate}&`;
       if (filterStatus && filterStatus !== 'ALL') apptUrl += `status=${filterStatus}`;
 
-      const resAppts = await fetch(apptUrl);
+      const resAppts = await fetch(apptUrl, { cache: 'no-store' });
       const dataAppts = await resAppts.json();
       if (dataAppts.appointments) {
         setAppointments(dataAppts.appointments);
@@ -429,14 +449,14 @@ export default function Dashboard() {
     } catch (e) {
       console.error('Erro ao carregar dados:', e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
-  async function fetchPatients() {
+  async function fetchPatients(silent = false) {
     try {
-      setLoadingPatients(true);
-      const res = await fetch('/api/patients');
+      if (!silent) setLoadingPatients(true);
+      const res = await fetch('/api/patients', { cache: 'no-store' });
       const data = await res.json();
       if (data.patients) {
         setPatients(data.patients);
@@ -451,7 +471,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Erro ao carregar pacientes:', err);
     } finally {
-      setLoadingPatients(false);
+      if (!silent) setLoadingPatients(false);
     }
   }
 

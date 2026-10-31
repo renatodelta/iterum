@@ -1087,6 +1087,20 @@ export default function GoogleCalendarView({
                     return h === hour;
                   });
 
+                  // Unificar e ordenar cronologicamente por horário de início dentro da hora
+                  const itemsInHour = [
+                    ...apptsInHour.map((appt) => {
+                      const d = new Date(appt.startTime);
+                      const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                      return { kind: 'appt' as const, time: timeStr, appt };
+                    }),
+                    ...vacantInHour.map((vacSlot) => ({
+                      kind: 'vacant' as const,
+                      time: vacSlot.time,
+                      vacSlot,
+                    })),
+                  ].sort((a, b) => a.time.localeCompare(b.time));
+
                   return (
                     <div
                       key={hour}
@@ -1097,91 +1111,93 @@ export default function GoogleCalendarView({
                         {hourFormatted}
                       </div>
 
-                      {/* CONTEÚDO DA HORA (CONSULTAS OU SLOTS VAGOS) */}
+                      {/* CONTEÚDO DA HORA (CONSULTAS OU SLOTS VAGOS ORDENADOS CRONOLOGICAMENTE) */}
                       <div className="flex-1 pl-2 pr-3 py-1 flex flex-col gap-1.5 justify-center border-l border-[#dadce0]">
-                        {/* 1. CONSULTAS AGENDADAS NESSE HORÁRIO */}
-                        {apptsInHour.map((appt) => {
-                          const badge = getAppointmentBadge(appt);
-                          const start = new Date(appt.startTime);
-                          const end = new Date(appt.endTime || appt.startTime);
-                          const startTimeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                          const endTimeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        {itemsInHour.map((item) => {
+                          if (item.kind === 'appt') {
+                            const appt = item.appt;
+                            const badge = getAppointmentBadge(appt);
+                            const start = new Date(appt.startTime);
+                            const end = new Date(appt.endTime || appt.startTime);
+                            const startTimeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const endTimeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+                            return (
+                              <div
+                                key={appt.id}
+                                onClick={() => onOpenApptDetails(appt)}
+                                className={`p-2.5 rounded-xl shadow-xs cursor-pointer transition active:scale-[0.99] hover:shadow-md ${badge.bg} ${badge.border} flex items-center justify-between gap-2`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-extrabold text-sm truncate">
+                                      {appt.patient?.name || 'Paciente sem nome'}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                      badge.isEncaixe
+                                        ? 'bg-amber-300 text-purple-950 font-black shadow-xs'
+                                        : badge.isRetorno
+                                        ? 'bg-sky-100 text-sky-950 font-black shadow-xs'
+                                        : 'bg-white/20 text-white'
+                                    } shrink-0`}>
+                                      {badge.tag}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-white/90 flex items-center gap-2 mt-0.5 truncate">
+                                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{startTimeStr} - {endTimeStr}</span>
+                                    {appt.patient?.phone && (
+                                      <span className="truncate opacity-80">• {appt.patient.phone}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenApptDetails(appt);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold shrink-0 transition"
+                                >
+                                  Ficha Cadastral
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          const vacSlot = item.vacSlot;
                           return (
                             <div
-                              key={appt.id}
-                              onClick={() => onOpenApptDetails(appt)}
-                              className={`p-2.5 rounded-xl shadow-xs cursor-pointer transition active:scale-[0.99] hover:shadow-md ${badge.bg} ${badge.border} flex items-center justify-between gap-2`}
+                              key={vacSlot.time}
+                              onClick={() => onOpenNewAppt(selectedDate, vacSlot.time, vacSlot.isReturn, vacSlot.duration)}
+                              className={`p-2.5 rounded-xl border border-dashed transition active:scale-[0.99] group/slot cursor-pointer flex items-center justify-between ${
+                                vacSlot.isReturn
+                                  ? 'border-sky-300 bg-sky-50/70 hover:bg-sky-100/80 hover:border-sky-400 text-sky-950 shadow-2xs'
+                                  : 'border-amber-300 bg-amber-50/60 hover:bg-amber-100/70 hover:border-amber-400 text-amber-900'
+                              }`}
                             >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-extrabold text-sm truncate">
-                                    {appt.patient?.name || 'Paciente sem nome'}
-                                  </span>
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                    badge.isEncaixe
-                                      ? 'bg-amber-300 text-purple-950 font-black shadow-xs'
-                                      : badge.isRetorno
-                                      ? 'bg-sky-100 text-sky-950 font-black shadow-xs'
-                                      : 'bg-white/20 text-white'
-                                  } shrink-0`}>
-                                    {badge.tag}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-white/90 flex items-center gap-2 mt-0.5 truncate">
-                                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                                  <span>{startTimeStr} - {endTimeStr}</span>
-                                  {appt.patient?.phone && (
-                                    <span className="truncate opacity-80">• {appt.patient.phone}</span>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`w-2.5 h-2.5 rounded-full ${vacSlot.isReturn ? 'bg-sky-500' : 'bg-amber-500'}`}></span>
+                                <span className="font-extrabold text-xs">{vacSlot.time} - {vacSlot.endTime}</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  vacSlot.isReturn ? 'bg-sky-100 text-sky-800 border border-sky-200' : 'bg-amber-100/80 text-amber-800'
+                                }`}>
+                                  {vacSlot.isReturn ? `Retorno (${vacSlot.duration}m)` : `1ª Vez (${vacSlot.duration}m)`}
+                                </span>
+                                <span className="text-xs text-slate-500 font-medium hidden sm:inline">• Horário Vago Disponível</span>
                               </div>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenApptDetails(appt);
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold shrink-0 transition"
-                              >
-                                Ficha Cadastral
-                              </button>
+                              <span className={`text-[11px] font-extrabold flex items-center gap-1 shrink-0 ${
+                                vacSlot.isReturn ? 'text-sky-700 group-hover/slot:text-sky-900' : 'text-amber-700 group-hover/slot:text-amber-900'
+                              }`}>
+                                <Plus className="w-3 h-3 stroke-[3]" />
+                                Agendar
+                              </span>
                             </div>
                           );
                         })}
 
-                        {/* 2. HORÁRIOS VAGOS DISPONÍVEIS NESTE INTERVALO */}
-                        {vacantInHour.map((vacSlot) => (
-                          <div
-                            key={vacSlot.time}
-                            onClick={() => onOpenNewAppt(selectedDate, vacSlot.time, vacSlot.isReturn, vacSlot.duration)}
-                            className={`p-2.5 rounded-xl border border-dashed transition active:scale-[0.99] group/slot cursor-pointer flex items-center justify-between ${
-                              vacSlot.isReturn
-                                ? 'border-sky-300 bg-sky-50/70 hover:bg-sky-100/80 hover:border-sky-400 text-sky-950 shadow-2xs'
-                                : 'border-amber-300 bg-amber-50/60 hover:bg-amber-100/70 hover:border-amber-400 text-amber-900'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`w-2.5 h-2.5 rounded-full ${vacSlot.isReturn ? 'bg-sky-500' : 'bg-amber-500'}`}></span>
-                              <span className="font-extrabold text-xs">{vacSlot.time} - {vacSlot.endTime}</span>
-                              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
-                                vacSlot.isReturn ? 'bg-sky-100 text-sky-800 border border-sky-200' : 'bg-amber-100/80 text-amber-800'
-                              }`}>
-                                {vacSlot.isReturn ? `Retorno (${vacSlot.duration}m)` : `1ª Vez (${vacSlot.duration}m)`}
-                              </span>
-                              <span className="text-xs text-slate-500 font-medium hidden sm:inline">• Horário Vago Disponível</span>
-                            </div>
-                            <span className={`text-[11px] font-extrabold flex items-center gap-1 shrink-0 ${
-                              vacSlot.isReturn ? 'text-sky-700 group-hover/slot:text-sky-900' : 'text-amber-700 group-hover/slot:text-amber-900'
-                            }`}>
-                              <Plus className="w-3 h-3 stroke-[3]" />
-                              Agendar
-                            </span>
-                          </div>
-                        ))}
-
                         {/* Se não houver nada agendado nem vago (fora de expediente) */}
-                        {apptsInHour.length === 0 && vacantInHour.length === 0 && (
+                        {itemsInHour.length === 0 && (
                           currentDayInfo.isActive ? (
                             <div
                               onClick={() => onOpenNewAppt(selectedDate, hourFormatted)}
@@ -1266,6 +1282,19 @@ export default function GoogleCalendarView({
                           return h === hour;
                         });
 
+                        const colItems = [
+                          ...apptsInHour.map((appt) => {
+                            const d = new Date(appt.startTime);
+                            const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                            return { kind: 'appt' as const, time: timeStr, appt };
+                          }),
+                          ...vacantInHour.map((v) => ({
+                            kind: 'vacant' as const,
+                            time: v.time,
+                            v,
+                          })),
+                        ].sort((a, b) => a.time.localeCompare(b.time));
+
                         return (
                           <div
                             key={colIdx}
@@ -1280,47 +1309,49 @@ export default function GoogleCalendarView({
                               }
                             }}
                           >
-                            {/* Consultas Agendadas */}
-                            {apptsInHour.map((appt) => {
-                              const badge = getAppointmentBadge(appt);
+                            {colItems.map((item) => {
+                              if (item.kind === 'appt') {
+                                const appt = item.appt;
+                                const badge = getAppointmentBadge(appt);
+                                return (
+                                  <div
+                                    key={appt.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenApptDetails(appt);
+                                    }}
+                                    className={`p-1.5 rounded-lg text-white ${badge.bg} shadow-xs truncate`}
+                                    title={`${appt.patient?.name} (${badge.tag})`}
+                                  >
+                                    <div className="text-[11px] font-bold truncate leading-tight">
+                                      {appt.patient?.name}
+                                    </div>
+                                    <div className="text-[9px] opacity-90 truncate">
+                                      {new Date(appt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {badge.tag}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              const v = item.v;
                               return (
                                 <div
-                                  key={appt.id}
+                                  key={v.time}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onOpenApptDetails(appt);
+                                    onOpenNewAppt(colDate, v.time, v.isReturn, v.duration);
                                   }}
-                                  className={`p-1.5 rounded-lg text-white ${badge.bg} shadow-xs truncate`}
-                                  title={`${appt.patient?.name} (${badge.tag})`}
+                                  className={`px-1.5 py-0.5 rounded border border-dashed text-[10px] font-bold flex items-center justify-between ${
+                                    v.isReturn
+                                      ? 'border-sky-300 bg-sky-50 text-sky-900'
+                                      : 'border-amber-300 bg-amber-50/70 text-amber-900'
+                                  }`}
                                 >
-                                  <div className="text-[11px] font-bold truncate leading-tight">
-                                    {appt.patient?.name}
-                                  </div>
-                                  <div className="text-[9px] opacity-90 truncate">
-                                    {new Date(appt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {badge.tag}
-                                  </div>
+                                  <span>{v.time}</span>
+                                  <span className="text-[9px] font-semibold">{v.isReturn ? 'Retorno' : 'Vago'}</span>
                                 </div>
                               );
                             })}
-
-                            {/* Vaga Disponível */}
-                            {vacantInHour.map((v) => (
-                              <div
-                                key={v.time}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenNewAppt(colDate, v.time, v.isReturn, v.duration);
-                                }}
-                                className={`px-1.5 py-0.5 rounded border border-dashed text-[10px] font-bold flex items-center justify-between ${
-                                  v.isReturn
-                                    ? 'border-sky-300 bg-sky-50 text-sky-900'
-                                    : 'border-amber-300 bg-amber-50/70 text-amber-900'
-                                }`}
-                              >
-                                <span>{v.time}</span>
-                                <span className="text-[9px] font-semibold">{v.isReturn ? 'Retorno' : 'Vago'}</span>
-                              </div>
-                            ))}
                           </div>
                         );
                       })}
