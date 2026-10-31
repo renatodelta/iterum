@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { processAgentMessage } from '@/lib/ai/agent';
-import { sendWhatsAppMessage } from '@/lib/whatsapp/client';
-import { enqueueWhatsAppMessage } from '@/lib/queue';
+import { sendWhatsAppTypingIndicator, WhatsAppCredentials } from '@/lib/whatsapp/client';
+import { enqueueWhatsAppMessage, qstashClient } from '@/lib/queue';
+import { executeWhatsAppMessageJob } from '@/lib/whatsapp/processor';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Suporta execução estendida sem encerramento prematuro na Vercel
 
 // --------------------------------------------------------------------------
 // 1. ENDPOINT GET: Verificação obrigatória do Webhook pela Meta
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
       metaPhoneNumberId: process.env.META_PHONE_NUMBER_ID || null,
       metaGraphVersion: process.env.META_GRAPH_VERSION || null,
       hasOpenAiKey: !!process.env.OPENAI_API_KEY,
+      hasQstash: !!process.env.QSTASH_TOKEN,
       nodeEnv: process.env.NODE_ENV,
     });
   }
@@ -42,36 +44,43 @@ export async function GET(req: NextRequest) {
 }
 
 // --------------------------------------------------------------------------
-// 2. ENDPOINT POST: Recebimento das Mensagens
+// 2. ENDPOINT POST: Recebimento e Processamento das Mensagens
 // --------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log('📩 [Webhook WhatsApp] Mensagem recebida:', JSON.stringify(body, null, 2));
+    console.log('📩 [Webhook WhatsApp] Payload recebido:', JSON.stringify(body, null, 2));
 
     let senderPhone = '';
     let userText = '';
     let pushName = 'Paciente';
+    let messageId: string | undefined = undefined;
+    let audioId: string | undefined = undefined;
+    let phoneNumberId = process.env.META_PHONE_NUMBER_ID || '';
+    let timestamp: string | undefined = undefined;
 
-    // 0. Parser para a Meta WhatsApp Cloud API Oficial (Conforme Especificação Técnica)
+    // 0. Parser para a Meta WhatsApp Cloud API Oficial
     if (body.object === 'whatsapp_business_account') {
       const change = body.entry?.[0]?.changes?.[0];
       const entryVal = change?.value;
 
-      // Ignora eventos de status (entregue, lido, etc.)
+      // Ignora eventos de status de entrega (sent, delivered, read)
       if (!entryVal?.messages || entryVal.messages.length === 0) {
         return new NextResponse('EVENT_RECEIVED', { status: 200 });
       }
 
       const msg = entryVal.messages[0];
       const metadata = entryVal.metadata;
+      messageId = msg.id;
       senderPhone = msg.from?.replace(/\D/g, '') || '';
       pushName = entryVal.contacts?.[0]?.profile?.name || 'Paciente';
+      phoneNumberId = metadata?.phone_number_id || phoneNumberId;
+      timestamp = msg.timestamp;
 
       const isAudio = msg.type === 'audio' && msg.audio?.id;
-      const audioId = isAudio ? msg.audio.id : undefined;
+      audioId = isAudio ? msg.audio.id : undefined;
 
-      // Extrai texto de mensagens normais, respostas interativas ou marca áudio
+      // Extrai texto de mensagens normais, respostas interativas ou áudio
       userText =
         msg.text?.body ||
         msg.interactive?.button_reply?.title ||
@@ -79,28 +88,58 @@ export async function POST(req: NextRequest) {
         msg.button?.text ||
         (isAudio ? '[Mensagem de Áudio]' : '');
 
-      if (senderPhone && (userText.trim() || isAudio)) {
-        const hostUrl = req.headers.get('host') || undefined;
-
-        // Despacha para a fila assíncrona / worker imediatamente
-        await enqueueWhatsAppMessage({
-          phoneNumberId: metadata?.phone_number_id || process.env.META_PHONE_NUMBER_ID || '',
-          patientPhone: senderPhone,
-          patientName: pushName,
-          messageId: msg.id,
-          text: userText,
-          audioId,
-          timestamp: msg.timestamp,
-          rawPayload: msg,
-        }, hostUrl);
-
-        console.log(`⚡ [Webhook Meta] Mensagem (${isAudio ? 'Áudio' : 'Texto'}) de ${senderPhone} enfileirada com sucesso. Respondendo 200 OK.`);
-
-        // Retorna HTTP 200 instantâneo para a Meta não realizar retentativas
+      if (!senderPhone || (!userText.trim() && !isAudio)) {
         return new NextResponse('EVENT_RECEIVED', { status: 200 });
       }
+
+      // Resolver credenciais customizadas se for tenant multi-empresa
+      let customCreds: WhatsAppCredentials | undefined = undefined;
+      try {
+        const tenantConfig = await (prisma as any).tenantWhatsAppConfig?.findUnique({
+          where: { phoneNumberId },
+        });
+        if (tenantConfig && tenantConfig.isActive) {
+          customCreds = {
+            accessToken: tenantConfig.systemUserToken,
+            phoneNumberId: tenantConfig.phoneNumberId,
+          };
+        }
+      } catch (e) {}
+
+      // 1. FEEDBACK VISUAL INSTANTÂNEO (< 200ms)
+      // Dispara o indicador de digitação ("digitando..." / 3 pontinhos animados) e os dois tracinhos azuis
+      if (messageId) {
+        sendWhatsAppTypingIndicator(messageId, senderPhone, customCreds).catch((e) =>
+          console.warn('Aviso typing indicator:', e.message)
+        );
+      }
+
+      const job = {
+        phoneNumberId,
+        patientPhone: senderPhone,
+        patientName: pushName,
+        messageId,
+        text: userText,
+        audioId,
+        timestamp,
+        rawPayload: msg,
+      };
+
+      // 2. Se houver QStash configurado, delega à fila
+      if (qstashClient) {
+        const hostUrl = req.headers.get('host') || undefined;
+        await enqueueWhatsAppMessage(job, hostUrl);
+        console.log(`⚡ [Webhook Meta] Mensagem de ${senderPhone} enfileirada no QStash com sucesso.`);
+        return new NextResponse('EVENT_RECEIVED', { status: 200 });
+      }
+
+      // 3. EXECUÇÃO DIRETA ULTRA-RÁPIDA (sem intermediação externa, sem congelamento de promises no Vercel)
+      console.log(`⚡ [Webhook Meta] Executando atendimento direto para ${senderPhone}...`);
+      await executeWhatsAppMessageJob(job, customCreds);
+
+      return new NextResponse('EVENT_RECEIVED', { status: 200 });
     }
-    // 1. Parser para Evolution API (v1 / v2, case-insensitive)
+    // 1. Parser para Evolution API (v1 / v2)
     else {
       const eventName = (body.event || '').toLowerCase();
       const isEvolutionEvent =
@@ -127,6 +166,7 @@ export async function POST(req: NextRequest) {
           '';
 
         pushName = msgData.pushName || body.senderName || 'Paciente';
+        messageId = msgData.key?.id;
       }
       // 2. Parser para Z-API
       else if (body.phone && (body.text?.message || body.isGroup === false)) {
@@ -136,133 +176,38 @@ export async function POST(req: NextRequest) {
         senderPhone = body.phone.replace(/\D/g, '');
         userText = body.text?.message || body.message || '';
         pushName = body.senderName || 'Paciente';
+        messageId = body.messageId || body.id;
       }
       // 3. Parser Genérico / Direto
       else if (body.phone || body.from) {
         senderPhone = (body.phone || body.from).replace(/\D/g, '');
         userText = body.message || body.text || body.content || '';
         pushName = body.name || 'Paciente';
+        messageId = body.id;
       }
-    }
 
-    if (!senderPhone || !userText.trim()) {
-      return NextResponse.json({ status: 'ignored', reason: 'Payload sem telefone ou conteúdo válido' }, { status: 200 });
-    }
-
-    // Formatar telefone para padrão internacional E.164 (+55...)
-    const formattedPhone = senderPhone.startsWith('55') ? `+${senderPhone}` : `+55${senderPhone}`;
-
-    // Buscar primeira clínica cadastrada ou criar padrão se o banco for novo
-    let clinic = await prisma.clinic.findFirst();
-    if (!clinic) {
-      clinic = await prisma.clinic.create({
-        data: {
-          name: 'Consultório Dra. Mariana Souza',
-          doctorName: 'Dra. Mariana Souza',
-          crm: 'CRM/SP 148.910',
-          specialty: 'Pediatria',
-          email: 'dra.mariana@iterum.med.br',
-          phone: '+5511999999999',
-          slotDurationMinutes: 30,
-          minCancelHours: 2,
-        },
-      });
-    }
-
-    // Sanitização do nome de perfil recebido pelo WhatsApp
-    const cleanedPush = pushName
-      ? pushName
-          .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/gu, '')
-          .replace(/[^\p{L}\s.'-]/gu, '')
-          .trim()
-      : '';
-    const safePushName = cleanedPush && cleanedPush.length >= 2 && cleanedPush.toLowerCase() !== 'paciente' ? cleanedPush : '';
-
-    // Buscar ou criar paciente no banco de dados
-    let patient = await prisma.patient.findFirst({
-      where: {
-        clinicId: clinic.id,
-        phone: { contains: senderPhone.slice(-8) },
-      },
-    });
-
-    if (!patient) {
-      patient = await prisma.patient.create({
-        data: {
-          clinicId: clinic.id,
-          name: safePushName || pushName || 'Paciente',
-          phone: formattedPhone,
-        },
-      });
-      console.log(`👤 Novo paciente cadastrado automaticamente: ${patient.name} (${patient.phone})`);
-    } else if (safePushName) {
-      // Se o titular mandou mensagem e seu nome no banco difere completamente do pushName
-      // (ex: foi sobrescrito para o nome de um terceiro como "Júlio"), sincronizamos de volta para o dono do WhatsApp
-      const currentLower = (patient.name || '').toLowerCase().trim();
-      const pushFirst = safePushName.toLowerCase().split(' ')[0];
-      if (!currentLower.includes(pushFirst)) {
-        console.log(`🔄 Restaurando nome do titular do WhatsApp no cadastro: de "${patient.name}" para "${safePushName}"`);
-        patient = await prisma.patient.update({
-          where: { id: patient.id },
-          data: { name: safePushName },
-        });
+      if (!senderPhone || !userText.trim()) {
+        return NextResponse.json({ status: 'ignored', reason: 'Payload sem telefone ou texto válido' }, { status: 200 });
       }
+
+      // Dispara indicador de digitação
+      if (senderPhone) {
+        sendWhatsAppTypingIndicator(messageId || 'generic', senderPhone).catch(() => {});
+      }
+
+      const job = {
+        phoneNumberId,
+        patientPhone: senderPhone,
+        patientName: pushName,
+        messageId,
+        text: userText,
+      };
+
+      const result = await executeWhatsAppMessageJob(job);
+      return NextResponse.json({ success: result.success, reply: result.reply });
     }
-
-    // 1. Salvar mensagem recebida do usuário no histórico
-    await prisma.message.create({
-      data: {
-        clinicId: clinic.id,
-        patientId: patient.id,
-        role: 'user',
-        content: userText,
-      },
-    });
-
-    // 2. Carregar histórico recente de mensagens (últimas 20 mais recentes)
-    const rawMessages = await prisma.message.findMany({
-      where: { patientId: patient.id },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
-    const recentMessages = rawMessages.reverse();
-
-    const history = recentMessages.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-      content: m.content,
-    }));
-
-    // 3. Processar mensagem através do motor de IA & Tool Calling
-    const agentResult = await processAgentMessage({
-      patientPhone: formattedPhone,
-      userMessage: userText,
-      conversationHistory: history,
-      clinicId: clinic.id,
-      pushName: safePushName || undefined,
-    });
-
-    // 4. Salvar resposta do assistente no banco
-    await prisma.message.create({
-      data: {
-        clinicId: clinic.id,
-        patientId: patient.id,
-        role: 'assistant',
-        content: agentResult.reply,
-      },
-    });
-
-    // 5. Disparar resposta para o WhatsApp do paciente via REST API
-    const whatsappResult = await sendWhatsAppMessage(formattedPhone, agentResult.reply);
-
-    return NextResponse.json({
-      success: true,
-      patient: { id: patient.id, name: patient.name, phone: patient.phone },
-      agentReply: agentResult.reply,
-      toolsExecuted: agentResult.toolsExecuted,
-      whatsappResult,
-    });
   } catch (error: any) {
-    console.error('❌ Erro no processamento do Webhook de WhatsApp:', error);
+    console.error('❌ Erro no Webhook de WhatsApp:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

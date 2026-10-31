@@ -137,22 +137,61 @@ export function formatBRTShort(date: Date): string {
 }
 
 /**
+ * Localiza o paciente titular correspondente a um número de telefone com proteção estrita contra colisão de dependentes (que possuem sufixo '-2', '-3', etc.).
+ */
+export async function findPatientByPhone(telefone: string, clinicId?: string) {
+  const cleanPhone = telefone.replace(/\D/g, '');
+  const last8 = cleanPhone.slice(-8);
+
+  // 1. Busca pelo telefone exato do titular
+  let patient = await prisma.patient.findFirst({
+    where: {
+      ...(clinicId ? { clinicId } : {}),
+      phone: {
+        in: [
+          `+${cleanPhone}`,
+          cleanPhone,
+          `+55${cleanPhone}`,
+          cleanPhone.replace(/^55/, ''),
+        ],
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // 2. Se não achou exato, busca pelos últimos 8 dígitos EXCLUINDO dependentes (que contêm hífen '-')
+  if (!patient) {
+    patient = await prisma.patient.findFirst({
+      where: {
+        ...(clinicId ? { clinicId } : {}),
+        phone: { contains: last8 },
+        NOT: { phone: { contains: '-' } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // 3. Fallback genérico ordenando pelo mais antigo (titular)
+  if (!patient) {
+    patient = await prisma.patient.findFirst({
+      where: {
+        ...(clinicId ? { clinicId } : {}),
+        phone: { contains: last8 },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  return patient;
+}
+
+/**
  * 1. BUSCAR CONSULTA ATUAL DO PACIENTE
  */
 export async function buscarConsultaAtual(telefonePaciente: string, clinicId?: string): Promise<ToolResult> {
   try {
-    // Normalizar telefone (remover caracteres não numéricos)
-    const cleanPhone = telefonePaciente.replace(/\D/g, '');
-
-    // Buscar paciente pelo telefone
-    const patient = await prisma.patient.findFirst({
-      where: {
-        phone: {
-          contains: cleanPhone.slice(-8), // busca pelos últimos dígitos para lidar com DDD/país
-        },
-        ...(clinicId ? { clinicId } : {}),
-      },
-    });
+    // Buscar paciente pelo telefone de forma resiliente
+    const patient = await findPatientByPhone(telefonePaciente, clinicId);
 
     if (!patient) {
       return {
@@ -553,10 +592,7 @@ export async function confirmarRemarcacao(
     if (oldAppointment) {
       patient = oldAppointment.patient;
     } else if (patientPhone) {
-      const cleanPhone = patientPhone.replace(/\D/g, '');
-      patient = await prisma.patient.findFirst({
-        where: { phone: { contains: cleanPhone.slice(-8) } },
-      });
+      patient = await findPatientByPhone(patientPhone);
     }
 
     if (!patient) {
@@ -1130,13 +1166,7 @@ export async function criarNovoAgendamento(
  */
 export async function transferirParaHumano(telefonePaciente: string, motivo?: string, clinicId?: string): Promise<ToolResult> {
   try {
-    const cleanPhone = telefonePaciente.replace(/\D/g, '');
-    const patient = await prisma.patient.findFirst({
-      where: {
-        phone: { contains: cleanPhone.slice(-8) },
-        ...(clinicId ? { clinicId } : {}),
-      },
-    });
+    const patient = await findPatientByPhone(telefonePaciente, clinicId);
 
     if (patient) {
       await (prisma.patient as any).update({
@@ -1183,13 +1213,7 @@ export async function adicionarFilaEspera(
       return { success: false, message: 'Clínica não encontrada.' };
     }
 
-    const cleanPhone = telefonePaciente.replace(/\D/g, '');
-    const patient = await prisma.patient.findFirst({
-      where: {
-        phone: { contains: cleanPhone.slice(-8) },
-        clinicId: targetClinicId,
-      },
-    });
+    const patient = await findPatientByPhone(telefonePaciente, targetClinicId);
 
     let shift: 'Manhã' | 'Tarde' | 'Qualquer Horário' = 'Qualquer Horário';
     if (turnoPreferido?.toLowerCase().includes('manh')) shift = 'Manhã';
@@ -1274,12 +1298,7 @@ export async function confirmarPresencaConsulta(
         include: { patient: true, clinic: true },
       });
     } else {
-      const patient = await prisma.patient.findFirst({
-        where: {
-          phone: { contains: cleanPhone.slice(-8) },
-          ...(clinicId ? { clinicId } : {}),
-        },
-      });
+      const patient = await findPatientByPhone(telefonePaciente, clinicId);
 
       if (patient) {
         appointment = await prisma.appointment.findFirst({
@@ -1369,12 +1388,7 @@ export async function cadastrarPaciente({
       : `+55${cleanTitularPhone}`;
 
     // Localizar ou registrar o paciente titular do WhatsApp
-    let titular = await prisma.patient.findFirst({
-      where: {
-        clinicId: clinic.id,
-        phone: { contains: cleanTitularPhone.slice(-8) },
-      },
-    });
+    let titular = await findPatientByPhone(telefoneTitular, clinicId);
 
     if (!titular) {
       titular = await prisma.patient.create({
