@@ -81,6 +81,35 @@ async function sendViaMetaCloudApi(
 }
 
 /**
+ * Marca mensagem recebida como lida na Meta Cloud API (ativa os dois tracinhos azuis instantâneos)
+ */
+export async function markWhatsAppMessageAsRead(
+  messageId: string,
+  customCreds?: WhatsAppCredentials
+): Promise<void> {
+  try {
+    const accessToken = (customCreds?.accessToken || process.env.META_ACCESS_TOKEN || '').replace(/['"]/g, '').trim();
+    const phoneNumberId = (customCreds?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '').replace(/['"]/g, '').trim();
+    const graphVersion = (customCreds?.graphVersion || process.env.META_GRAPH_VERSION || 'v21.0').replace(/['"]/g, '').trim();
+
+    if (!accessToken || !phoneNumberId || !messageId) return;
+
+    fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+/**
  * Utilitário para envio de mensagens via API de WhatsApp
  * Suporta botões interativos clicáveis e texto simples com detecção automática de opções SIM/NÃO.
  * Suporta credenciais dinâmicas do Tenant e fallback para variáveis de ambiente.

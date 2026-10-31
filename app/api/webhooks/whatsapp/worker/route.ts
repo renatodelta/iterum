@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { processAgentMessage } from '@/lib/ai/agent';
 import {
   sendWhatsAppMessage,
+  markWhatsAppMessageAsRead,
   downloadMetaMedia,
   transcribeAudioWithWhisper,
   WhatsAppCredentials,
@@ -37,6 +38,11 @@ export async function POST(req: NextRequest) {
 
     if (!clinic) {
       clinic = await prisma.clinic.findFirst();
+    }
+
+    // Sinalizar visualmente leitura imediata para o usuário no WhatsApp (dois tracinhos azuis instantâneos)
+    if (job.messageId) {
+      markWhatsAppMessageAsRead(job.messageId, customCreds);
     }
 
     if (!clinic) {
@@ -134,9 +140,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 5.1 DEBOUNCE OTIMIZADO (500ms):
-    // Aguarda brevemente para consolidar mensagens rápidas em sequência sem gerar atraso perceptível
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // 5.1 DEBOUNCE ULTRA-RÁPIDO (150ms):
+    // Pequena janela para agrupar mensagens consecutivas imediatas sem atrasar a conversa
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     // Verificar se existe uma mensagem mais recente deste paciente criada durante o intervalo
     const newerMsg = await prisma.message.findFirst({
@@ -196,18 +202,18 @@ export async function POST(req: NextRequest) {
       patientId: patient.id,
     });
 
-    // 8. Salvar resposta do assistente
-    await prisma.message.create({
-      data: {
-        clinicId: clinic.id,
-        patientId: patient.id,
-        role: 'assistant',
-        content: agentResult.reply,
-      },
-    });
-
-    // 9. Enviar resposta pelo WhatsApp usando credenciais dinâmicas do Tenant
-    const whatsappResult = await sendWhatsAppMessage(formattedPhone, agentResult.reply, undefined, customCreds);
+    // 8 e 9. DISPARO CONCORRENTE: Envia ao WhatsApp imediatamente em paralelo com a persistência no banco
+    const [whatsappResult] = await Promise.all([
+      sendWhatsAppMessage(formattedPhone, agentResult.reply, undefined, customCreds),
+      prisma.message.create({
+        data: {
+          clinicId: clinic.id,
+          patientId: patient.id,
+          role: 'assistant',
+          content: agentResult.reply,
+        },
+      }),
+    ]);
 
     console.log(`✅ [Worker Concluído] Resposta entregue para ${patient.name} (${formattedPhone})`);
 

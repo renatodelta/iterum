@@ -9,35 +9,101 @@ export interface ToolResult {
 }
 
 /**
- * Converte qualquer string de data (ex: "2026-09-25 13:00", "2026-09-25T13:00")
+ * Converte qualquer string de data (ex: "13/11", "13/11/2026", "2026-11-13", "13 de novembro", "13/11 14:15")
  * interpretando explicitamente no fuso de Brasília (UTC-3).
  */
-export function parseBRT(dateStr: string): Date {
-  let s = dateStr.trim().replace(' ', 'T');
-  if (s.includes('/')) {
-    const parts = s.split('T');
-    const dateParts = parts[0].split('/');
-    if (dateParts.length === 3) {
-      let year = dateParts[2];
-      if (year.length === 2) {
-        year = `20${year}`;
+export function parseBRT(dateInput: string): Date {
+  if (!dateInput || typeof dateInput !== 'string') return new Date();
+  let str = dateInput.trim();
+
+  let timePart = '';
+  if (str.includes('T')) {
+    const split = str.split('T');
+    str = split[0].trim();
+    timePart = split[1]?.trim() || '';
+  } else if (str.includes(' ')) {
+    const split = str.split(' ');
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(split[1])) {
+      str = split[0].trim();
+      timePart = split[1].trim();
+    }
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  let year = currentYear;
+  let month = -1;
+  let day = -1;
+
+  const mesesMap: Record<string, number> = {
+    janeiro: 1, jan: 1,
+    fevereiro: 2, fev: 2,
+    marco: 3, mar: 3, março: 3,
+    abril: 4, abr: 4,
+    maio: 5, mai: 5,
+    junho: 6, jun: 6,
+    julho: 7, jul: 7,
+    agosto: 8, ago: 8,
+    setembro: 9, set: 9,
+    outubro: 10, out: 10,
+    novembro: 11, nov: 11,
+    dezembro: 12, dez: 12,
+  };
+
+  const nomeMesMatch = str.toLowerCase().match(/(\d{1,2})\s*(?:de)?\s*([a-zçãé]+)(?:\s*(?:de)?\s*(\d{2,4}))?/i);
+  if (nomeMesMatch && mesesMap[nomeMesMatch[2]]) {
+    day = parseInt(nomeMesMatch[1], 10);
+    month = mesesMap[nomeMesMatch[2]];
+    if (nomeMesMatch[3]) {
+      year = parseInt(nomeMesMatch[3].length === 2 ? `20${nomeMesMatch[3]}` : nomeMesMatch[3], 10);
+    }
+  }
+
+  if (month === -1) {
+    if (str.includes('/')) {
+      const parts = str.split('/');
+      if (parts.length === 3) {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = parseInt(parts[2].length === 2 ? `20${parts[2]}` : parts[2], 10);
+      } else if (parts.length === 2) {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = currentYear;
       }
-      s = `${year}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}` + (parts[1] ? `T${parts[1]}` : '');
+    } else if (str.includes('-')) {
+      const parts = str.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+        } else {
+          day = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+          year = parseInt(parts[2].length === 2 ? `20${parts[2]}` : parts[2], 10);
+        }
+      } else if (parts.length === 2) {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = currentYear;
+      }
     }
   }
-  if (!s.includes('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) {
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) {
-      s += ':00';
-    }
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) {
-      s += '-03:00';
-    }
+
+  if (day > 0 && month > 0 && year > 0) {
+    const mStr = String(month).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    let tStr = timePart || '00:00:00';
+    if (tStr.length === 5) tStr += ':00';
+    const isoString = `${year}-${mStr}-${dStr}T${tStr}-03:00`;
+    const dt = new Date(isoString);
+    if (!isNaN(dt.getTime())) return dt;
   }
-  const parsed = new Date(s);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
-  }
-  return new Date(dateStr);
+
+  const fallback = new Date(dateInput);
+  return !isNaN(fallback.getTime()) ? fallback : new Date();
 }
 
 /**
@@ -242,9 +308,9 @@ export async function buscarHorariosDisponiveis(
     }
 
     // Determinar dias da semana atendidos: prioriza metaAgenda.selectedDays se houver, ou os dias com active: true em workingHoursConfig
-    let activeDays: string[] = selectedDaysList;
+    let activeDays: string[] = Array.isArray(selectedDaysList) ? selectedDaysList.map(String) : [];
     if (!activeDays || activeDays.length === 0) {
-      activeDays = Object.keys(workingHoursConfig).filter((k) => workingHoursConfig[k]?.active);
+      activeDays = Object.keys(workingHoursConfig).filter((k) => workingHoursConfig[k]?.active).map(String);
     }
     if (activeDays.length === 0) {
       activeDays = ['1', '2', '3', '4', '5']; // Segunda a sexta por padrão

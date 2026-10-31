@@ -18,10 +18,22 @@ import {
   verificarAgendaTemHorariosDisponiveis,
 } from './tools';
 
+let cachedDoctorInfo: { info: { name: string; link: string }; expiresAt: number } | null = null;
+
 /**
- * Obtém os dados e nome da médica e o link institucional da clínica
+ * Obtém os dados e nome da médica e o link institucional da clínica (com cache em memória para velocidade máxima)
  */
 export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; link: string }> {
+  const now = Date.now();
+  if (cachedDoctorInfo && cachedDoctorInfo.expiresAt > now) {
+    return cachedDoctorInfo.info;
+  }
+
+  let result = {
+    name: 'Dra. Mariana Souza',
+    link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
+  };
+
   try {
     const doctor = await prisma.user.findFirst({
       where: { role: 'MEDICO', status: 'ACTIVE' },
@@ -29,15 +41,14 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     });
     if (doctor?.name) {
       const name = doctor.name.startsWith('Dr') ? doctor.name : `Dra. ${doctor.name}`;
-      return {
+      result = {
         name,
         link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
       };
-    }
-    if (clinicId) {
+    } else if (clinicId) {
       const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
       if (clinic?.name?.includes('Dr')) {
-        return {
+        result = {
           name: clinic.name,
           link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
         };
@@ -45,10 +56,8 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     }
   } catch (e) {}
 
-  return {
-    name: 'Dra. Mariana Souza',
-    link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
-  };
+  cachedDoctorInfo = { info: result, expiresAt: now + 5 * 60 * 1000 };
+  return result;
 }
 
 export const SYSTEM_PROMPT = `Você é a Sofia, secretária virtual humana, inteligente, acolhedora e altamente profissional do consultório médico Iterum.
@@ -82,7 +91,7 @@ DIRETRIZES DE COMUNICAÇÃO:
 3. **Fluxo Natural e Resolutivo de Agendamento:**
    - Cumprimente o paciente chamando-o pelo primeiro nome se souber.
    - **Próximo Horário / Vaga Mais Breve:** Se o paciente perguntar pelo *próximo horário*, *horário mais breve*, *vaga mais próxima* ou similar: NUNCA faça perguntas adicionais como "que dia prefere?". Execute IMEDIATAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' e apresente os dias e horários livres mais próximos!
-   - Se o paciente indicar um dia ou período ("quinta-feira à tarde", "segunda pela manhã"), chame 'buscar_horarios_disponiveis' para a data solicitada.
+   - **Consulta de Datas Específicas:** Se o paciente indicar um dia específico ou período (ex: "dia 13/11", "tem horário dia 13", "13 de novembro", "quinta-feira à tarde", "segunda pela manhã"): Você DEVE SEMPRE e OBRIGATORIAMENTE chamar a ferramenta 'buscar_horarios_disponiveis' para a data solicitada. NUNCA deduza ou diga que não há vagas sem consultar a ferramenta. Se a ferramenta retornar horários vagos, apresente de 2 a 4 opções imediatamente para o paciente escolher. Apenas se a ferramenta retornar lista vazia de horários é que você pode avisar com acolhimento e oferecer a lista de espera.
    - NUNCA invente horários. Sempre consulte as ferramentas reais.
    - Apresente de 2 a 4 opções de horários de forma limpa.
    - Ao paciente escolher o horário desejado e os dados cadastrais estiverem preenchidos, **solicite a confirmação ativa** resumindo claramente os detalhes:
@@ -163,7 +172,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           data_desejada: {
             type: 'string',
-            description: 'Data desejada no formato DD/MM/AA ou AAAA-MM-DD.',
+            description: 'Data desejada no formato DD/MM/AAAA, DD/MM, AAAA-MM-DD ou por extenso (ex: 13/11, 13/11/2026, 2026-11-13).',
           },
           periodo: {
             type: 'string',
@@ -544,8 +553,8 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
         messages,
         tools: openaiTools,
         tool_choice: 'auto',
-        temperature: 0.5,
-        max_tokens: 450,
+        temperature: 0.3,
+        max_tokens: 300,
       });
 
       let responseMessage = response.choices[0].message;
@@ -578,8 +587,8 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
           model: modelName,
           messages,
           tools: openaiTools,
-          temperature: 0.5,
-          max_tokens: 450,
+          temperature: 0.3,
+          max_tokens: 300,
         });
         responseMessage = response.choices[0].message;
       }
