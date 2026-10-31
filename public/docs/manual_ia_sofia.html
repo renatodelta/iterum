@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Manual de Operações e Escopo da IA Sofia - Iterum</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 16mm 14mm 16mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.5;
+      font-size: 10pt;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+
+    /* HEADER / CAPA */
+    .header {
+      border-bottom: 2px solid #005a43;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .brand-title {
+      font-size: 20pt;
+      font-weight: 900;
+      color: #005a43;
+      letter-spacing: -0.5px;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-subtitle {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #0f766e;
+      margin-top: 2px;
+      margin-bottom: 0;
+    }
+    .doc-meta {
+      text-align: right;
+      font-size: 8.5pt;
+      color: #64748b;
+      line-height: 1.3;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 7.5pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #e6f4ea;
+      color: #005a43;
+      border: 1px solid #a3cfbb;
+    }
+
+    /* SEÇÕES */
+    .section {
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .section-title {
+      font-size: 11.5pt;
+      font-weight: 800;
+      color: #005a43;
+      border-left: 4px solid #00875a;
+      padding-left: 8px;
+      margin-bottom: 8px;
+      margin-top: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    p {
+      margin: 0 0 6px 0;
+      color: #334155;
+      text-align: justify;
+    }
+    ul {
+      margin: 4px 0 8px 18px;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 3px;
+      color: #334155;
+    }
+    strong {
+      color: #0f172a;
+    }
+
+    /* CARDS EM DESTAQUE */
+    .callout {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 8px 0;
+    }
+    .callout-emerald {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-left: 4px solid #16a34a;
+    }
+    .callout-blue {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-left: 4px solid #2563eb;
+    }
+    .callout-amber {
+      background: #fffbeb;
+      border: 1px solid #fef3c7;
+      border-left: 4px solid #d97706;
+    }
+    .callout-title {
+      font-weight: 800;
+      font-size: 9.5pt;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .callout-emerald .callout-title { color: #166534; }
+    .callout-blue .callout-title { color: #1e40af; }
+    .callout-amber .callout-title { color: #92400e; }
+
+    /* TABELA DE FERRAMENTAS */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 8.5pt;
+    }
+    th {
+      background: #005a43;
+      color: #ffffff;
+      font-weight: 700;
+      text-align: left;
+      padding: 6px 8px;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    th:first-child { border-top-left-radius: 6px; }
+    th:last-child { border-top-right-radius: 6px; }
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 8pt;
+      background: #e2e8f0;
+      color: #0f172a;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* STATUS PILLS */
+    .status-pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      font-weight: 700;
+    }
+    .status-scheduled { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .status-confirmed { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-encaixe { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+    .status-retorno { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+    /* FOOTER */
+    .footer {
+      margin-top: 24px;
+      padding-top: 8px;
+      border-top: 1px solid #cbd5e1;
+      font-size: 7.5pt;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- CABEÇALHO EXECUTIVO -->
+  <div class="header">
+    <div>
+      <h1 class="brand-title">CLINIDESK / ITERUM</h1>
+      <p class="brand-subtitle">Manual de Escopo, Arquitetura e Diretrizes da IA Sofia</p>
+    </div>
+    <div class="doc-meta">
+      <span class="badge">Documento Oficial de Engenharia</span><br>
+      <strong>Versão:</strong> 2.4 (Produção)<br>
+      <strong>Motor de IA:</strong> OpenAI GPT-4o-mini<br>
+      <strong>Data:</strong> Outubro / Novembro de 2026
+    </div>
+  </div>
+
+  <!-- SEÇÃO 1: VISÃO GERAL -->
+  <div class="section">
+    <div class="section-title">1. Visão Geral e Arquitetura do Agente</div>
+    <p>
+      A <strong>Sofia</strong> é a assistente virtual de inteligência artificial encarregada de conduzir 100% dos atendimentos, agendamentos, remarcações, cancelamentos e esclarecimentos do consultório médico no WhatsApp oficial (Meta Cloud API).
+    </p>
+    <p>
+      Diferente de chatbots tradicionais baseados em árvores de decisão engessadas, a Sofia opera com <strong>Function Calling Nativo (OpenAI Tools)</strong> e um <strong>System Prompt Clínico</strong> centralizado no arquivo <code>lib/ai/agent.ts</code>. Todas as ações concretas de agendamento, busca de vagas e criação de prontuários são executadas diretamente contra o banco de dados PostgreSQL via Prisma ORM com validações estritas de governança médica.
+    </p>
+  </div>
+
+  <!-- SEÇÃO 2: IDENTIDADE E COMUNICAÇÃO -->
+  <div class="section">
+    <div class="section-title">2. Identidade, Persona e Tom de Voz</div>
+    <div class="callout callout-emerald">
+      <div class="callout-title">🌿 Diretrizes Comportamentais de Atendimento</div>
+      <ul>
+        <li><strong>Linguagem Humanizada:</strong> Proibição estrita de opções numéricas do tipo "[1] SIM / [2] NÃO" ou respostas mecânicas. A Sofia conversa como uma secretária atenciosa e educada em tempo real.</li>
+        <li><strong>Empatia e Acolhimento:</strong> Tom cortês, paciente e solícito, utilizando emojis médicos moderados (😊, 🩺, 📅).</li>
+        <li><strong>Formatação Otimizada para Mobile:</strong> Parágrafos curtos, uso de marcadores limpos e destaque em negrito para *datas*, *horários* e *médicos*.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 3: REGRA DE CADASTRO OBRIGATÓRIO -->
+  <div class="section">
+    <div class="section-title">3. Regra de Ouro do Cadastro Obrigatório de Pacientes</div>
+    <p>
+      <strong>Nenhuma pessoa pode ter uma consulta marcada sem estar devidamente cadastrada no sistema da clínica.</strong> Esta diretriz é garantida por travas no prompt e na camada de dados (ORM).
+    </p>
+    <div class="callout callout-blue">
+      <div class="callout-title">📋 Tríade de Dados Obrigatórios para Agendamento</div>
+      <p style="margin-bottom: 4px;">Antes de confirmar qualquer vaga na grade, a Sofia deve possuir obrigatoriamente:</p>
+      <ul>
+        <li><strong>Nome Completo:</strong> Identificação formal do paciente que passará pela consulta.</li>
+        <li><strong>Data de Nascimento:</strong> Formato DD/MM/AAAA (essencial para identificação e prontuário).</li>
+        <li><strong>CEP de Residência:</strong> Localização geográfica do paciente.</li>
+      </ul>
+    </div>
+    <p><strong>Fluxos de Aplicação da Regra:</strong></p>
+    <ul>
+      <li><strong>Titular Agendando para Si Mesmo (1º Contato):</strong> Se o titular do WhatsApp ainda não possuir cadastro completo, a Sofia solicita cordialmente os 3 dados antes de registrar o agendamento.</li>
+      <li><strong>Titular Agendando para OUTRA Pessoa (Dependente / Familiar):</strong> Se a consulta for para terceiro (ex: filho, pai, cônjuge, como no caso do Edyr José):
+        <br>— A Sofia solicita o Nome Completo, Nascimento e CEP <em>da pessoa que será atendida</em>.
+        <br>— Executa a ferramenta <code>cadastrar_paciente</code> criando um registro de paciente individual para essa pessoa.
+        <br>— O agendamento é vinculado diretamente ao ID desse paciente real.
+        <br>— No card da agenda e nos Detalhes da Consulta, o paciente exibido é a pessoa correta, preservando nas observações cadastrais: <em>Agendamento para: [Nome] (Titular WhatsApp: [Titular])</em>.
+      </li>
+      <li><strong>Complementação Presencial:</strong> Documentos como CPF, RG ou carteirinha do convênio podem ser completados presencialmente no consultório pelo médico ou recepcionista.</li>
+    </ul>
+  </div>
+
+  <!-- SEÇÃO 4: GOVERNANÇA DA AGENDA MÉDICA -->
+  <div class="section">
+    <div class="section-title">4. Governança da Agenda Médica e Blindagem de Horários</div>
+    <ul>
+      <li><strong>Soberania Exclusiva do Profissional:</strong> A Sofia JAMAIS estende períodos ou promete vagas em datas que o médico não liberou previamente no painel da aplicação (<code>scheduleStartDate</code> e <code>scheduleEndDate</code>).</li>
+      <li><strong>Blindagem de Consultas de Retorno:</strong> Os horários marcados como Retorno (ex: 11:00, 16:00, 16:30, 17:00) são de uso <em>exclusivo para acompanhamento de pacientes que já consultaram há menos de 30 dias</em>. A Sofia é estritamente proibida de oferecer ou agendar horários de retorno via WhatsApp; esses horários só podem ser preenchidos manualmente pelo médico ou secretária humana.</li>
+      <li><strong>Consulta de Datas Específicas:</strong> Ao ser questionada sobre qualquer dia (ex: "tem vaga no dia 13/11?"), a Sofia obrigatoriamente consulta a ferramenta <code>buscar_horarios_disponiveis</code> com parsing flexível de datas.</li>
+      <li><strong>Gravação Imediata:</strong> Assim que o paciente confirma o horário com um "Sim" ou emoji afirmativo, a Sofia dispara a gravação no banco de dados na mesma hora, sem perguntas repetitivas.</li>
+    </ul>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SEÇÃO 5: LEMBRETE DE VÉSPERA E STATUS -->
+  <div class="section">
+    <div class="section-title">5. Ciclo de Vida da Consulta e Lembrete de Véspera (D-1)</div>
+    <p>
+      O sistema distingue com clareza clínica e operacional os dois momentos fundamentais da consulta:
+    </p>
+    <div style="display: flex; gap: 10px; margin: 8px 0;">
+      <div class="callout callout-blue" style="flex: 1; margin: 0;">
+        <div class="callout-title"><span class="status-pill status-scheduled">AGENDADO</span> Vaga Garantida</div>
+        <p style="font-size: 8pt; margin: 0;">
+          A vaga é bloqueada na grade logo após o contato no WhatsApp. A cor visual é <strong>Azul (#1a73e8)</strong>. Aguarda confirmação de presença no dia anterior.
+        </p>
+      </div>
+      <div class="callout callout-emerald" style="flex: 1; margin: 0;">
+        <div class="callout-title"><span class="status-pill status-confirmed">CONFIRMADO</span> Presença Garantida</div>
+        <p style="font-size: 8pt; margin: 0;">
+          Disparado 24h antes da consulta via cron. Quando o paciente responde "Sim", a Sofia promove o status para Confirmado e a cor visual na grade muda para <strong>Verde Esmeralda</strong>.
+        </p>
+      </div>
+    </div>
+    <p style="font-size: 8.5pt; color: #64748b; margin-top: 4px;">
+      * A recepção também dispõe do botão de ação rápida <em>"Confirmar Presença (D-1)"</em> dentro do modal do agendamento para confirmações presenciais ou telefônicas.
+    </p>
+  </div>
+
+  <!-- SEÇÃO 6: LIMITES CLÍNICOS E COMPLIANCE -->
+  <div class="section">
+    <div class="section-title">6. Limites Éticos, Clínicos e Transbordo Humano</div>
+    <div class="callout callout-amber">
+      <div class="callout-title">⚠️ Regras de Segurança e Compliance Médico</div>
+      <ul>
+        <li><strong>Sem Diagnósticos ou Prescrições:</strong> A Sofia é terminantemente proibida de fornecer diagnósticos, interpretar exames médicos ou receitar medicamentos.</li>
+        <li><strong>Emergências:</strong> Se o paciente relatar dor intensa no peito, falta de ar grave ou risco iminente, é orientada a indicar atendimento imediato no pronto-socorro.</li>
+        <li><strong>Particular com Reembolso:</strong> Esclarece que as consultas são particulares, fornecendo recibo detalhado para solicitação de reembolso no convênio do paciente.</li>
+        <li><strong>Transbordo Humano (Human Handoff):</strong> Caso o paciente solicite falar com uma recepcionista ou o caso fuja do escopo de agendamento, a Sofia aciona <code>transferir_para_humano</code>, desativa suas respostas automáticas e notifica o painel.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 7: CATÁLOGO DE FERRAMENTAS -->
+  <div class="section">
+    <div class="section-title">7. Catálogo Completo das 11 Ferramentas (OpenAI Function Calling)</div>
+    <p>A Sofia atua delimitada exclusivamente pelo conjunto de ferramentas abaixo:</p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 28%;">Ferramenta (Tool)</th>
+          <th style="width: 28%;">Parâmetros Principais</th>
+          <th>Objetivo no Sistema</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>cadastrar_paciente</code></td>
+          <td><code>nome_completo</code>, <code>data_nascimento</code>, <code>cep</code>, <code>e_para_outra_pessoa</code></td>
+          <td>Abre prontuário do paciente antes do agendamento (titular ou dependente).</td>
+        </tr>
+        <tr>
+          <td><code>criar_novo_agendamento</code></td>
+          <td><code>nova_data_hora</code>, <code>beneficiario_nome</code>, <code>beneficiario_nascimento</code></td>
+          <td>Reserva a vaga na grade e grava o agendamento vinculado ao paciente real.</td>
+        </tr>
+        <tr>
+          <td><code>buscar_horarios_disponiveis</code></td>
+          <td><code>data_desejada</code> (DD/MM, DD/MM/AAAA), <code>periodo</code></td>
+          <td>Consulta a grade médica para a data informada, filtrando horários de retorno.</td>
+        </tr>
+        <tr>
+          <td><code>buscar_proximos_horarios_disponiveis</code></td>
+          <td>Nenhum (automático)</td>
+          <td>Retorna os próximos 3 dias úteis livres mais próximos na agenda.</td>
+        </tr>
+        <tr>
+          <td><code>confirmar_presenca_consulta</code></td>
+          <td><code>telefone_paciente</code>, <code>agendamento_id</code></td>
+          <td>Atualiza a consulta para Confirmado (D-1) quando o paciente responde ao lembrete.</td>
+        </tr>
+        <tr>
+          <td><code>buscar_consulta_atual</code></td>
+          <td><code>telefone_paciente</code></td>
+          <td>Localiza a consulta futura mais próxima vinculada ao telefone para conferência.</td>
+        </tr>
+        <tr>
+          <td><code>confirmar_remarcacao</code></td>
+          <td><code>agendamento_id</code>, <code>nova_data_hora</code></td>
+          <td>Transfere o horário da consulta e notifica a fila de espera da lacuna aberta.</td>
+        </tr>
+        <tr>
+          <td><code>cancelar_consulta</code></td>
+          <td><code>agendamento_id</code>, <code>motivo</code></td>
+          <td>Cancela o agendamento respeitando antecedência mínima e oferta vaga à fila.</td>
+        </tr>
+        <tr>
+          <td><code>adicionar_fila_espera</code></td>
+          <td><code>paciente_nome</code>, <code>turno_preferido</code>, <code>dias_preferidos</code></td>
+          <td>Adiciona à lista de espera prioritária para convocação de encaixes.</td>
+        </tr>
+        <tr>
+          <td><code>transferir_para_humano</code></td>
+          <td><code>motivo</code></td>
+          <td>Pausa a Sofia e entrega o canal para a recepcionista humana.</td>
+        </tr>
+        <tr>
+          <td><code>obter_informacoes_clinica</code></td>
+          <td>Nenhum (automático)</td>
+          <td>Consulta dados cadastrais: endereço, especialista, CRM e tempo de consulta.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- RODAPÉ EXECUTIVO -->
+  <div class="footer">
+    <div><strong>Iterum Medical Technologies</strong> • Gestão Inteligente de Consultórios Médicos</div>
+    <div>Documento gerado em conformidade com o código-fonte de produção (<code>lib/ai/agent.ts</code>)</div>
+  </div>
+
+</body>
+</html>
