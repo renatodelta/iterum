@@ -1,0 +1,171 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("STORAGE_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Clinic {
+  id                  String   @id @default(uuid())
+  tenantId            String?  @map("tenant_id")
+  name                String
+  doctorName          String?  @map("doctor_name")
+  specialty           String
+  crm                 String?
+  email               String   @unique
+  phone               String
+  address             String?
+  googleCalendarToken String?  @map("google_calendar_token")
+  googleCalendarId    String?  @map("google_calendar_id")
+  workingHours        String   @default("{\"1\":{\"active\":true,\"start\":\"08:00\",\"end\":\"18:00\",\"lunchStart\":\"12:00\",\"lunchEnd\":\"13:00\"},\"2\":{\"active\":true,\"start\":\"08:00\",\"end\":\"18:00\",\"lunchStart\":\"12:00\",\"lunchEnd\":\"13:00\"},\"3\":{\"active\":true,\"start\":\"08:00\",\"end\":\"18:00\",\"lunchStart\":\"12:00\",\"lunchEnd\":\"13:00\"},\"4\":{\"active\":true,\"start\":\"08:00\",\"end\":\"18:00\",\"lunchStart\":\"12:00\",\"lunchEnd\":\"13:00\"},\"5\":{\"active\":true,\"start\":\"08:00\",\"end\":\"18:00\",\"lunchStart\":\"12:00\",\"lunchEnd\":\"13:00\"},\"6\":{\"active\":false,\"start\":\"08:00\",\"end\":\"12:00\",\"lunchStart\":\"\",\"lunchEnd\":\"\"},\"0\":{\"active\":false,\"start\":\"08:00\",\"end\":\"12:00\",\"lunchStart\":\"\",\"lunchEnd\":\"\"}}") @map("working_hours")
+  slotDurationMinutes Int      @default(30) @map("slot_duration_minutes")
+  minCancelHours      Int      @default(2) @map("min_cancel_hours")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patients     Patient[]
+  appointments Appointment[]
+  messages     Message[]
+  waitlists    Waitlist[]
+
+  @@map("clinics")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  document  String?  @unique
+  email     String   @unique
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  whatsappConfig TenantWhatsAppConfig?
+  clinics        Clinic[]
+  patients       Patient[]
+  appointments   Appointment[]
+
+  @@map("tenants")
+}
+
+model TenantWhatsAppConfig {
+  id                 String   @id @default(uuid())
+  tenantId           String   @unique @map("tenant_id")
+  wabaId             String   @map("waba_id")
+  phoneNumberId      String   @unique @map("phone_number_id")
+  displayPhoneNumber String   @map("display_phone_number")
+  systemUserToken    String   @map("system_user_token")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_whatsapp_configs")
+}
+
+model Patient {
+  id        String   @id @default(uuid())
+  tenantId  String?  @map("tenant_id")
+  clinicId  String   @map("clinic_id")
+  name      String
+  phone     String   // E.164 Ex: +5511999999999
+  cpf       String?
+  email     String?
+  birthDate    String?  @map("birth_date")
+  cep          String?  @map("cep")
+  street       String?  @map("street")
+  number       String?  @map("number")
+  neighborhood String?  @map("neighborhood")
+  city         String?  @map("city")
+  notes        String?
+  humanHandoff Boolean  @default(false) @map("human_handoff")
+  humanHandoffAt DateTime? @map("human_handoff_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  messages     Message[]
+  waitlists    Waitlist[]
+
+  @@unique([clinicId, phone])
+  @@map("patients")
+}
+
+model Appointment {
+  id            String   @id @default(uuid())
+  tenantId      String?  @map("tenant_id")
+  clinicId      String   @map("clinic_id")
+  patientId     String   @map("patient_id")
+  startTime     DateTime @map("start_time")
+  endTime       DateTime @map("end_time")
+  status        String   @default("AGENDADO") // AGENDADO, CONFIRMADO, CANCELADO, REMARCADO
+  googleEventId String?  @map("google_event_id")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clinic  Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("appointments")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  patientId String   @map("patient_id")
+  clinicId  String   @map("clinic_id")
+  role      String   // user, assistant, system, tool
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  cpf         String?
+  crm         String?
+  phone       String?
+  login       String?  @unique
+  password    String?
+  role        String   @default("SECRETARIA") // ADMIN, MEDICO, SECRETARIA
+  specialty   String?  // Cargo / Especialidade do usuário
+  permissions String   @default("[]") // Lista de permissões JSON
+  status      String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Waitlist {
+  id             String    @id @default(uuid())
+  clinicId       String    @map("clinic_id")
+  patientId      String?   @map("patient_id")
+  patientName    String    @map("patient_name")
+  patientPhone   String    @map("patient_phone")
+  preferredShift String?   @default("Qualquer Horário") @map("preferred_shift")
+  preferredDays  String?   @default("Qualquer dia útil") @map("preferred_days")
+  status         String    @default("AGUARDANDO") // AGUARDANDO, NOTIFICADO, AGENDADO, RECUSADO
+  notes          String?
+  notifiedAt     DateTime? @map("notified_at")
+  offeredSlot    String?   @map("offered_slot") // JSON string: { startTime, endTime, dateDisplay, timeDisplay }
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient        Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@map("waitlist")
+}
+

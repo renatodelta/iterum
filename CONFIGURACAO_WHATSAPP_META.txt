@@ -1,0 +1,105 @@
+# REGISTRO DA CONFIGURAÇÃO DO WHATSAPP META CLOUD API - ITERUM
+Data: 13 de Outubro de 2026
+Projeto: Iterum
+Hospedagem: Vercel (https://clini-desk-kappa.vercel.app)
+
+================================================================================
+1. RESUMO DO QUE FOI CONFIGURADO COM SUCESSO
+================================================================================
+
+O sistema Iterum foi integrado com sucesso à API Oficial do WhatsApp (Meta Cloud API).
+O fluxo completo testado e aprovado consiste em:
+1. Paciente envia mensagem no WhatsApp.
+2. Meta encaminha a mensagem via Webhook para a Vercel em tempo real.
+3. O backend do Iterum identifica o paciente no banco de dados, busca o histórico e consultas agendadas.
+4. A Inteligência Artificial (OpenAI) processa o pedido e formula a resposta.
+5. O Iterum dispara a resposta oficial via Meta Graph API de volta para o WhatsApp do paciente.
+
+================================================================================
+2. DADOS E CREDENCIAIS DA CONEXÃO
+================================================================================
+
+- URL da Aplicação (Vercel):
+  https://clini-desk-kappa.vercel.app
+
+- Endpoint do Webhook:
+  https://clini-desk-kappa.vercel.app/api/webhooks/whatsapp
+
+- Verify Token do Webhook:
+  (definido na variável VERIFY_TOKEN - não registrar aqui)
+
+- Phone Number ID (Meta):
+  (seu Phone Number ID - ver painel da Meta)
+
+- WhatsApp Business Account ID (WABA):
+  (seu WABA ID - ver painel da Meta)
+
+- ID do Aplicativo na Meta:
+  (seu App ID - ver painel da Meta)
+
+- Número de Teste da Meta:
+  (número de teste da Meta)
+
+- Número de WhatsApp do Paciente de Teste:
+  (número do paciente de teste)
+
+================================================================================
+3. PONTOS CRÍTICOS RESOLVIDOS DURANTE A CONFIGURAÇÃO
+================================================================================
+
+1. CONFIGURAÇÃO DE VARIÁVEIS NA VERCEL:
+   - Variáveis de ambiente como META_ACCESS_TOKEN devem ser inseridas SEM ASPAS duplas.
+   - Sempre que alterar uma variável de ambiente na Vercel, é obrigatório executar um REDEPLOY na aba "Deployments" para os novos valores entrarem em vigor.
+
+2. INSCRIÇÃO DA CONTA WABA NO APLICATIVO (O "PULO DO GATO"):
+   - No painel da Meta, ao criar um bot, a conta comercial (WABA) precisa estar inscrita no seu App.
+   - Caso contrário, a Meta registra os eventos apenas na tela de teste interna e não encaminha para a Vercel.
+   - Foi executada com sucesso a chamada:
+     POST https://graph.facebook.com/v21.0/(seu WABA ID - ver painel da Meta)/subscribed_apps
+     Vinculando o app "Meu_Primeiro_Bot" à WABA, habilitando a entrega automática em tempo real.
+
+================================================================================
+4. ESTRUTURA DE CUSTOS DA META E DA INTELIGÊNCIA ARTIFICIAL
+================================================================================
+
+A) META WHATSAPP CLOUD API:
+- A cobrança NÃO é por mensagem enviada, mas sim por JANELA DE 24 HORAS (Conversa).
+- Se o paciente mandar várias mensagens dentro de 24 horas, conta como 1 única conversa.
+
+- Conversas de Atendimento (Iniciadas pelo Paciente):
+  * Custo aproximado: R$ 0,16 a R$ 0,18 por atendimento completo de 24h.
+  * COTA GRATUITA: A Meta disponibiliza 1.000 conversas de atendimento gratuitas todo mês por conta.
+  * Se a clínica tiver até 1.000 atendimentos mensais de pacientes que chamam primeiro, o custo da Meta é R$ 0,00.
+
+- Conversas de Utilidade (Lembretes de Consulta iniciados pela Clínica):
+  * Custo aproximado: R$ 0,18 a R$ 0,20 por lembrete disparado na véspera.
+
+- Conversas de Marketing (Disparos em massa/promoções):
+  * Custo aproximado: R$ 0,35 a R$ 0,40 por conversa.
+
+B) CUSTO DA INTELIGÊNCIA ARTIFICIAL (OpenAI GPT-4o-mini):
+- Custo por mensagem processada: cerca de US$ 0,0002.
+- Com R$ 10,00 a R$ 15,00 é possível responder de 5.000 a 10.000 mensagens no mês.
+
+================================================================================
+5. PRÓXIMO PASSO: MIGRAÇÃO PARA PRODUÇÃO (NÚMERO DEFINITIVO)
+================================================================================
+
+O token utilizado no teste é temporário (expira em 24h).
+Para colocar o número comercial definitivo da clínica em produção perpétua:
+
+1. No Gerenciador de Negócios da Meta (business.facebook.com):
+   - Acessar "Configurações do Negócio" > "Usuários" > "Usuários do Sistema".
+   - Criar um usuário do sistema (Ex: "Iterum Bot").
+   - Atribuir a ele o controle do aplicativo.
+   - Clicar em "Gerar Token", selecionar o aplicativo e marcar as permissões:
+     * whatsapp_business_messaging
+     * whatsapp_business_management
+   - Definir a validade do token como "Nunca expira".
+
+2. Cadastrar o número definitivo da clínica na Meta e fazer a verificação via SMS/Ligação.
+3. Atualizar o META_ACCESS_TOKEN e META_PHONE_NUMBER_ID no painel da Vercel.
+4. Fazer o Redeploy na Vercel.
+
+
+(Atenção: este arquivo NÃO deve conter tokens, IDs ou telefones reais. Segredos ficam somente no .env e nas variáveis da Vercel.)

@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>ITERUM — Documentação do Projeto</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 20mm 16mm;
+      @bottom-right {
+        content: counter(page);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-size: 8.5pt;
+        color: #64748b;
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      line-height: 1.5;
+      font-size: 9.5pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* CAPA */
+    .cover-page {
+      page-break-after: always;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+      padding: 60px 20px 40px 20px;
+    }
+
+    .cover-logo-wrapper {
+      margin-top: 80px;
+    }
+
+    .cover-logo {
+      width: 140px;
+      height: auto;
+      border-radius: 20px;
+    }
+
+    .cover-title {
+      font-size: 28pt;
+      font-weight: 800;
+      color: #005a43;
+      letter-spacing: 2px;
+      margin-top: 25px;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    .cover-subtitle {
+      font-size: 13pt;
+      font-weight: 600;
+      color: #059669;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 30px;
+    }
+
+    .cover-tagline {
+      font-size: 10.5pt;
+      color: #475569;
+      max-width: 520px;
+      line-height: 1.6;
+      border-top: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
+      padding: 16px 0;
+      margin: 0 auto;
+    }
+
+    .cover-footer {
+      margin-bottom: 30px;
+      font-size: 9pt;
+      color: #64748b;
+    }
+
+    .cover-footer strong {
+      color: #1e293b;
+    }
+
+    /* PÁGINAS INTERNAS */
+    .page-header {
+      font-size: 7.5pt;
+      color: #64748b;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    h1, h2, h3, h4 {
+      color: #005a43;
+      margin-top: 18px;
+      margin-bottom: 8px;
+      font-weight: 700;
+      page-break-after: avoid;
+    }
+
+    h1 {
+      font-size: 15pt;
+      border-bottom: 1.5px solid #005a43;
+      padding-bottom: 4px;
+      margin-top: 24px;
+    }
+
+    h2 {
+      font-size: 12pt;
+      margin-top: 14px;
+    }
+
+    h3 {
+      font-size: 10pt;
+      margin-top: 10px;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 8px;
+      text-align: justify;
+    }
+
+    ul, ol {
+      margin-top: 4px;
+      margin-bottom: 10px;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    /* TABELAS */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 14px 0;
+      font-size: 8.5pt;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: #005a43;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td {
+      background-color: #f8fafc;
+    }
+
+    /* CAIXAS DE DESTAQUE / ALERTA */
+    .callout {
+      background: #f0fdf4;
+      border-left: 4px solid #059669;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-size: 8.5pt;
+      border-radius: 0 6px 6px 0;
+      page-break-inside: avoid;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge-approved { background: #dcfce7; color: #166534; }
+    .badge-proposed { background: #e0f2fe; color: #075985; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+
+    .signature-box {
+      margin-top: 40px;
+      page-break-inside: avoid;
+    }
+    .signature-line {
+      border-bottom: 1px solid #94a3b8;
+      width: 320px;
+      margin-top: 45px;
+      margin-bottom: 4px;
+    }
+
+    .color-swatch {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      vertical-align: middle;
+      margin-right: 6px;
+      border: 1px solid #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- CAPA -->
+  <div class="cover-page">
+    <div class="cover-logo-wrapper">
+      <img src="../iterum-icon.png" class="cover-logo" alt="Iterum Logo">
+      <div class="cover-title">Iterum</div>
+      <div class="cover-subtitle">Documentação do Projeto</div>
+      <div class="cover-tagline">
+        <strong>Secretária Virtual Inteligente com Atendimento 24h para Médicos</strong><br>
+        Visão • Requisitos • Regras de Negócio • Arquitetura Técnica • Cronograma • Critérios de Aceite
+      </div>
+    </div>
+    
+    <div class="cover-footer">
+      <strong>Versão 1.1 | 01 de novembro de 2026</strong><br>
+      Documento-base oficial para construção, validação, operação e evolução da plataforma
+    </div>
+  </div>
+
+  <!-- PÁGINA 2: COMO UTILIZAR + ÍNDICE -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 2</span>
+  </div>
+
+  <h2>Como utilizar este documento</h2>
+  <p>
+    Este documento consolida o entendimento integral do projeto <strong>Iterum</strong>. Ele deve ser tratado como referência técnica e gerencial controlada: quando uma decisão mudar, registrar a alteração, a justificativa, a data e o impacto. Requisitos futuros não devem ser considerados aprovados apenas por estarem descritos como possibilidades.
+  </p>
+  <p>
+    <strong>Legenda:</strong> 
+    <span class="badge badge-approved">APROVADO</span> = decisão confirmada e vigente no projeto; 
+    <span class="badge badge-proposed">PROPOSTO</span> = recomendação técnica ou de produto a validar; 
+    <span class="badge badge-pending">PENDENTE</span> = definição ainda necessária antes da fase correspondente.
+  </p>
+
+  <h2>Índice</h2>
+  <ol>
+    <li>Identificação e controle do documento</li>
+    <li>Sumário executivo</li>
+    <li>Visão, missão e objetivos</li>
+    <li>Escopo do produto e modelo SaaS Multi-Tenant</li>
+    <li>Estrutura funcional e mapa da aplicação</li>
+    <li>Requisitos funcionais</li>
+    <li>Regras de negócio</li>
+    <li>Inteligência Artificial, Especialidades e Persona da Sofia</li>
+    <li>Identidade visual e experiência do usuário (UI/UX)</li>
+    <li>Arquitetura e especificações técnicas</li>
+    <li>Hospedagem, custos e infraestrutura</li>
+    <li>Segurança, privacidade e conformidade com a LGPD</li>
+    <li>Desempenho, escalabilidade e observabilidade</li>
+    <li>Cronograma de referência e marcos</li>
+    <li>Entregáveis do projeto</li>
+    <li>Testes e critérios de aceite</li>
+    <li>Gestão de mudanças, Git e versionamento</li>
+    <li>Riscos, premissas e restrições</li>
+    <li>Pendências para aprovação e próximas decisões</li>
+    <li>Aprovação e histórico de versões</li>
+    <li>Anexo A — Referências técnicas e institucionais</li>
+    <li>Anexo B — Glossário</li>
+  </ol>
+
+  <!-- PÁGINA 3: IDENTIFICAÇÃO, SUMÁRIO, VISÃO -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 3</span>
+  </div>
+
+  <h1>1. Identificação e controle do documento</h1>
+  <p><strong>Projeto:</strong> Iterum — Secretária Virtual Inteligente com Atendimento 24h</p>
+  <p><strong>Documento:</strong> Documento de Visão, Requisitos, Regras de Negócio, Arquitetura e Planejamento</p>
+  <p><strong>Versão:</strong> 1.1 | <strong>Situação:</strong> Baseline Oficial Atualizada (Suporte Multi-Tenant & Especialidade Médica Dinâmica) | <strong>Data:</strong> 01 de novembro de 2026</p>
+  <p><strong>Natureza:</strong> Documento oficial de referência técnica, arquitetural, gerencial e apresentável a stakeholders, investidores e médicos clientes.</p>
+
+  <h3>1.1 Objetivo deste documento</h3>
+  <p>
+    Registrar formalmente as decisões aprovadas, a visão do produto, a arquitetura SaaS Multi-Tenant, os requisitos funcionais e não funcionais, as regras de negócio de agendamento e lista de espera, o alinhamento de especialidade médica da IA Sofia, o cronograma e os critérios de aceite.
+  </p>
+
+  <h3>1.2 Convenções</h3>
+  <p>
+    Os itens estão classificados como <span class="badge badge-approved">APROVADO</span> (decisão vigente e homologada), <span class="badge badge-proposed">PROPOSTO</span> (sugestão ou melhoria arquitetural em estudo) ou <span class="badge badge-pending">PENDENTE</span> (decisão necessária antes da execução de nova etapa).
+  </p>
+
+  <h1>2. Sumário executivo</h1>
+  <p>
+    O <strong>Iterum</strong> é uma plataforma moderna e inteligente de automação de recepção e gestão de agenda médica, projetada para atuar como uma <strong>secretária virtual 24 horas</strong> de alta fidelidade e humanização (personificada pela inteligência artificial <strong>Sofia</strong>).
+  </p>
+  <p>
+    A aplicação opera em modelo de <strong>Software como Serviço (SaaS Multi-Tenant)</strong>: múltiplos médicos podem contratar o sistema, cada um com seu próprio número comercial de WhatsApp (Meta Cloud API), sua identidade institucional e sua respectiva <strong>Especialidade Médica Principal</strong> (ex.: Pediatria, Cardiologia, Dermatologia).
+  </p>
+  <p>
+    A solução integra de maneira elegante e robusta três componentes fundamentais:
+  </p>
+  <ul>
+    <li><strong>Atendimento Multicanal WhatsApp Oficial (Meta Cloud API):</strong> Atendimento conversacional empático da Sofia, que reconhece a especialidade do médico contratante, tira dúvidas institucionais, checa horários livres em tempo real e agenda consultas.</li>
+    <li><strong>Cockpit Médico Web (Next.js 14):</strong> Painel gerencial responsivo com calendário interativo, gestão de pacientes, disparo de lembretes e intervenção humana imediata (<em>Human Handoff</em>).</li>
+    <li><strong>Recuperação Ativa de Vagas (Waitlist Inteligente):</strong> Algoritmo que detecta desistências e aciona pacientes em fila de espera de forma justa e cronometrada.</li>
+  </ul>
+
+  <h1>3. Visão, missão e objetivos</h1>
+  <h3>3.1 Visão do produto</h3>
+  <p>Ser a secretária virtual médica definitiva no Brasil, estabelecendo o padrão ouro em acolhimento ao paciente e eficiência de agenda para o profissional de saúde autônomo.</p>
+
+  <h3>3.2 Missão</h3>
+  <p>Oferecer aos médicos e seus pacientes um ecossistema de comunicação e agendamento contínuo, humanizado, seguro e pontual, reduzindo o estresse operacional do consultório.</p>
+
+  <h3>3.3 Objetivos gerais</h3>
+  <ul>
+    <li>Garantir atendimento imediato 24h por dia para dúvidas básicas e marcação de consultas.</li>
+    <li>Reconhecer e respeitar a especialidade médica do médico atendido, orientando sintomas fora do escopo sem regras manuais frágeis.</li>
+    <li>Reduzir o <em>no-show</em> (faltas) em até 70% com lembretes automáticos e confirmações ativas.</li>
+    <li>Recuperar vagas ociosas por cancelamentos através de fila de espera automatizada.</li>
+    <li>Garantir isolamento de dados seguro entre diferentes médicos clientes na mesma infraestrutura.</li>
+  </ul>
+
+  <!-- PÁGINA 4: ESCOPO E SAAS -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 4</span>
+  </div>
+
+  <h3>3.4 Público-alvo</h3>
+  <p>
+    <strong>Médicos em consultório autônomo</strong> de qualquer especialidade médica que gerenciam a própria agenda ou contam com secretária presencial. O público final são os <strong>pacientes</strong>, que exigem rapidez e acolhimento no WhatsApp sem precisar instalar novos aplicativos.
+  </p>
+
+  <h1>4. Escopo do produto e modelo SaaS Multi-Tenant</h1>
+
+  <div class="callout">
+    <strong>Arquitetura Multi-Tenant & Identidade por Médico:</strong><br>
+    O Iterum foi estruturado para suportar múltiplos médicos clientes. Cada consultório possui seu próprio perfil, expediente, especialidade (<code>specialty</code>) e número oficial de WhatsApp. A Sofia adapta dinamicamente suas conversas ao contexto médico de cada profissional contratante.
+  </div>
+
+  <h3>4.1 Escopo previsto para o MVP</h3>
+  <ul>
+    <li><strong>Painel Administrativo Web (Next.js 14):</strong>
+      <ul>
+        <li>Autenticação com sessão segura (cookies HttpOnly) e perfis (ADMIN, MEDICO, SECRETARIA).</li>
+        <li>Dashboard com indicadores em tempo real (consultas hoje, confirmadas, pendentes, faltas).</li>
+        <li>Calendário interativo semanal e diário de horários.</li>
+        <li>Módulo de pacientes com histórico de consultas e dados cadastrais.</li>
+        <li>Gestão completa da Fila de Espera (Waitlist) com filtros por turno e dia.</li>
+        <li>Cockpit de Atendimentos WhatsApp com histórico e botão de Intervenção Humana (Handoff).</li>
+        <li>Configurações de horários de expediente, duração do slot e especialidade do médico.</li>
+      </ul>
+    </li>
+    <li><strong>Atendimento com IA Sofia (WhatsApp Oficial):</strong>
+      <ul>
+        <li>Integração homologada com Meta Cloud API Oficial via números próprios de cada consultório.</li>
+        <li>Injeção dinâmica da Especialidade Médica Principal no contexto de raciocínio da IA.</li>
+        <li>Diretriz de Congruência Clínica: queixas compatíveis são agendadas; queixas manifestamente incompatíveis são esclarecidas com delicadeza.</li>
+        <li>Transcrição automática de mensagens de voz (áudios) via OpenAI Whisper.</li>
+        <li>Sofia equipada com ferramentas (*Function Calling*) para consultar agenda, marcar e cancelar consultas.</li>
+        <li>Transbordo inteligente para a secretária física em casos de urgência ou dúvidas clínicas.</li>
+        <li>Fila assíncrona Upstash QStash & Redis para garantir entrega sem timeouts.</li>
+        <li>Disparo programado de lembretes de consulta (24h e 2h antes) e felicitação de aniversário.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>4.2 Fora do escopo do MVP</h3>
+  <ul>
+    <li>Clínicas com dezenas de salas simultâneas e múltiplos médicos atendendo no mesmo horário.</li>
+    <li>Prontuário eletrônico completo com receituário e certificação digital ICP-Brasil.</li>
+    <li>Cobrança financeira transacional direta com gateway de cartão de crédito no chat.</li>
+    <li>Aplicativo móvel nativo em lojas de aplicativos (substituído com excelência pela versão web responsiva).</li>
+  </ul>
+
+  <!-- PÁGINA 5: ESTRUTURA FUNCIONAL E ROTAS -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 5</span>
+  </div>
+
+  <h1>5. Estrutura funcional e mapa da aplicação</h1>
+
+  <h3>5.1 Telas e Navegação Principal</h3>
+  <ul>
+    <li><strong>/login:</strong> Acesso autenticado da equipe do consultório com validação de perfil e permissões.</li>
+    <li><strong>/ (Dashboard Principal):</strong>
+      <ul>
+        <li><em>Visão Geral:</em> Métricas do dia, avisos de vagas na fila de espera e próximos agendamentos.</li>
+        <li><em>Calendário:</em> Grade horária interativa, visualização de slots livres/ocupados e agendamento manual rápido.</li>
+        <li><em>Pacientes:</em> Base de contatos, histórico de comparecimento e link direto para WhatsApp.</li>
+        <li><em>Lista de Espera:</em> Monitor de pacientes aguardando vagas com preferências de dias e turnos.</li>
+        <li><em>Atendimentos WhatsApp:</em> Visualizador de conversas em tempo real com status da Sofia e controle de handoff.</li>
+        <li><em>Configurações do Consultório:</em> Definição de horários de expediente, especialidade do médico, CRM e duração do slot.</li>
+        <li><em>Conexão WhatsApp:</em> Monitoramento do status da Meta Cloud API e números associados.</li>
+      </ul>
+    </li>
+    <li><strong>/agendamento:</strong> Portal web responsivo opcional para autoagendamento pelo próprio paciente.</li>
+  </ul>
+
+  <h3>5.2 Estrutura de Endpoints de API (/app/api)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 32%;">Rota de API</th>
+        <th style="width: 18%;">Métodos</th>
+        <th>Responsabilidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/api/auth/login</code></td>
+        <td>POST</td>
+        <td>Autenticação com e-mail/senha e geração de token seguro de sessão.</td>
+      </tr>
+      <tr>
+        <td><code>/api/appointments</code></td>
+        <td>GET, POST</td>
+        <td>Listagem de consultas por período e criação de agendamento validando conflitos.</td>
+      </tr>
+      <tr>
+        <td><code>/api/appointments/availability</code></td>
+        <td>GET</td>
+        <td>Cálculo dinâmico de slots livres conforme o expediente cadastrado e consultas ativas.</td>
+      </tr>
+      <tr>
+        <td><code>/api/appointments/cron-reminders</code></td>
+        <td>GET, POST</td>
+        <td>Disparo agendado de lembretes e confirmações automáticas aos pacientes.</td>
+      </tr>
+      <tr>
+        <td><code>/api/patients</code></td>
+        <td>GET, POST, PUT</td>
+        <td>Gestão do cadastro de pacientes e histórico de consultas.</td>
+      </tr>
+      <tr>
+        <td><code>/api/waitlist</code></td>
+        <td>GET, POST, PATCH</td>
+        <td>Gerenciamento de pacientes na fila de espera e acionamento de encaixes.</td>
+      </tr>
+      <tr>
+        <td><code>/api/webhooks/whatsapp</code></td>
+        <td>GET, POST</td>
+        <td>Verificação de webhook Meta e enfileiramento seguro de mensagens com roteamento por tenant.</td>
+      </tr>
+      <tr>
+        <td><code>/api/webhooks/whatsapp/worker</code></td>
+        <td>POST</td>
+        <td>Processador em background desacoplado da fila com acionamento do LLM e Whisper.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PÁGINA 6: REQUISITOS FUNCIONAIS -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 6</span>
+  </div>
+
+  <h1>6. Requisitos funcionais</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 10%;">ID</th>
+        <th style="width: 25%;">Requisito</th>
+        <th style="width: 50%;">Descrição</th>
+        <th style="width: 15%;">Prioridade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>RF-01</strong></td>
+        <td>Autenticação Segura</td>
+        <td>Login do médico e secretária com verificação de credenciais criptografadas e proteção de rotas.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-02</strong></td>
+        <td>Gestão da Agenda</td>
+        <td>Visualização em calendário, bloqueio automático de conflitos e remarcações.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-03</strong></td>
+        <td>Expediente Flexível</td>
+        <td>Configuração de dias de atendimento, horários de início/fim e horário de almoço.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-04</strong></td>
+        <td>WhatsApp Oficial (Meta)</td>
+        <td>Recepção e envio de mensagens via Meta Cloud API com verificação de assinatura HMAC.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-05</strong></td>
+        <td>Sofia: IA Conversacional</td>
+        <td>Atendimento 24h em linguagem natural empática, clara e objetiva com suporte a contexto.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-06</strong></td>
+        <td>Roteamento Multi-Tenant</td>
+        <td>Identificar a clínica e o médico corretos a partir do <code>phoneNumberId</code> da mensagem recebida.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-07</strong></td>
+        <td>Congruência Clínica</td>
+        <td>A Sofia utiliza o campo <code>specialty</code> do médico para contextualizar respostas e orientar queixas fora do escopo.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-08</strong></td>
+        <td>Function Calling de IA</td>
+        <td>Ferramentas para Sofia consultar vagas em tempo real e agendar/cancelar diretamente no banco.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-09</strong></td>
+        <td>Fila de Espera Ativa</td>
+        <td>Cadastro de pacientes sem horário e oferta automática de horários decorrentes de cancelamentos.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-10</strong></td>
+        <td>Intervenção Humana</td>
+        <td>Botão no painel para pausar a Sofia e permitir que a secretária assuma o atendimento manual.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-11</strong></td>
+        <td>Transcrição de Áudio</td>
+        <td>Processar mensagens de voz enviadas pelo paciente através da transcrição com OpenAI Whisper.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+      <tr>
+        <td><strong>RF-12</strong></td>
+        <td>Lembretes de Consulta</td>
+        <td>Envio automático de confirmação de presença 24h e 2h antes com botões interativos no WhatsApp.</td>
+        <td><span class="badge badge-approved">MVP</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PÁGINA 7: REGRAS DE NEGÓCIO -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 7</span>
+  </div>
+
+  <h1>7. Regras de negócio</h1>
+  <ul>
+    <li><strong>RN-01 — Centralidade no Consultório Individual:</strong> Toda a comunicação, tom de voz da assistente Sofia e interface refletem um médico e seu consultório. A expansão para clínicas com dezenas de salas simultâneas é tratada como escopo futuro.</li>
+    <li><strong>RN-02 — Conflito Zero de Horários:</strong> O sistema bloqueia transacionalmente qualquer tentativa de duplo agendamento no mesmo slot de atendimento.</li>
+    <li><strong>RN-03 — Antecedência Mínima de Cancelamento:</strong> Cancelamentos só são aceitos pela Sofia até o limite de horas configurado pelo médico (padrão de 2 horas antes da consulta).</li>
+    <li><strong>RN-04 — Prioridade Equitativa na Lista de Espera:</strong> Ao liberar uma vaga, o sistema notifica o primeiro paciente elegível cadastrado. Se o paciente não responder em tempo hábil ou recusar, a vaga é automaticamente ofertada ao próximo.</li>
+    <li><strong>RN-05 — Soberania Humana e Limite Clínico:</strong> A Sofia não realiza diagnósticos, nem prescreve medicamentos. Diante de qualquer menção de urgência ou dúvida clínica, a IA ativa o flag <code>humanHandoff</code>, silencia a automação e recomenda atendimento de emergência (SAMU 192).</li>
+    <li><strong>RN-06 — Congruência de Especialidade:</strong> Sintomas ou pedidos manifestamente incompatíveis com a especialidade do médico (ex: adulto com dor cervical procurando pediatra) recebem esclarecimento amigável sobre o público atendido e pergunta sobre agendamento para familiares elegíveis.</li>
+    <li><strong>RN-07 — Formato Telefônico Canônico E.164:</strong> Todos os telefones devem conter código de país (+55) e DDD, garantindo conformidade com a Meta Cloud API.</li>
+    <li><strong>RN-08 — Tolerância a Falhas e Resiliência:</strong> Mensagens de webhook recebidas da Meta são enviadas para filas no Upstash Redis, garantindo resposta imediata à Meta (< 3 segundos) para evitar cancelamento de webhook.</li>
+  </ul>
+
+  <h1>8. Inteligência Artificial, Especialidades e Persona da Sofia</h1>
+
+  <h3>8.1 Persona e Diretrizes da Sofia</h3>
+  <p>
+    A Sofia é a recepcionista virtual inteligente do consultório. Seu papel é acolher com máxima atenção, rapidez e simpatia. Suas mensagens são formatadas com espaçamento legível, listas numeradas e uso comedido de emojis adequados ao ambiente de saúde.
+  </p>
+
+  <h3>8.2 Diretriz de Especialidade Médica Dinâmica</h3>
+  <p>
+    Para evitar a necessidade de mapeamentos manuais de cada sintoma ou "papo furado", a Sofia recebe dinamicamente a especialidade do médico no início de cada atendimento. Ela utiliza seu modelo de linguagem para identificar a congruência entre a queixa do paciente e o escopo do consultório, conduzindo agendamentos com naturalidade.
+  </p>
+
+  <h3>8.3 Matriz de Ferramentas (Tools / Function Calling)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 30%;">Nome da Ferramenta</th>
+        <th style="width: 25%;">Parâmetros</th>
+        <th>Comportamento no Sistema</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>buscar_horarios_disponiveis</code></td>
+        <td><code>data_desejada, periodo</code></td>
+        <td>Consulta horários livres no banco considerando o expediente e consultas ativas.</td>
+      </tr>
+      <tr>
+        <td><code>criar_novo_agendamento</code></td>
+        <td><code>nova_data_hora, beneficiario_nome</code></td>
+        <td>Cria o agendamento no banco de dados e gera o status CONFIRMADO ou AGENDADO.</td>
+      </tr>
+      <tr>
+        <td><code>confirmar_remarcacao</code></td>
+        <td><code>agendamento_id, nova_data_hora</code></td>
+        <td>Atualiza o horário da consulta e recalcula a disponibilidade na agenda.</td>
+      </tr>
+      <tr>
+        <td><code>cancelar_consulta</code></td>
+        <td><code>agendamento_id, motivo</code></td>
+        <td>Marca o status como CANCELADO e dispara gatilho de busca na fila de espera.</td>
+      </tr>
+      <tr>
+        <td><code>cadastrar_paciente</code></td>
+        <td><code>nome, nascimento, cep</code></td>
+        <td>Registra os dados obrigatórios do paciente antes de formalizar o agendamento.</td>
+      </tr>
+      <tr>
+        <td><code>transferir_para_humano</code></td>
+        <td><code>motivo</code></td>
+        <td>Sinaliza no painel que a secretária física deve assumir o paciente e silencia a IA.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PÁGINA 8: IDENTIDADE VISUAL E UI/UX -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 8</span>
+  </div>
+
+  <h1>9. Identidade visual e experiência do usuário (UI/UX)</h1>
+  <p>
+    A identidade visual do Iterum transmite sobriedade médica, higiene, modernidade e tranquilidade, adotando tons de verde profundo inspirados na saúde e bem-estar.
+  </p>
+
+  <h3>9.1 Paleta de Cores Aprovada</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Cor</th>
+        <th>Código Hex</th>
+        <th>Aplicação Sugerida</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Verde Médico Primário</strong></td>
+        <td><code>#005A43</code></td>
+        <td><span class="color-swatch" style="background:#005A43;"></span>Cabeçalho institucional, botões de ação principal e destaque de marca.</td>
+      </tr>
+      <tr>
+        <td><strong>Verde Esmeralda</strong></td>
+        <td><code>#059669</code></td>
+        <td><span class="color-swatch" style="background:#059669;"></span>Badges de status ativo, confirmações de consulta e ícones de WhatsApp.</td>
+      </tr>
+      <tr>
+        <td><strong>Cinza Claro de Fundo</strong></td>
+        <td><code>#F8FAFC</code></td>
+        <td><span class="color-swatch" style="background:#F8FAFC;"></span>Fundo geral do sistema para leitura confortável e sem fadiga visual.</td>
+      </tr>
+      <tr>
+        <td><strong>Bordas e Divisores</strong></td>
+        <td><code>#E2E8F0</code></td>
+        <td><span class="color-swatch" style="background:#E2E8F0;"></span>Separações de linhas, contornos de cartões e inputs.</td>
+      </tr>
+      <tr>
+        <td><strong>Texto Principal</strong></td>
+        <td><code>#0F172A</code></td>
+        <td><span class="color-swatch" style="background:#0F172A;"></span>Tipografia de alto contraste para leitura perfeita em qualquer condição.</td>
+      </tr>
+      <tr>
+        <td><strong>Alerta e Cancelamento</strong></td>
+        <td><code>#DC2626</code></td>
+        <td><span class="color-swatch" style="background:#DC2626;"></span>Consultas canceladas, ações destrutivas e faltas.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h1>10. Arquitetura e especificações técnicas</h1>
+
+  <h3>10.1 Decisão Arquitetural Aprovada</h3>
+  <p>
+    A solução é construída como um monólito modular serverless com <strong>Next.js 14 (App Router)</strong>, hospedado na infraestrutura global da <strong>Vercel</strong>, com persistência relacional no <strong>PostgreSQL</strong> via <strong>Prisma ORM</strong>, fila de mensageria assíncrona <strong>Upstash QStash & Redis</strong> e modelos de linguagem <strong>OpenAI GPT-4o / Google Gemini</strong>.
+  </p>
+
+  <h3>10.2 Matriz Tecnológica</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 30%;">Camada</th>
+        <th style="width: 35%;">Tecnologia Adotada</th>
+        <th>Finalidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Framework Full-Stack</td>
+        <td>Next.js 14 (App Router) + React 18</td>
+        <td>Interface reativa do painel e API serverless unificada.</td>
+      </tr>
+      <tr>
+        <td>Linguagem</td>
+        <td>TypeScript 5</td>
+        <td>Tipagem estática estrita e prevenção de erros em produção.</td>
+      </tr>
+      <tr>
+        <td>Estilos e Ícones</td>
+        <td>Tailwind CSS 3 + Lucide React</td>
+        <td>Design system consistente e visual médico moderno.</td>
+      </tr>
+      <tr>
+        <td>Banco de Dados</td>
+        <td>PostgreSQL</td>
+        <td>Armazenamento relacional com integridade ACID para agendamentos.</td>
+      </tr>
+      <tr>
+        <td>ORM</td>
+        <td>Prisma 5</td>
+        <td>Modelagem estruturada de dados, migrações e consultas tipadas.</td>
+      </tr>
+      <tr>
+        <td>Motor de IA</td>
+        <td>OpenAI (GPT-4o) / Google Gemini</td>
+        <td>Processamento de linguagem natural e acionamento de ferramentas.</td>
+      </tr>
+      <tr>
+        <td>Transcrição de Voz</td>
+        <td>OpenAI Whisper</td>
+        <td>Compreensão de áudios enviados pelos pacientes no WhatsApp.</td>
+      </tr>
+      <tr>
+        <td>Filas Serverless</td>
+        <td>Upstash QStash + Redis</td>
+        <td>Desacoplamento de webhook e garantia de entrega sem reenvios.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- PÁGINA 9: CUSTOS, SEGURANÇA E LGPD -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 9</span>
+  </div>
+
+  <h1>11. Hospedagem, custos e infraestrutura</h1>
+
+  <h3>11.1 Estimativa de Custos Operacionais (Por Consultório)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Componente</th>
+        <th>Plano / Provedor</th>
+        <th>Custo Mensal Estimado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Aplicação Web & API</td>
+        <td>Vercel (Hobby / Pro)</td>
+        <td>U$ 0,00 a U$ 20,00</td>
+      </tr>
+      <tr>
+        <td>Banco de Dados PostgreSQL</td>
+        <td>Postgres Gerenciado (Supabase / Neon)</td>
+        <td>U$ 0,00 a U$ 25,00</td>
+      </tr>
+      <tr>
+        <td>Fila de Mensagens Assíncronas</td>
+        <td>Upstash QStash + Redis</td>
+        <td>U$ 0,00 (Gratuito no tier de volume padrão)</td>
+      </tr>
+      <tr>
+        <td>Consumo de Tokens de IA</td>
+        <td>OpenAI / Google Gemini API</td>
+        <td>R$ 15,00 a R$ 40,00 (conforme volume de pacientes)</td>
+      </tr>
+      <tr>
+        <td>Meta Cloud API WhatsApp</td>
+        <td>Primeiras 1.000 conversas gratuitas/mês</td>
+        <td>R$ 0,00 para início de operação do consultório</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h1>12. Segurança, privacidade e conformidade com a LGPD</h1>
+  <ul>
+    <li><strong>Minimização de Dados:</strong> O Iterum coleta apenas o estritamente necessário para a marcação da consulta (nome, telefone, data de nascimento e observações de preparo). Dados clínicos profundos permanecem restritos ao prontuário físico/médico do profissional.</li>
+    <li><strong>Verificação Criptográfica de Webhooks:</strong> Todas as chamadas recebidas da Meta são validadas com HMAC SHA-256 no cabeçalho <code>x-hub-signature-256</code> contra o segredo da aplicação. Chamadas não autenticadas são descartadas imediatamente.</li>
+    <li><strong>Gestão Rigorosa de Segredos:</strong> Tokens de acesso permanente, senhas e chaves de banco nunca são commitados no Git ou expostos em bundles de frontend. São administrados exclusivamente via variáveis de ambiente seguras da Vercel.</li>
+    <li><strong>Proteção de Sessão:</strong> Autenticação por cookies HttpOnly protegidos com SameSite e encriptação TLS obrigatória em todas as rotas.</li>
+  </ul>
+
+  <h1>13. Desempenho, escalabilidade e observabilidade</h1>
+  <ul>
+    <li><strong>Desacoplamento Assíncrono:</strong> Ao receber um evento da Meta, o webhook do Iterum responde em menos de 200ms com HTTP 200 após publicar o evento no QStash, garantindo que o tempo de raciocínio da IA não exceda o timeout da Meta.</li>
+    <li><strong>Logs Estruturados e Identificados:</strong> Mensagens de console padronizadas com prefixos visuais facilitam a depuração em tempo real no console de produção.</li>
+    <li><strong>Edge Network e Caching:</strong> A interface do painel é entregue através da CDN global da Vercel com latência mínima no Brasil.</li>
+  </ul>
+
+  <!-- PÁGINA 10: CRONOGRAMA E ENTREGÁVEIS -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 10</span>
+  </div>
+
+  <h1>14. Cronograma de referência e marcos</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%;">Marco</th>
+        <th style="width: 35%;">Atividades Principais</th>
+        <th style="width: 35%;">Entregáveis</th>
+        <th style="width: 15%;">Situação</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>M1 — Fundação</strong></td>
+        <td>Setup Next.js, Prisma, PostgreSQL, Docker/XAMPP local e autenticação.</td>
+        <td>Estrutura de rotas, schema e tela de login funcional.</td>
+        <td><span class="badge badge-approved">Concluído</span></td>
+      </tr>
+      <tr>
+        <td><strong>M2 — Cockpit Médico</strong></td>
+        <td>Construção da UI do Dashboard, calendário de consultas e pacientes.</td>
+        <td>Interface de agendamentos e cadastros em tempo real.</td>
+        <td><span class="badge badge-approved">Concluído</span></td>
+      </tr>
+      <tr>
+        <td><strong>M3 — WhatsApp Meta</strong></td>
+        <td>Integração com a Meta Cloud API e implementação de filas Upstash QStash/Redis.</td>
+        <td>Webhook seguro e mensageria bidirecional operando.</td>
+        <td><span class="badge badge-approved">Concluído</span></td>
+      </tr>
+      <tr>
+        <td><strong>M4 — Inteligência Sofia</strong></td>
+        <td>Orquestração de prompts, ferramentas de IA e fluxo de agendamento natural.</td>
+        <td>Sofia agendando e cancelando via chat natural.</td>
+        <td><span class="badge badge-approved">Concluído</span></td>
+      </tr>
+      <tr>
+        <td><strong>M5 — Fila de Espera & Especialidades</strong></td>
+        <td>Automação de encaixes, painel de handoff e injeção dinâmica de especialidade médica.</td>
+        <td>Recuperação de cancelamentos e contexto clínico ativo.</td>
+        <td><span class="badge badge-approved">Concluído</span></td>
+      </tr>
+      <tr>
+        <td><strong>M6 — Homologação</strong></td>
+        <td>Testes integrados de ponta a ponta, auditoria de segurança e deploy final.</td>
+        <td>Sistema homologado e publicado em domínio próprio.</td>
+        <td><span class="badge badge-proposed">Em Execução</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h1>15. Entregáveis do projeto</h1>
+  <ul>
+    <li><strong>E-01 — Código-fonte Completo:</strong> Repositório versionado com histórico limpo de alterações no padrão Conventional Commits.</li>
+    <li><strong>E-02 — Cockpit Web do Consultório:</strong> Painel responsivo para gestão de horários, pacientes e configuração de expediente.</li>
+    <li><strong>E-03 — Sofia WhatsApp:</strong> Secretária virtual inteligente homologada no número oficial de cada consultório com perfil comercial da clínica.</li>
+    <li><strong>E-04 — Módulo de Recuperação de Vagas:</strong> Sistema de lista de espera automatizada para horários vagos.</li>
+    <li><strong>E-05 — Documentação Executiva e Manual Operacional:</strong> Documento de projeto, manual da IA Sofia e guias de contingência.</li>
+  </ul>
+
+  <h1>16. Testes e critérios de aceite</h1>
+  <h3>16.1 Critérios de Aceite da Plataforma</h3>
+  <ul>
+    <li>O médico consegue visualizar e alterar consultas na visão semanal e diária em telas móveis e desktop.</li>
+    <li>A assistente Sofia consulta vagas em tempo real e não agenda horários em duplicidade.</li>
+    <li>Queixas manifestamente incompatíveis com a especialidade recebem esclarecimento educado sem dispersão.</li>
+    <li>Cancelamentos respeitam a regra de antecedência configurada e notificam a lista de espera.</li>
+    <li>O acionamento de intervenção humana desativa imediatamente as respostas automáticas da IA para aquele paciente.</li>
+  </ul>
+
+  <!-- PÁGINA 11: RISCOS, PENDÊNCIAS E APROVAÇÃO -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 11</span>
+  </div>
+
+  <h1>17. Gestão de mudanças, Git e versionamento</h1>
+  <ul>
+    <li><strong>Padrão de Commits:</strong> Mensagens no padrão Conventional Commits em português e sem acentos (ex.: <code>feat(...)</code>, <code>fix(...)</code>, <code>docs(...)</code>).</li>
+    <li><strong>Fluxo de Deploy Contínuo:</strong> A branch <code>main</code> é a branch de produção integrada diretamente à Vercel. Toda alteração aprovada é enviada via <code>git push origin main</code>.</li>
+    <li><strong>Auditoria Pré-Commit:</strong> Arquivos sensíveis (<code>.env</code>, dados locais) são expressamente bloqueados de qualquer commit.</li>
+  </ul>
+
+  <h1>18. Riscos, premissas e restrições</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Risco Mapeado</th>
+        <th>Impacto</th>
+        <th>Tratamento e Mitigação</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Instabilidade pontual na Meta API</td>
+        <td>Atraso de entrega de mensagens</td>
+        <td>Buffer com Upstash QStash garante retentativas automáticas e durabilidade.</td>
+      </tr>
+      <tr>
+        <td>Alucinação de horários da IA</td>
+        <td>Agendamento em horário incorreto</td>
+        <td>Uso mandatório de Function Calling validando vagas deterministicamente no banco.</td>
+      </tr>
+      <tr>
+        <td>Queixas fora da especialidade</td>
+        <td>Confusão de atendimento</td>
+        <td>Injeção dinâmica de especialidade e diretriz de congruência clínica da Sofia.</td>
+      </tr>
+      <tr>
+        <td>Cancelamento de última hora</td>
+        <td>Ociosidade do médico</td>
+        <td>Acionamento automático e imediato da lista de espera com notificação ao paciente.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h1>19. Pendências para homologação e próximas decisões</h1>
+  <ul>
+    <li>Homologação do fluxo de onboarding facilitado (*Embedded Signup*) para conexão direta do número do médico pelo painel.</li>
+    <li>Definição do domínio oficial do consultório para publicação (ex: <code>app.iterum.med.br</code>).</li>
+    <li>Configuração do gateway para envio de lembretes via SMS como contingência.</li>
+  </ul>
+
+  <h1>20. Aprovação e histórico de versões</h1>
+  <div class="signature-box">
+    <p>Este documento consolida a baseline oficial de planejamento, arquitetura e entrega do sistema <strong>Iterum</strong>.</p>
+    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+      <div>
+        <div class="signature-line"></div>
+        <p><strong>Responsável Técnico pelo Projeto</strong><br>Equipe de Engenharia Iterum</p>
+      </div>
+      <div>
+        <div class="signature-line"></div>
+        <p><strong>Aprovador / Cliente</strong><br>Médico / Gestor do Consultório</p>
+      </div>
+    </div>
+    <p style="margin-top: 25px;"><strong>Data de Aprovação:</strong> 01 / 11 / 2026</p>
+  </div>
+
+  <!-- PÁGINA 12: ANEXOS -->
+  <div class="page-break"></div>
+  <div class="page-header">
+    <span>ITERUM | DOCUMENTAÇÃO DO PROJETO | VERSÃO 1.1</span>
+    <span>Página 12</span>
+  </div>
+
+  <h1>Anexo A — Referências técnicas e institucionais</h1>
+  <ul>
+    <li><strong>Documentação Oficial do Next.js:</strong> https://nextjs.org/docs</li>
+    <li><strong>Documentação Oficial do Prisma ORM:</strong> https://www.prisma.io/docs</li>
+    <li><strong>Guia da Meta WhatsApp Cloud API:</strong> https://developers.facebook.com/docs/whatsapp/cloud-api</li>
+    <li><strong>Documentação Upstash QStash & Redis:</strong> https://upstash.com/docs</li>
+    <li><strong>Conselho Federal de Medicina (CFM) — Boas Práticas e Sigilo:</strong> https://portal.cfm.org.br/</li>
+    <li><strong>Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018):</strong> http://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm</li>
+  </ul>
+
+  <h1>Anexo B — Glossário</h1>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Termo</th>
+        <th>Definição no Contexto do Projeto</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Iterum</strong></td>
+        <td>Plataforma de gestão e secretária virtual inteligente 24h para consultórios médicos.</td>
+      </tr>
+      <tr>
+        <td><strong>Sofia</strong></td>
+        <td>Assistente virtual com inteligência artificial que acolhe e atende os pacientes no WhatsApp.</td>
+      </tr>
+      <tr>
+        <td><strong>SaaS Multi-Tenant</strong></td>
+        <td>Modelo onde a mesma infraestrutura atende diversos médicos de forma isolada e personalizada.</td>
+      </tr>
+      <tr>
+        <td><strong>Specialty</strong></td>
+        <td>Especialidade médica principal cadastrada, utilizada pela IA para conduzir o diálogo clínico.</td>
+      </tr>
+      <tr>
+        <td><strong>Slot</strong></td>
+        <td>Intervalo fixo reservado na grade da agenda para uma consulta (ex.: 30 ou 60 minutos).</td>
+      </tr>
+      <tr>
+        <td><strong>Waitlist</strong></td>
+        <td>Mecanismo automatizado que realoca pacientes para vagas surgidas por cancelamentos.</td>
+      </tr>
+      <tr>
+        <td><strong>Human Handoff</strong></td>
+        <td>Ato de pausar a Sofia e transferir a conversa a uma secretária física do consultório.</td>
+      </tr>
+      <tr>
+        <td><strong>Meta Cloud API</strong></td>
+        <td>Infraestrutura oficial da Meta para tráfego seguro de mensagens corporativas no WhatsApp.</td>
+      </tr>
+    </tbody>
+  </table>
+
+</body>
+</html>
