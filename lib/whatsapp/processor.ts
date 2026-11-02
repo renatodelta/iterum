@@ -5,6 +5,7 @@ import {
   sendWhatsAppTypingIndicator,
   downloadMetaMedia,
   transcribeAudioWithWhisper,
+  formatForWhatsApp,
   WhatsAppCredentials,
 } from '@/lib/whatsapp/client';
 import { findPatientByPhone } from '@/lib/ai/tools';
@@ -193,21 +194,24 @@ export async function executeWhatsAppMessageJob(
       patientId: patient.id,
     });
 
-    // 8. Disparo imediato da resposta no WhatsApp e persistência no banco em paralelo
+    // 8. Normalizar formatação para WhatsApp (elimina asteriscos duplos e resíduos visuais mantendo negritos limpos)
+    const formattedReply = formatForWhatsApp(agentResult.reply);
+
+    // 9. Disparo imediato da resposta no WhatsApp e persistência no banco em paralelo
     await Promise.all([
-      sendWhatsAppMessage(formattedPhone, agentResult.reply, undefined, customCreds),
+      sendWhatsAppMessage(formattedPhone, formattedReply, undefined, customCreds),
       prisma.message.create({
         data: {
           clinicId: clinic.id,
           patientId: patient.id,
           role: 'assistant',
-          content: agentResult.reply,
+          content: formattedReply,
         },
       }),
     ]);
 
     console.log(`✅ [Processador WhatsApp] Resposta entregue com sucesso (paciente ${patient.id})`);
-    return { success: true, reply: agentResult.reply };
+    return { success: true, reply: formattedReply };
   } catch (error: any) {
     console.error('❌ [Processador WhatsApp] Erro crítico no atendimento:', error);
 

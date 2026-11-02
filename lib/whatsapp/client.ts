@@ -160,6 +160,50 @@ export async function markWhatsAppMessageAsRead(
 }
 
 /**
+ * Normaliza textos formatados em Markdown para a sintaxe nativa do WhatsApp:
+ * - Converte negrito Markdown (**texto**) e (__texto__) para o negrito nativo do WhatsApp (*texto*).
+ * - Remove asteriscos extras/desnecessários ao redor das palavras em negrito.
+ * - Corrige espaços internos em negrito (* texto * -> *texto*) para que o WhatsApp renderize perfeitamente.
+ * - Substitui títulos Markdown (### Título) por cabeçalhos destacados em negrito (*Título*).
+ * - Preserva listas e caracteres válidos.
+ */
+export function formatForWhatsApp(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  let formatted = text;
+
+  // 1. Converter títulos Markdown (### Título -> *Título*)
+  formatted = formatted.replace(/^#{1,6}\s*(.+)$/gm, '*$1*');
+
+  // 2. Tratar asteriscos triplos ou mais: ***texto*** -> *texto*
+  formatted = formatted.replace(/\*{3,}([^*\n]+?)\*{3,}/g, '*$1*');
+
+  // 3. Negrito padrão Markdown com 2 asteriscos: **texto** -> *texto* (removendo espaços internos nos cantos)
+  formatted = formatted.replace(/\*\*([^*\n]+?)\*\*/g, (_, match) => `*${match.trim()}*`);
+
+  // 4. Negrito com sublinhado duplo: __texto__ -> *texto*
+  formatted = formatted.replace(/__([^_\n]+?)__/g, (_, match) => `*${match.trim()}*`);
+
+  // 5. Tachado: ~~texto~~ -> ~texto~
+  formatted = formatted.replace(/~~([^~\n]+?)~~/g, '~$1~');
+
+  // 6. Eliminar asteriscos duplos residuais
+  formatted = formatted.replace(/\*{2,}/g, '*');
+
+  // 7. Substituir asterisco solto usado como marcador no início de linha: "* *Data:*" -> "• *Data:*"
+  formatted = formatted.replace(/^(\s*)\*\s+\*([^*\n]+)\*/gm, '$1• *$2*');
+
+  // 8. Tratar asterisco solto ao final do negrito: "*texto* *" -> "*texto*"
+  formatted = formatted.replace(/\*([^*\n]+)\*\s+\*/g, '*$1*');
+
+  // 9. Garantir que não haja espaços logo após a abertura ou antes do fechamento do asterisco de negrito
+  // No WhatsApp, "* texto *" não ativa o negrito e fica exibindo asteriscos literais
+  formatted = formatted.replace(/(^|[^\w*])\*\s+([^\s*\n][^*\n]*?)\*(?=[^\w*]|$)/g, '$1*$2*');
+  formatted = formatted.replace(/(^|[^\w*])\*([^*\n]*?[^\s*\n])\s+\*(?=[^\w*]|$)/g, '$1*$2*');
+
+  return formatted;
+}
+
+/**
  * Utilitário para envio de mensagens via API de WhatsApp
  * Suporta botões interativos clicáveis e texto simples com detecção automática de opções SIM/NÃO.
  * Suporta credenciais dinâmicas do Tenant e fallback para variáveis de ambiente.
@@ -178,17 +222,17 @@ export async function sendWhatsAppMessage(
 
   // Detectar automaticamente opções [1] SIM e [2] NÃO se nenhum botão for passado explicitamente
   let buttonsToSend = explicitButtons;
-  let textToSend = messageText;
+  let textToSend = formatForWhatsApp(messageText);
 
   if (!buttonsToSend) {
-    const hasSimNao = /\[1\]\s*SIM[\s\S]*\[2\]\s*NÃO/i.test(messageText);
+    const hasSimNao = /\[1\]\s*SIM[\s\S]*\[2\]\s*NÃO/i.test(textToSend);
     if (hasSimNao) {
       buttonsToSend = [
         { id: 'btn_sim', title: 'SIM' },
         { id: 'btn_nao', title: 'NÃO' },
       ];
       // Limpa os sufixos "[1] SIM \n [2] NÃO" do corpo do texto para exibir os botões nativos limpos
-      textToSend = messageText.replace(/\n+\s*\[1\]\s*SIM[\s\S]*\[2\]\s*NÃO\s*$/i, '').trim();
+      textToSend = textToSend.replace(/\n+\s*\[1\]\s*SIM[\s\S]*\[2\]\s*NÃO\s*$/i, '').trim();
     }
   }
 

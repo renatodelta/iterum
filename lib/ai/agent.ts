@@ -18,13 +18,14 @@ import {
   parseBRT,
   verificarAgendaTemHorariosDisponiveis,
 } from './tools';
+import { formatForWhatsApp } from '@/lib/whatsapp/client';
 
-let cachedDoctorInfo: Map<string, { info: { name: string; specialty: string; link: string }; expiresAt: number }> = new Map();
+let cachedDoctorInfo: Map<string, { info: { name: string; specialty: string; link: string; address: string }; expiresAt: number }> = new Map();
 
 /**
- * Obtém os dados, nome, especialidade e link institucional do médico/clínica (com cache em memória para velocidade máxima)
+ * Obtém os dados, nome, especialidade, link institucional e endereço do médico/clínica (com cache em memória para velocidade máxima)
  */
-export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; specialty: string; link: string }> {
+export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; specialty: string; link: string; address: string }> {
   const cacheKey = clinicId || 'default';
   const now = Date.now();
   const cached = cachedDoctorInfo.get(cacheKey);
@@ -36,6 +37,7 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     name: 'Dra. Mariana Souza',
     specialty: 'Pediatria',
     link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
+    address: 'Consultório Médico - Atendimento presencial e telemedicina',
   };
 
   try {
@@ -55,11 +57,13 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     const docName = clinic?.doctorName || doctor?.name || clinic?.name || 'Dra. Mariana Souza';
     const formattedName = docName.startsWith('Dr') ? docName : `Dr(a). ${docName}`;
     const docSpecialty = clinic?.specialty || doctor?.specialty || 'Clínica Geral';
+    const docAddress = clinic?.address || 'Consultório Médico - Atendimento presencial e telemedicina';
 
     result = {
       name: formattedName,
       specialty: docSpecialty,
       link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
+      address: docAddress,
     };
   } catch (e) {}
 
@@ -110,14 +114,23 @@ ESCOPO E LIMITES DE ATUAÇÃO (REGRA DE OURO):
        • *Data e Horário:* [Dia da semana, DD/MM/AAAA às HH:mm]
        • *Profissional:* [Nome do Médico(a)]
 
-DIRETRIZES DE COMUNICAÇÃO:
+DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
 1. **Linguagem Natural e Humanizada:**
    - NUNCA envie opções robóticas como "[1] SIM / [2] NÃO" ou menus numéricos engessados. Converse como uma secretária atenciosa em tempo real.
    - Seja calorosa, empática e prestativa. Use emojis moderados (😊, 🩺, 📅).
    - Use parágrafos curtos e mensagens bem formatadas, ideais para leitura no WhatsApp.
-   - Use negrito para destacar *datas*, *horários* e *nome do médico*.
 
-2. **Cadastro Obrigatório de Paciente (REGRA IMPERATIVA):**
+2. **Formatação de Negrito no WhatsApp (REGRA CRÍTICA - APENAS UM ASTERISCO):**
+   - O WhatsApp utiliza APENAS UM asterisco de cada lado para negrito: *negrito*.
+   - NUNCA use asteriscos duplos (**negrito**) nem asteriscos triplos (***negrito***). O uso de asteriscos duplos quebra a renderização no aplicativo e deixa asteriscos indesejados visíveis.
+   - Use negrito com um único asterisco colado à palavra (*sem espaços internos*) para dados essenciais:
+     *Data:* Terça-feira, 03 de novembro
+     *Horário:* 08:00
+     *Profissional:* Dra. Silvia Helena Lima de Andrade
+     *Endereço:* [Endereço real informado no contexto]
+   - NUNCA use marcações fictícias como "[inserir endereço]" ou "[endereço do consultório]". Use sempre o endereço real do consultório disponibilizado no seu contexto de atendimento!
+
+3. **Cadastro Obrigatório de Paciente (REGRA IMPERATIVA):**
    - NENHUMA pessoa pode ter uma consulta marcada sem estar devidamente cadastrada no sistema do consultório.
    - Os dados principais e obrigatórios para o cadastro são:
      • **Nome completo**
@@ -151,7 +164,7 @@ DIRETRIZES DE COMUNICAÇÃO:
    - **EXECUÇÃO IMEDIATA DA GRAVAÇÃO:** Assim que o paciente confirmar (ex: "sim", "sim. obrigado!", "pode confirmar", "ok", "perfeito", "confirmado"):
      Você DEVE OBRIGATORIAMENTE executar a ferramenta 'criar_novo_agendamento' enviando 'nova_data_hora' (no formato AAAA-MM-DD HH:mm, por exemplo: '2026-11-18 14:15') e 'beneficiario_nome' (o nome completo da pessoa que vai consultar).
      NUNCA reenvie perguntas de confirmação se ele já confirmou. Grave imediatamente no banco de dados através da ferramenta.
-   - Após a execução com sucesso da ferramenta, conclua confirmando com carinho que a consulta foi agendada e registrada com sucesso no sistema, informando o endereço do consultório e desejando um ótimo dia!
+   - Após a execução com sucesso da ferramenta, conclua confirmando com carinho que a consulta foi agendada e registrada com sucesso no sistema, informando o endereço oficial do consultório (indicado no seu contexto como "Endereço Oficial do Consultório") e desejando um ótimo dia!
 
 4. **Continuidade de Contexto & Lista de Espera:**
    - Se você perguntou ou ofereceu colocar o paciente na Lista de Espera (ex: "Se você preferir, posso colocar seu nome na lista de espera... O que você acha?") e o paciente responder "Pode ser", "Sim", "Ok", "Quero", "Pode colocar" ou similar:
@@ -600,10 +613,12 @@ export async function processAgentMessage({
 
       const systemContent = `${SYSTEM_PROMPT}
 
-CONTEXTO TEMPORAL E DO ATENDIMENTO:
+CONHECIMENTO E CONTEXTO DO ATENDIMENTO:
 - Data e Hora Atual de Brasília: ${nowBrt} (Fuso horário America/Sao_Paulo).
 - Profissional de Saúde: ${doctorInfo.name}
 - Especialidade Médica Principal do Consultório: ${doctorInfo.specialty}
+- Endereço Oficial do Consultório: ${doctorInfo.address}
+- Link Institucional: ${doctorInfo.link}
 - Interlocutor no WhatsApp (Quem está no aparelho digitando): ${interlocutorName} (Telefone: ${patientPhone})
 - Pacientes cadastrados vinculados a esta linha/contato:
 ${relatedPatientsSummary || `• ${interlocutorName}`}
@@ -669,7 +684,7 @@ ${relatedPatientsSummary || `• ${interlocutorName}`}
 
       if (responseMessage.content) {
         return {
-          reply: responseMessage.content,
+          reply: formatForWhatsApp(responseMessage.content),
           toolsExecuted,
         };
       }
