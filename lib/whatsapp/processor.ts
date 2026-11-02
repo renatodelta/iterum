@@ -98,6 +98,11 @@ export async function executeWhatsAppMessageJob(
         },
       });
       console.log(`👤 Novo paciente titular cadastrado (ID: ${patient.id})`);
+    } else if ((patient.name === 'Paciente' || patient.name === 'Titular WhatsApp') && patientName && patientName.toLowerCase() !== 'paciente') {
+      patient = await prisma.patient.update({
+        where: { id: patient.id },
+        data: { name: patientName },
+      });
     }
 
     // 4. Checagem de Transbordo Humano (Human Handoff)

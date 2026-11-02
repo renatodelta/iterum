@@ -201,11 +201,23 @@ export async function buscarConsultaAtual(telefonePaciente: string, clinicId?: s
     }
 
     const now = new Date();
+    const cleanPhone = telefonePaciente.replace(/\D/g, '');
+    const last8 = cleanPhone.slice(-8);
+
+    // Buscar todos os pacientes relacionados a esta linha (titular e dependentes/filhos cadastrados)
+    const relatedPatients = await prisma.patient.findMany({
+      where: {
+        ...(clinicId ? { clinicId } : {}),
+        phone: { contains: last8 },
+      },
+      select: { id: true, name: true, phone: true },
+    });
+    const patientIds = relatedPatients.length > 0 ? relatedPatients.map((p) => p.id) : [patient.id];
 
     // Buscar agendamento futuro mais próximo
     const appointment = await prisma.appointment.findFirst({
       where: {
-        patientId: patient.id,
+        patientId: { in: patientIds },
         startTime: {
           gte: now,
         },
@@ -231,14 +243,20 @@ export async function buscarConsultaAtual(telefonePaciente: string, clinicId?: s
     }
 
     const dataFormatada = formatBRT(new Date(appointment.startTime));
+    const isBeneficiary = appointment.patientId !== patient.id;
+    const targetDesc = isBeneficiary
+      ? `${appointment.patient.name} (vinculado(a) ao responsável/titular ${patient.name})`
+      : patient.name;
 
     return {
       success: true,
-      message: `Consulta encontrada para ${patient.name}:\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Especialidade: ${appointment.clinic.specialty}\n- ID Agendamento: ${appointment.id}`,
+      message: `Consulta encontrada para ${targetDesc}:\n- Paciente: ${appointment.patient.name}\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Especialidade: ${appointment.clinic.specialty}\n- ID Agendamento: ${appointment.id}`,
       data: {
         appointmentId: appointment.id,
-        patientName: patient.name,
-        patientPhone: patient.phone,
+        patientName: appointment.patient.name,
+        patientPhone: appointment.patient.phone,
+        titularName: patient.name,
+        isBeneficiary,
         startTime: appointment.startTime.toISOString(),
         endTime: appointment.endTime.toISOString(),
         status: appointment.status,
@@ -1362,6 +1380,7 @@ export async function cadastrarPaciente({
   dataNascimento,
   cep,
   eParaOutraPessoa = false,
+  nomeInterlocutor,
   telefoneProprio,
   clinicId,
 }: {
@@ -1370,6 +1389,7 @@ export async function cadastrarPaciente({
   dataNascimento: string;
   cep: string;
   eParaOutraPessoa?: boolean;
+  nomeInterlocutor?: string;
   telefoneProprio?: string;
   clinicId?: string;
 }): Promise<ToolResult> {
@@ -1394,14 +1414,36 @@ export async function cadastrarPaciente({
       titular = await prisma.patient.create({
         data: {
           clinicId: clinic.id,
-          name: eParaOutraPessoa ? 'Titular WhatsApp' : nomeCompleto.trim(),
+          name: nomeInterlocutor?.trim() || (eParaOutraPessoa ? 'Titular WhatsApp' : nomeCompleto.trim()),
           phone: formattedTitularPhone,
         },
       });
+    } else if (nomeInterlocutor && nomeInterlocutor.trim()) {
+      // Se informou o nome da mãe/responsável, garantir que o titular guarde o nome correto
+      const cleanInterlocutor = nomeInterlocutor.trim();
+      if (titular.name !== cleanInterlocutor && (titular.name === 'Paciente' || titular.name === 'Titular WhatsApp')) {
+        titular = await prisma.patient.update({
+          where: { id: titular.id },
+          data: { name: cleanInterlocutor },
+        });
+      }
     }
 
+    // Proteção de segurança: se o titular já tiver nome real diferente do nome a ser cadastrado,
+    // trata com segurança como outra pessoa/dependente para nunca apagar o nome do responsável!
+    const titularHasRealName =
+      titular.name &&
+      titular.name !== 'Paciente' &&
+      titular.name !== 'Titular WhatsApp';
+    const isNameDifferent =
+      titularHasRealName &&
+      !titular.name.toLowerCase().includes(nomeCompleto.trim().toLowerCase()) &&
+      !nomeCompleto.trim().toLowerCase().includes(titular.name.toLowerCase());
+
+    const isForOtherPerson = Boolean(eParaOutraPessoa || isNameDifferent);
+
     // CASO 1: O titular está se cadastrando para si mesmo
-    if (!eParaOutraPessoa) {
+    if (!isForOtherPerson) {
       const updatedTitular = await prisma.patient.update({
         where: { id: titular.id },
         data: {
@@ -1424,7 +1466,7 @@ export async function cadastrarPaciente({
       };
     }
 
-    // CASO 2: O titular está cadastrando OUTRA pessoa (beneficiário / terceiro)
+    // CASO 2: O titular está cadastrando OUTRA pessoa (beneficiário / dependente / filho / familiar)
     const cleanNome = nomeCompleto.trim();
     let beneficiary = await prisma.patient.findFirst({
       where: {
@@ -1470,7 +1512,7 @@ export async function cadastrarPaciente({
 
     return {
       success: true,
-      message: `Paciente ${beneficiary.name} cadastrado(a) com sucesso no sistema do consultório! (Nascimento: ${beneficiary.birthDate}, CEP: ${beneficiary.cep})`,
+      message: `✅ Paciente ${beneficiary.name} cadastrado(a) com sucesso como PACIENTE BENEFICIÁRIO da consulta médica!\n⚠️ ALERTA DE TRATAMENTO PARA A SOFIA: Você está conversando no WhatsApp com o(a) responsável (${titular.name || 'titular do WhatsApp'}). NUNCA passe a chamar o(a) responsável pelo nome do paciente cadastrado (${beneficiary.name}). Mantenha o diálogo e a gentileza dirigidos ao responsável e refira-se ao paciente "${beneficiary.name}" sempre na 3ª pessoa ("a consulta do ${beneficiary.name}", "o agendamento dele(a)", etc.)!`,
       data: {
         patientId: beneficiary.id,
         patientName: beneficiary.name,

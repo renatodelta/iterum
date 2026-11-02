@@ -93,6 +93,23 @@ ESCOPO E LIMITES DE ATUAÇÃO (REGRA DE OURO):
    - Você DEVE encerrar educadamente o atendimento, explicando com clareza e delicadeza que seu canal é exclusivo para gestão de consultas e que estará à disposição quando ele precisar cuidar de agendamentos.
      *Exemplo de encerramento:* "Compreendo, [Nome], mas meu atendimento por aqui é estritamente dedicado ao gerenciamento de consultas do consultório (agendar, remarcar, cancelar e tirar dúvidas do consultório). Para mantermos a linha liberada para os atendimentos aos pacientes, vou encerrar nosso atendimento por agora. Assim que você precisar de qualquer questão sobre consultas, estarei sempre à sua inteira disposição! Tenha um ótimo dia! 😊"
 
+4. **DISTINÇÃO CRÍTICA ENTRE INTERLOCUTOR (QUEM ESTÁ NO WHATSAPP) E PACIENTE (QUEM CONSULTA):**
+   - **Atenção Máxima:** Quem entra em contato pelo WhatsApp (o titular do telefone) frequentemente NÃO é o paciente que passará pela consulta médica!
+   - É extremamente comum mães e pais agendando para filhos e bebês (especialmente em pediatria), filhos agendando para pais idosos, cônjuges ou cuidadores. (Exemplo real: A mãe **Elizabeth** entra em contato pelo WhatsApp para marcar uma consulta para o filho **Pedro Henrique**).
+   - **QUEM DEVE ESTAR CADASTRADO NO SISTEMA:** O cadastro médico (Nome completo, Data de nascimento e CEP) é SEMPRE do **PACIENTE** que passará pela consulta médica (Pedro Henrique). Nenhuma consulta pode ser agendada sem os dados cadastrais do paciente real.
+   - **COMO TRATAR A PESSOA NO WHATSAPP (REGRA INEGOCIÁVEL):**
+     * NUNCA passe a chamar a pessoa que está no WhatsApp pelo nome do paciente cadastrado!
+     * Se quem está falando é a mãe Elizabeth e ela cadastrou o filho Pedro Henrique:
+       - Você continua conversando com a **Elizabeth**! Trate-a com respeito e cordialidade pelo nome dela (ou como mãe/responsável) e refira-se ao Pedro na 3ª pessoa ("a consulta do Pedro", "o cadastro do Pedro Henrique foi realizado com sucesso", "qual o melhor dia e horário para a consulta dele?").
+       - JAMAIS chame a mãe de "Pedro Henrique"! JAMAIS diga frases como "Olá Pedro Henrique!", "Como posso te ajudar hoje, Pedro Henrique?" quando estiver falando com quem é mãe ou responsável pelo paciente.
+     * **Identificação do Interlocutor:** Se a pessoa disser que quer marcar para um familiar (ex: "Quero marcar pro meu filho") mas ainda não tiver informado o próprio nome, você pode perguntar delicadamente:
+       *"Com certeza! E com quem tenho o prazer de falar? (para eu me dirigir a você adequadamente enquanto organizamos a consulta dele)"*.
+     * **Resumo de Confirmação:** Ao apresentar os dados para confirmação da consulta, destaque SEMPRE ambos com clareza:
+       • *Paciente:* [Nome Completo do Paciente / Filho / Familiar]
+       • *Responsável / Contato:* [Nome da Mãe/Pai/Titular do WhatsApp]
+       • *Data e Horário:* [Dia da semana, DD/MM/AAAA às HH:mm]
+       • *Profissional:* [Nome do Médico(a)]
+
 DIRETRIZES DE COMUNICAÇÃO:
 1. **Linguagem Natural e Humanizada:**
    - NUNCA envie opções robóticas como "[1] SIM / [2] NÃO" ou menus numéricos engessados. Converse como uma secretária atenciosa em tempo real.
@@ -218,32 +235,36 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'cadastrar_paciente',
-      description: 'Cadastra ou atualiza um paciente no sistema do consultório com os dados obrigatórios (Nome completo, Data de nascimento e CEP). OBRIGATÓRIO executar antes de criar qualquer agendamento.',
+      description: 'Cadastra ou atualiza o paciente que passará pela consulta médica (Nome completo, Data de nascimento e CEP). OBRIGATÓRIO executar antes de criar qualquer agendamento.',
       parameters: {
         type: 'object',
         properties: {
           nome_completo: {
             type: 'string',
-            description: 'Nome completo da pessoa que passará pela consulta médica.',
+            description: 'Nome completo da PESSOA QUE PASSARÁ PELA CONSULTA MÉDICA (o paciente real, ex: o filho Pedro Henrique).',
           },
           data_nascimento: {
             type: 'string',
-            description: 'Data de nascimento da pessoa no formato DD/MM/AAAA (ex: 15/05/1980).',
+            description: 'Data de nascimento do paciente no formato DD/MM/AAAA (ex: 15/05/2018).',
           },
           cep: {
             type: 'string',
-            description: 'CEP de residência da pessoa (ex: 12245-000).',
+            description: 'CEP de residência do paciente (ex: 12245-000).',
           },
           e_para_outra_pessoa: {
             type: 'boolean',
-            description: 'True se o titular do WhatsApp estiver agendando para outra pessoa (filho, cônjuge, pai, etc.); False se for para si mesmo.',
+            description: 'OBRIGATÓRIO: Definir TRUE sempre que o contato no WhatsApp estiver agendando para outra pessoa (filho, bebê, cônjuge, pai/mãe idoso, dependente ou terceiro). Definir FALSE somente se quem está digitando estiver marcando consulta para si mesmo.',
+          },
+          nome_interlocutor: {
+            type: 'string',
+            description: 'Nome da pessoa que está digitando no WhatsApp (mãe, pai, responsável), se ela tiver informado (ex: Elizabeth).',
           },
           telefone_proprio: {
             type: 'string',
-            description: 'Telefone próprio do paciente (opcional caso tenha número diferente do titular).',
+            description: 'Telefone próprio do paciente (opcional caso tenha número diferente do titular do WhatsApp).',
           },
         },
-        required: ['nome_completo', 'data_nascimento', 'cep'],
+        required: ['nome_completo', 'data_nascimento', 'cep', 'e_para_outra_pessoa'],
       },
     },
   },
@@ -413,6 +434,7 @@ async function executeToolCall(
         dataNascimento: toolArgs.data_nascimento,
         cep: toolArgs.cep,
         eParaOutraPessoa: Boolean(toolArgs.e_para_outra_pessoa),
+        nomeInterlocutor: toolArgs.nome_interlocutor,
         telefoneProprio: toolArgs.telefone_proprio,
         clinicId,
       });
@@ -551,7 +573,30 @@ export async function processAgentMessage({
         }
       } catch (e) {}
 
-      const effectiveName = pushName && pushName !== 'Paciente' ? pushName : patientName;
+      const cleanPhone = patientPhone.replace(/\D/g, '');
+      const last8 = cleanPhone.slice(-8);
+      let relatedPatientsSummary = '';
+      try {
+        const related = await prisma.patient.findMany({
+          where: {
+            ...(clinicId ? { clinicId } : {}),
+            phone: { contains: last8 },
+          },
+          select: { id: true, name: true, birthDate: true, phone: true },
+        });
+        if (related.length > 0) {
+          relatedPatientsSummary = related
+            .map((p) => `• ${p.name}${p.birthDate ? ` (Nasc: ${p.birthDate})` : ''}`)
+            .join('\n');
+        }
+      } catch (e) {}
+
+      const interlocutorName =
+        pushName && pushName !== 'Paciente'
+          ? pushName
+          : patientName !== 'Paciente' && patientName !== 'Titular WhatsApp'
+            ? patientName
+            : 'Titular do WhatsApp';
 
       const systemContent = `${SYSTEM_PROMPT}
 
@@ -559,8 +604,11 @@ CONTEXTO TEMPORAL E DO ATENDIMENTO:
 - Data e Hora Atual de Brasília: ${nowBrt} (Fuso horário America/Sao_Paulo).
 - Profissional de Saúde: ${doctorInfo.name}
 - Especialidade Médica Principal do Consultório: ${doctorInfo.specialty}
-- Paciente em atendimento: ${effectiveName || 'Paciente'} (Telefone: ${patientPhone})
-- Situação atual de agendamento: ${consultaAtualInfo}`;
+- Interlocutor no WhatsApp (Quem está no aparelho digitando): ${interlocutorName} (Telefone: ${patientPhone})
+- Pacientes cadastrados vinculados a esta linha/contato:
+${relatedPatientsSummary || `• ${interlocutorName}`}
+- Situação atual de agendamento: ${consultaAtualInfo}
+- LEMBRETE DE OURO: Se o interlocutor estiver agendando para um familiar (filho, cônjuge, mãe/pai idoso), mantenha SEMPRE o diálogo e o tratamento com o Interlocutor (${interlocutorName}) e refira-se ao paciente na 3ª pessoa!`;
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
