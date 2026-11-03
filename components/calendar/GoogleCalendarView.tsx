@@ -1009,7 +1009,7 @@ export default function GoogleCalendarView({
                     key={idx}
                     onClick={() => {
                       setSelectedDate(cell.date);
-                      setAgendaViewMode('dia'); // Ao clicar no dia do mês, abre o dia!
+                      onOpenNewAppt(cell.date);
                     }}
                     className={`min-h-[70px] sm:min-h-[95px] p-1 pt-1.5 flex flex-col items-center text-center transition-colors relative hover:bg-slate-50/60 active:bg-blue-50/30 ${
                       !cell.inCurrentMonth ? 'bg-slate-50/30' : 'bg-white'
@@ -1519,30 +1519,6 @@ export default function GoogleCalendarView({
           </div>
         )}
       </div>
-
-      {/* =========================================================================
-          3. FLOATING ACTION BUTTON (FAB DO GOOGLE CALENDAR COM O ÍCONE + COLORIDO)
-          Oculto na visualização de mês e em telas menores (onde a barra mobile exibe o botão dedicado na Agenda).
-      ========================================================================= */}
-      {agendaViewMode !== 'mes' && (
-        <button
-          onClick={() => onOpenNewAppt(selectedDate)}
-          className="hidden sm:flex fixed sm:bottom-8 sm:right-8 w-14 h-14 bg-white rounded-full shadow-2xl border border-slate-100 items-center justify-center z-40 active:scale-90 hover:scale-105 transition duration-200 group"
-          aria-label="Criar nova consulta"
-          title="Criar nova consulta"
-        >
-          {/* Ícone + com as 4 cores características do Google */}
-          <svg viewBox="0 0 36 36" className="w-8 h-8 drop-shadow-xs">
-            <path fill="#4285F4" d="M16 16v14h4V16h14v-4H20V2h-4v10H2v4h14z" />
-            <path fill="#FBBC05" d="M16 16H2v4h14v10h4V20z" opacity="0" />
-            {/* Versão estilizada do Google Plus SVG */}
-            <path fill="#EA4335" d="M16 2h4v14h-4z" />
-            <path fill="#4285F4" d="M20 16h14v4H20z" />
-            <path fill="#FBBC05" d="M16 20h4v14h-4z" />
-            <path fill="#34A853" d="M2 16h14v4H2z" />
-          </svg>
-        </button>
-      )}
 
       {/* =========================================================================
           4. GOOGLE CALENDAR SIDE DRAWER (MENU LATERAL DESLIZANTE)
