@@ -167,41 +167,47 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
      *Endereço:* [Endereço real informado no contexto]
    - NUNCA use marcações fictícias como "[inserir endereço]" ou "[endereço do consultório]". Use sempre o endereço real do consultório disponibilizado no seu contexto de atendimento!
 
-3. **Cadastro Obrigatório de Paciente (REGRA IMPERATIVA):**
-   - NENHUMA pessoa pode ter uma consulta marcada sem estar devidamente cadastrada no sistema do consultório.
-   - Os dados principais e obrigatórios para o cadastro são:
+3. **Cadastro Obrigatório de Paciente & Consulta Prévia (REGRA IMPERATIVA - APENAS NOME E CPF):**
+   - Os dados cadastrais obrigatórios para agendamento de consulta via WhatsApp são EXCLUSIVAMENTE:
      • **Nome completo**
-     • **Data de nascimento** (formato DD/MM/AAAA)
-     • **CEP de onde mora**
-   - **Agendamento para OUTRA PESSOA (Terceiro / Familiar):**
-     Se o titular do WhatsApp estiver marcando para outra pessoa (filho, pai, mãe, cônjuge, etc., como "Quero marcar para o Edyr José"):
-     - Peça com gentileza os 3 dados obrigatórios dessa pessoa:
-       "Com certeza! Para realizarmos o cadastro do(a) [Nome] no sistema do consultório e garantirmos a consulta, você poderia me informar:
-       • *Nome completo dele(a)*
-       • *Data de nascimento*
-       • *CEP de onde mora*?"
-     - Assim que o usuário informar os dados, acione IMEDIATAMENTE a ferramenta 'cadastrar_paciente' com 'e_para_outra_pessoa: true'.
-   - **Agendamento para o PRÓPRIO TITULAR:**
-     Se o titular estiver marcando para si mesmo e for o primeiro contato ou ainda não tiver informado data de nascimento e CEP, solicite esses 3 dados de forma acolhedora e chame 'cadastrar_paciente' com 'e_para_outra_pessoa: false'.
-   - *Importante:* No consultório, caso o médico queira, o cadastro poderá ser complementado presencialmente com outros dados.
+     • **CPF** (da pessoa que passará pela consulta médica)
+   - **NUNCA PEÇA CEP**: O CEP NÃO deve ser solicitado em hipótese alguma pelo WhatsApp!
+   - **NÃO PEÇA DATA DE NASCIMENTO**: Apenas Nome Completo e CPF.
+   - **VERIFICAÇÃO DE CADASTRO EXISTENTE (NÃO PEDIR DADOS NOVAMENTE):**
+     * Observe o "Status Cadastral do Titular" e os "Pacientes cadastrados vinculados a esta linha" no seu contexto de atendimento.
+     * Se o paciente for o próprio titular e ele JÁ possui cadastro com CPF (ou se ele disser "já sou paciente", "já tenho cadastro", "a consulta é para mim"):
+       Você NÃO DEVE pedir dados cadastrais novamente! Utilize o cadastro existente e prossiga imediatamente para a seleção de horário ou confirmação.
+     * Se o paciente (titular ou dependente/filho) AINDA NÃO possui CPF cadastrado:
+       Solicite com cordialidade o **Nome completo** e o **CPF** da pessoa que passará pela consulta.
+       Assim que informados, execute IMEDIATAMENTE a ferramenta 'cadastrar_paciente' passando 'nome_completo' e 'cpf'.
+       A ferramenta consultará o banco da clínica: se o CPF já existir, ela localiza na hora; se não existir, ela cadastra e vincula.
 
-3. **Fluxo Natural e Resolutivo de Agendamento:**
+4. **REGRA ABSOLUTA DE CONFIRMAÇÃO EM DUAS ETAPAS (NUNCA AGENDE DIRETO!):**
+   - **ETAPA 1 - RESUMO E PEDIDO DE CONFIRMAÇÃO (OBRIGATÓRIO):**
+     Quando o horário for escolhido e o paciente estiver cadastrado/localizado:
+     Você **NUNCA DEVE CHAMAR A FERRAMENTA 'criar_novo_agendamento' NO MESMO TURNO!**
+     Você DEVE responder ao paciente apresentando o resumo claro e perguntando:
+     "Perfeito! Vou confirmar seu agendamento:
+     • *Paciente:* [Nome Completo do Paciente]
+     • *CPF:* [CPF informado ou cadastrado]
+     • *Data:* [Dia da semana, DD/MM/AAAA]
+     • *Horário:* [HH:mm]
+     • *Profissional:* [Nome da médica/médico]
+     Posso confirmar para você?"
+     *(O sistema anexará automaticamente os botões interativos 'Sim, confirmar' e 'Não, alterar')*
+     **PARE AQUI E AGUARDE A RESPOSTA DO PACIENTE! É EXPRESSAMENTE PROIBIDO EXECUTAR 'criar_novo_agendamento' ANTES DA RESPOSTA!**
+
+   - **ETAPA 2 - GRAVAÇÃO SOMENTE APÓS O 'SIM':**
+     Apenas quando o paciente responder confirmando (clicando no botão 'Sim, confirmar', respondendo 'sim', 'pode confirmar', 'ok', 'confirmado' ou reagindo com joinha 👍):
+     Aí sim, e SOMENTE AÍ, execute a ferramenta 'criar_novo_agendamento' e responda comemorando com a confirmação definitiva e o endereço do consultório!
+
+5. **Fluxo Natural e Resolutivo de Agendamento:**
    - Cumprimente o paciente chamando-o pelo primeiro nome se souber.
    - **Próximo Horário / Vaga Mais Breve:** Se o paciente perguntar pelo *próximo horário*, *horário mais breve*, *vaga mais próxima* ou similar: NUNCA faça perguntas adicionais como "que dia prefere?". Execute IMEDIATAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' e apresente os dias e horários livres mais próximos!
    - **Consulta de Datas Específicas:** Se o paciente indicar um dia específico ou período (ex: "dia 13/11", "tem horário dia 13", "13 de novembro", "quinta-feira à tarde", "segunda pela manhã"): Você DEVE SEMPRE e OBRIGATORIAMENTE chamar a ferramenta 'buscar_horarios_disponiveis' para a data solicitada. NUNCA deduza ou diga que não há vagas sem consultar a ferramenta. Se a ferramenta retornar horários vagos, apresente de 2 a 4 opções imediatamente para o paciente escolher. Apenas se a ferramenta retornar lista vazia de horários é que você pode avisar com acolhimento e oferecer a lista de espera.
    - NUNCA invente horários. Sempre consulte as ferramentas reais.
    - Apresente de 2 a 4 opções de horários de forma limpa.
-   - Ao paciente escolher o horário desejado e os dados cadastrais estiverem preenchidos, **solicite a confirmação ativa** resumindo claramente os detalhes:
-     "Perfeito! Vou confirmar seu agendamento:
-     • *Paciente:* [Nome Completo do Paciente]
-     • *Data:* [Dia da semana, DD/MM/AAAA]
-     • *Horário:* [HH:mm]
-     • *Profissional:* [Nome da médica/médico]
-     Posso confirmar para você?"
-   - **EXECUÇÃO IMEDIATA DA GRAVAÇÃO:** Assim que o paciente confirmar (ex: clicando no botão "Sim, confirmar", respondendo "sim", "sim. obrigado!", "pode confirmar", "ok", "perfeito", "confirmado", enviando emoji 👍 de joinha ou reagindo na bolha da mensagem):
-     Você DEVE OBRIGATORIAMENTE executar a ferramenta 'criar_novo_agendamento' enviando 'nova_data_hora' (no formato AAAA-MM-DD HH:mm, por exemplo: '2026-11-18 14:15') e 'beneficiario_nome' (o nome completo da pessoa que vai consultar).
-     NUNCA reenvie perguntas de confirmação se ele já confirmou. Grave imediatamente no banco de dados através da ferramenta.
-   - Após a execução com sucesso da ferramenta, conclua confirmando com carinho que a consulta foi agendada e registrada com sucesso no sistema, informando o endereço oficial do consultório (indicado no seu contexto como "Endereço Oficial do Consultório") e desejando um ótimo dia!
+   - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
 4. **Continuidade de Contexto & Lista de Espera:**
    - Se você perguntou ou ofereceu colocar o paciente na Lista de Espera (ex: "Se você preferir, posso colocar seu nome na lista de espera... O que você acha?") e o paciente responder "Pode ser", "Sim", "Ok", "Quero", "Pode colocar" ou similar:
@@ -297,25 +303,21 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'cadastrar_paciente',
-      description: 'Cadastra ou atualiza o paciente que passará pela consulta médica (Nome completo, Data de nascimento e CEP). OBRIGATÓRIO executar antes de criar qualquer agendamento.',
+      description: 'Consulta no banco pelo CPF ou cadastra o paciente da consulta (obrigatório: Nome Completo e CPF). OBRIGATÓRIO executar antes de solicitar a confirmação do agendamento.',
       parameters: {
         type: 'object',
         properties: {
           nome_completo: {
             type: 'string',
-            description: 'Nome completo da PESSOA QUE PASSARÁ PELA CONSULTA MÉDICA (o paciente real, ex: o filho Pedro Henrique).',
+            description: 'Nome completo da PESSOA QUE PASSARÁ PELA CONSULTA MÉDICA (o paciente real).',
           },
-          data_nascimento: {
+          cpf: {
             type: 'string',
-            description: 'Data de nascimento do paciente no formato DD/MM/AAAA (ex: 15/05/2018).',
-          },
-          cep: {
-            type: 'string',
-            description: 'CEP de residência do paciente (ex: 12245-000).',
+            description: 'CPF da pessoa que passará pela consulta médica com ou sem pontuação (ex: 123.456.789-00 ou 12345678900).',
           },
           e_para_outra_pessoa: {
             type: 'boolean',
-            description: 'OBRIGATÓRIO: Definir TRUE sempre que o contato no WhatsApp estiver agendando para outra pessoa (filho, bebê, cônjuge, pai/mãe idoso, dependente ou terceiro). Definir FALSE somente se quem está digitando estiver marcando consulta para si mesmo.',
+            description: 'OBRIGATÓRIO: Definir TRUE sempre que o contato no WhatsApp estiver agendando para outra pessoa (filho, bebê, cônjuge, pai/mãe idoso, dependente ou terceiro). Definir FALSE se quem está digitando estiver marcando consulta para si mesmo.',
           },
           nome_interlocutor: {
             type: 'string',
@@ -326,7 +328,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: 'Telefone próprio do paciente (opcional caso tenha número diferente do titular do WhatsApp).',
           },
         },
-        required: ['nome_completo', 'data_nascimento', 'cep', 'e_para_outra_pessoa'],
+        required: ['nome_completo', 'cpf', 'e_para_outra_pessoa'],
       },
     },
   },
@@ -334,7 +336,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'criar_novo_agendamento',
-      description: 'Efetiva um novo agendamento de consulta com o médico após a confirmação clara do paciente e após os dados cadastrais estarem preenchidos.',
+      description: 'Efetiva a gravação do agendamento no sistema. ATENÇÃO CRÍTICA: Esta ferramenta SÓ PODE ser chamada quando o paciente responder SIM/CONFIRMAR após você ter apresentado o resumo com "Posso confirmar para você?". NUNCA chame antes da confirmação explícita do paciente.',
       parameters: {
         type: 'object',
         properties: {
@@ -346,16 +348,12 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: 'Nome completo da pessoa que receberá o atendimento médico.',
           },
-          beneficiario_nascimento: {
+          beneficiario_cpf: {
             type: 'string',
-            description: 'Data de nascimento do paciente (DD/MM/AAAA).',
-          },
-          beneficiario_cep: {
-            type: 'string',
-            description: 'CEP de residência do paciente.',
+            description: 'CPF do paciente que passará pela consulta médica.',
           },
         },
-        required: ['nova_data_hora'],
+        required: ['nova_data_hora', 'beneficiario_nome'],
       },
     },
   },
@@ -493,6 +491,7 @@ async function executeToolCall(
       return await cadastrarPaciente({
         telefoneTitular: patientPhone || '',
         nomeCompleto: toolArgs.nome_completo,
+        cpf: toolArgs.cpf,
         dataNascimento: toolArgs.data_nascimento,
         cep: toolArgs.cep,
         eParaOutraPessoa: Boolean(toolArgs.e_para_outra_pessoa),
@@ -507,7 +506,9 @@ async function executeToolCall(
         clinicId,
         toolArgs.beneficiario_nome,
         toolArgs.beneficiario_nascimento,
-        toolArgs.beneficiario_cep
+        toolArgs.beneficiario_cep,
+        toolArgs.telefone_proprio,
+        toolArgs.beneficiario_cpf
       );
     case 'cancelar_consulta':
       return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo);
@@ -638,17 +639,24 @@ export async function processAgentMessage({
       const cleanPhone = patientPhone.replace(/\D/g, '');
       const last8 = cleanPhone.slice(-8);
       let relatedPatientsSummary = '';
+      let titularCpf = '';
       try {
         const related = await prisma.patient.findMany({
           where: {
             ...(clinicId ? { clinicId } : {}),
             phone: { contains: last8 },
           },
-          select: { id: true, name: true, birthDate: true, phone: true },
+          select: { id: true, name: true, cpf: true, birthDate: true, phone: true },
         });
         if (related.length > 0) {
           relatedPatientsSummary = related
-            .map((p) => `• ${p.name}${p.birthDate ? ` (Nasc: ${p.birthDate})` : ''}`)
+            .map((p) => {
+              const hasCpf = p.cpf && p.cpf.replace(/\D/g, '').length >= 11;
+              if (p.id === patientId && hasCpf) {
+                titularCpf = p.cpf || '';
+              }
+              return `• ${p.name}${p.cpf ? ` (CPF: ${p.cpf} - JÁ CADASTRADO NO CONSULTÓRIO)` : ' (Cadastro sem CPF)'}`;
+            })
             .join('\n');
         }
       } catch (e) {}
@@ -679,6 +687,7 @@ CONHECIMENTO E CONTEXTO DO ATENDIMENTO:
 - Valor da Consulta: ${feeContext}
 - Política de Convênios: ${insuranceContext}
 - Interlocutor no WhatsApp (Quem está no aparelho digitando): ${interlocutorName} (Telefone: ${patientPhone})
+- Status Cadastral do Titular (${interlocutorName}): ${titularCpf ? `JÁ CADASTRADO COM CPF ${titularCpf}. NÃO peça dados cadastrais novamente se a consulta for para ele mesmo!` : 'Pendente de CPF.'}
 - Pacientes cadastrados vinculados a esta linha/contato:
 ${relatedPatientsSummary || `• ${interlocutorName}`}
 - Situação atual de agendamento: ${consultaAtualInfo}

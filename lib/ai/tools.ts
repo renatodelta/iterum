@@ -955,7 +955,8 @@ export async function criarNovoAgendamento(
   beneficiarioNome?: string,
   beneficiarioNascimento?: string,
   beneficiarioCep?: string,
-  beneficiarioTelefone?: string
+  beneficiarioTelefone?: string,
+  beneficiarioCpf?: string
 ): Promise<ToolResult> {
   try {
     const patient = await prisma.patient.findUnique({
@@ -1100,19 +1101,22 @@ export async function criarNovoAgendamento(
             clinicId: clinic.id,
             name: cleanBeneficiario,
             phone: beneficiarioTelefone ? beneficiarioTelefone.replace(/\D/g, '') : candidatePhone,
+            cpf: beneficiarioCpf ? beneficiarioCpf.trim() : null,
             birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : null,
             cep: beneficiarioCep ? beneficiarioCep.trim() : null,
             notes: `Cadastrado via WhatsApp por titular: ${patient.name} (${patient.phone})`,
           },
         });
       } else {
-        if (beneficiarioNascimento || beneficiarioCep) {
+        const updateData: any = {};
+        if (beneficiarioCpf && !beneficiary.cpf) updateData.cpf = beneficiarioCpf.trim();
+        if (beneficiarioNascimento) updateData.birthDate = beneficiarioNascimento.trim();
+        if (beneficiarioCep) updateData.cep = beneficiarioCep.trim();
+
+        if (Object.keys(updateData).length > 0) {
           beneficiary = await prisma.patient.update({
             where: { id: beneficiary.id },
-            data: {
-              birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : beneficiary.birthDate,
-              cep: beneficiarioCep ? beneficiarioCep.trim() : beneficiary.cep,
-            },
+            data: updateData,
           });
         }
       }
@@ -1121,13 +1125,15 @@ export async function criarNovoAgendamento(
       notes = `Agendamento para: ${cleanBeneficiario} (Titular WhatsApp: ${patient.name})`;
     } else {
       // Agendamento para o próprio titular
-      if (beneficiarioNascimento || beneficiarioCep) {
+      const updateData: any = {};
+      if (beneficiarioCpf && !patient.cpf) updateData.cpf = beneficiarioCpf.trim();
+      if (beneficiarioNascimento) updateData.birthDate = beneficiarioNascimento.trim();
+      if (beneficiarioCep) updateData.cep = beneficiarioCep.trim();
+
+      if (Object.keys(updateData).length > 0) {
         targetPatient = await prisma.patient.update({
           where: { id: patient.id },
-          data: {
-            birthDate: beneficiarioNascimento ? beneficiarioNascimento.trim() : patient.birthDate,
-            cep: beneficiarioCep ? beneficiarioCep.trim() : patient.cep,
-          },
+          data: updateData,
         });
       }
     }
@@ -1384,25 +1390,28 @@ export async function confirmarPresencaConsulta(
 
 /**
  * 11. CADASTRAR OU ATUALIZAR PACIENTE NO SISTEMA
- * Obrigatório: Nome completo, Data de Nascimento e CEP antes de qualquer agendamento.
+ * Obrigatório: Nome completo e CPF antes de qualquer agendamento.
+ * Realiza busca prévia por CPF no banco de dados da clínica para reutilizar cadastros existentes.
  */
 export async function cadastrarPaciente({
   telefoneTitular,
   nomeCompleto,
-  dataNascimento,
-  cep,
+  cpf,
   eParaOutraPessoa = false,
   nomeInterlocutor,
   telefoneProprio,
+  dataNascimento,
+  cep,
   clinicId,
 }: {
   telefoneTitular: string;
   nomeCompleto: string;
-  dataNascimento: string;
-  cep: string;
+  cpf?: string;
   eParaOutraPessoa?: boolean;
   nomeInterlocutor?: string;
   telefoneProprio?: string;
+  dataNascimento?: string;
+  cep?: string;
   clinicId?: string;
 }): Promise<ToolResult> {
   try {
@@ -1419,7 +1428,25 @@ export async function cadastrarPaciente({
       ? `+${cleanTitularPhone}`
       : `+55${cleanTitularPhone}`;
 
-    // Localizar ou registrar o paciente titular do WhatsApp
+    const rawCpf = (cpf || '').trim();
+    const cleanCpf = rawCpf.replace(/\D/g, '');
+    const formattedCpf =
+      cleanCpf.length === 11
+        ? `${cleanCpf.slice(0, 3)}.${cleanCpf.slice(3, 6)}.${cleanCpf.slice(6, 9)}-${cleanCpf.slice(9)}`
+        : rawCpf;
+
+    // 1. Verificar se já existe paciente com este CPF cadastrado na clínica
+    const existingByCpf =
+      cleanCpf.length >= 11
+        ? await prisma.patient.findFirst({
+            where: {
+              clinicId: clinic.id,
+              OR: [{ cpf: cleanCpf }, { cpf: formattedCpf }],
+            },
+          })
+        : null;
+
+    // 2. Localizar ou registrar o paciente titular do WhatsApp
     let titular = await findPatientByPhone(telefoneTitular, clinicId);
 
     if (!titular) {
@@ -1428,6 +1455,7 @@ export async function cadastrarPaciente({
           clinicId: clinic.id,
           name: nomeInterlocutor?.trim() || (eParaOutraPessoa ? 'Titular WhatsApp' : nomeCompleto.trim()),
           phone: formattedTitularPhone,
+          cpf: !eParaOutraPessoa && formattedCpf ? formattedCpf : null,
         },
       });
     } else if (nomeInterlocutor && nomeInterlocutor.trim()) {
@@ -1439,6 +1467,31 @@ export async function cadastrarPaciente({
           data: { name: cleanInterlocutor },
         });
       }
+    }
+
+    // Se já encontramos um paciente existente por CPF na clínica
+    if (existingByCpf) {
+      if (!eParaOutraPessoa && existingByCpf.id !== titular.id) {
+        await prisma.patient.update({
+          where: { id: titular.id },
+          data: {
+            name: existingByCpf.name || nomeCompleto.trim(),
+            cpf: formattedCpf,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        message: `✅ Cadastro do paciente ${existingByCpf.name} LOCALIZADO no sistema (CPF: ${formattedCpf})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO chame criar_novo_agendamento agora! Você DEVE responder ao paciente apresentando o resumo do agendamento e perguntando: "Posso confirmar para você?". Aguarde a resposta de confirmação do paciente.`,
+        data: {
+          patientId: existingByCpf.id,
+          patientName: existingByCpf.name,
+          cpf: formattedCpf,
+          phone: existingByCpf.phone,
+          alreadyExisted: true,
+        },
+      };
     }
 
     // Proteção de segurança: se o titular já tiver nome real diferente do nome a ser cadastrado,
@@ -1460,20 +1513,21 @@ export async function cadastrarPaciente({
         where: { id: titular.id },
         data: {
           name: nomeCompleto.trim(),
-          birthDate: dataNascimento.trim(),
-          cep: cep.trim(),
+          cpf: formattedCpf || titular.cpf,
+          birthDate: dataNascimento ? dataNascimento.trim() : titular.birthDate,
+          cep: cep ? cep.trim() : titular.cep,
         },
       });
 
       return {
         success: true,
-        message: `Cadastro de ${updatedTitular.name} atualizado com sucesso no sistema do consultório! (Nascimento: ${updatedTitular.birthDate}, CEP: ${updatedTitular.cep})`,
+        message: `✅ Cadastro de ${updatedTitular.name} salvo com sucesso no sistema (CPF: ${formattedCpf || 'Registrado'})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO chame criar_novo_agendamento agora! Você DEVE responder ao paciente apresentando o resumo do agendamento e perguntando: "Posso confirmar para você?". Aguarde a resposta de confirmação do paciente.`,
         data: {
           patientId: updatedTitular.id,
           patientName: updatedTitular.name,
-          birthDate: updatedTitular.birthDate,
-          cep: updatedTitular.cep,
+          cpf: formattedCpf,
           phone: updatedTitular.phone,
+          alreadyExisted: false,
         },
       };
     }
@@ -1491,6 +1545,7 @@ export async function cadastrarPaciente({
       beneficiary = await prisma.patient.update({
         where: { id: beneficiary.id },
         data: {
+          cpf: formattedCpf || beneficiary.cpf,
           birthDate: dataNascimento ? dataNascimento.trim() : beneficiary.birthDate,
           cep: cep ? cep.trim() : beneficiary.cep,
         },
@@ -1515,6 +1570,7 @@ export async function cadastrarPaciente({
           clinicId: clinic.id,
           name: cleanNome,
           phone: phoneToUse,
+          cpf: formattedCpf || null,
           birthDate: dataNascimento ? dataNascimento.trim() : null,
           cep: cep ? cep.trim() : null,
           notes: `Cadastrado via WhatsApp por titular: ${titular.name} (${titular.phone})`,
@@ -1524,15 +1580,15 @@ export async function cadastrarPaciente({
 
     return {
       success: true,
-      message: `✅ Paciente ${beneficiary.name} cadastrado(a) com sucesso como PACIENTE BENEFICIÁRIO da consulta médica!\n⚠️ ALERTA DE TRATAMENTO PARA A SOFIA: Você está conversando no WhatsApp com o(a) responsável (${titular.name || 'titular do WhatsApp'}). NUNCA passe a chamar o(a) responsável pelo nome do paciente cadastrado (${beneficiary.name}). Mantenha o diálogo e a gentileza dirigidos ao responsável e refira-se ao paciente "${beneficiary.name}" sempre na 3ª pessoa ("a consulta do ${beneficiary.name}", "o agendamento dele(a)", etc.)!`,
+      message: `✅ Paciente ${beneficiary.name} CADASTRADO como paciente beneficiário da consulta (CPF: ${formattedCpf || 'Registrado'})!\n⚠️ ALERTA DE TRATAMENTO PARA A SOFIA: Você está conversando no WhatsApp com o(a) responsável (${titular.name || 'titular do WhatsApp'}). NUNCA passe a chamar o(a) responsável pelo nome do paciente cadastrado (${beneficiary.name}). NÃO chame criar_novo_agendamento agora! Apresente o resumo do agendamento destacando Paciente (${beneficiary.name}) e Responsável (${titular.name}), e pergunte: "Posso confirmar para você?". Aguarde a confirmação do paciente.`,
       data: {
         patientId: beneficiary.id,
         patientName: beneficiary.name,
-        birthDate: beneficiary.birthDate,
-        cep: beneficiary.cep,
+        cpf: formattedCpf,
         phone: beneficiary.phone,
         titularName: titular.name,
         titularPhone: titular.phone,
+        alreadyExisted: false,
       },
     };
   } catch (error: any) {
