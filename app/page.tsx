@@ -1794,21 +1794,13 @@ export default function Dashboard() {
           <nav className="px-3 space-y-1.5 mt-3">
             <button
               onClick={() => setActiveTab('agenda')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'agenda'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'agenda'
                 ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
                 }`}
             >
-              <div className="flex items-center gap-3">
-                <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Agenda</span>
-              </div>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${activeTab === 'agenda' ? 'bg-[#005a43] text-white' : 'bg-[#e8f7f0] text-[#00875a]'
-                  }`}
-              >
-                {appointments.length}
-              </span>
+              <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-[#059669]' : 'text-slate-400'}`} />
+              <span>Agenda</span>
             </button>
 
             <button
@@ -1861,34 +1853,24 @@ export default function Dashboard() {
 
             <button
               onClick={() => setActiveTab('relatorios')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'relatorios'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'relatorios'
                 ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
                 }`}
             >
-              <div className="flex items-center gap-3">
-                <BarChart3 className={`w-5 h-5 ${activeTab === 'relatorios' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Inteligência e Relatórios</span>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43]">
-                ROI
-              </span>
+              <BarChart3 className={`w-5 h-5 ${activeTab === 'relatorios' ? 'text-[#059669]' : 'text-slate-400'}`} />
+              <span>Inteligência e Relatórios</span>
             </button>
 
             <button
               onClick={() => setActiveTab('users')}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'users'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'users'
                 ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
                 }`}
             >
-              <div className="flex items-center gap-3">
-                <UserCheck className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
-                <span>Usuários e Acessos</span>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                {users.length}
-              </span>
+              <UserCheck className={`w-5 h-5 ${activeTab === 'users' ? 'text-[#059669]' : 'text-slate-400'}`} />
+              <span>Usuários e Acessos</span>
             </button>
 
             <button
@@ -1967,21 +1949,13 @@ export default function Dashboard() {
                     setActiveTab('agenda');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition ${activeTab === 'agenda'
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition ${activeTab === 'agenda'
                     ? 'bg-slate-900 text-white shadow-md'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-teal-400' : 'text-slate-500'}`} />
-                    <span>Agenda</span>
-                  </div>
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${activeTab === 'agenda' ? 'bg-white/20 text-white' : 'bg-slate-200/70 text-slate-700'
-                      }`}
-                  >
-                    {appointments.length}
-                  </span>
+                  <CalendarIcon className={`w-5 h-5 ${activeTab === 'agenda' ? 'text-teal-400' : 'text-slate-500'}`} />
+                  <span>Agenda</span>
                 </button>
 
                 <button
@@ -2045,18 +2019,13 @@ export default function Dashboard() {
                     setActiveTab('relatorios');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'relatorios'
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'relatorios'
                     ? 'bg-slate-900 text-white shadow-md font-bold'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <BarChart3 className="w-5 h-5 text-teal-400" />
-                    <span>Inteligência e Relatórios</span>
-                  </div>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
-                    ROI
-                  </span>
+                  <BarChart3 className="w-5 h-5 text-teal-400" />
+                  <span>Inteligência e Relatórios</span>
                 </button>
 
                 <button
@@ -2064,18 +2033,13 @@ export default function Dashboard() {
                     setActiveTab('users');
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'users'
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'users'
                     ? 'bg-slate-900 text-white shadow-md font-bold'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <UserCheck className="w-5 h-5 text-slate-500" />
-                    <span>Usuários e Acessos</span>
-                  </div>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                    {users.length}
-                  </span>
+                  <UserCheck className="w-5 h-5 text-slate-500" />
+                  <span>Usuários e Acessos</span>
                 </button>
 
                 <button
