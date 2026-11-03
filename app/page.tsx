@@ -138,6 +138,41 @@ function isPatientBirthdayToday(birthDateStr?: string | null): boolean {
   return false;
 }
 
+function formatBirthDateForInput(val?: string | null): string {
+  if (!val) return '';
+  const s = val.trim();
+  if (s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length === 3 && parts[0].length === 4) return s; // YYYY-MM-DD
+    if (parts.length === 3 && parts[2].length === 4) {
+      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+    }
+  }
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+    }
+    if (parts.length === 3 && parts[0].length === 4) {
+      return parts[0] + '-' + parts[1].padStart(2, '0') + '-' + parts[2].padStart(2, '0');
+    }
+  }
+  return s;
+}
+
+function formatBirthDateDisplay(val?: string | null): string {
+  if (!val) return '';
+  const s = val.trim();
+  if (s.includes('/')) return s;
+  if (s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return parts[2].padStart(2, '0') + '/' + parts[1].padStart(2, '0') + '/' + parts[0];
+    }
+  }
+  return s;
+}
+
 function calculateAge(birthDateStr?: string | null): string {
   if (!birthDateStr) return '';
   const birth = new Date(birthDateStr);
@@ -430,20 +465,30 @@ export default function Dashboard() {
       const resSettings = await fetch('/api/clinic/settings', { cache: 'no-store' });
       const dataSettings = await resSettings.json();
       if (dataSettings.clinic) {
-        setClinic(dataSettings.clinic);
+        // Se o usuário estiver na aba de gestão/configurações ou formulário, não sobrescrever estados dos inputs durante a digitação
+        setClinic((prev: any) => {
+          if (activeTab === 'profissionais' && prev) {
+            return prev; // Preserva o que o usuário está digitando na tela de dados profissionais
+          }
+          return dataSettings.clinic;
+        });
+
         const c = dataSettings.clinic;
-        if (c.scheduleStartDate !== undefined) setScheduleStartDate(c.scheduleStartDate || '');
-        if (c.scheduleEndDate !== undefined) setScheduleEndDate(c.scheduleEndDate || '');
-        if (c.workStartTime) setWorkStartTime(c.workStartTime);
-        if (c.workEndTime) setWorkEndTime(c.workEndTime);
-        if (c.breakEnabled !== undefined) setBreakEnabled(Boolean(c.breakEnabled));
-        if (c.breakStartTime) setBreakStartTime(c.breakStartTime);
-        if (c.breakEndTime) setBreakEndTime(c.breakEndTime);
-        if (c.slotDurationMinutes) setSlotDurationMinutes(Number(c.slotDurationMinutes));
-        if (c.returnSlotDurationMinutes) setReturnSlotDurationMinutes(Number(c.returnSlotDurationMinutes));
-        if (c.maxReturnSlotsPerDay !== undefined) setMaxReturnSlotsPerDay(Number(c.maxReturnSlotsPerDay));
-        if (c.returnSlotTimes && Array.isArray(c.returnSlotTimes)) setReturnSlotTimes(c.returnSlotTimes);
-        if (c.selectedDays && Array.isArray(c.selectedDays)) setSelectedDays(c.selectedDays.map(String));
+        // Apenas inicializar ou atualizar os campos de criar agenda se NÃO estiver na aba 'settings' editando
+        if (activeTab !== 'settings') {
+          if (c.scheduleStartDate !== undefined) setScheduleStartDate(c.scheduleStartDate || '');
+          if (c.scheduleEndDate !== undefined) setScheduleEndDate(c.scheduleEndDate || '');
+          if (c.workStartTime) setWorkStartTime(c.workStartTime);
+          if (c.workEndTime) setWorkEndTime(c.workEndTime);
+          if (c.breakEnabled !== undefined) setBreakEnabled(Boolean(c.breakEnabled));
+          if (c.breakStartTime) setBreakStartTime(c.breakStartTime);
+          if (c.breakEndTime) setBreakEndTime(c.breakEndTime);
+          if (c.slotDurationMinutes) setSlotDurationMinutes(Number(c.slotDurationMinutes));
+          if (c.returnSlotDurationMinutes) setReturnSlotDurationMinutes(Number(c.returnSlotDurationMinutes));
+          if (c.maxReturnSlotsPerDay !== undefined) setMaxReturnSlotsPerDay(Number(c.maxReturnSlotsPerDay));
+          if (c.returnSlotTimes && Array.isArray(c.returnSlotTimes)) setReturnSlotTimes(c.returnSlotTimes);
+          if (c.selectedDays && Array.isArray(c.selectedDays)) setSelectedDays(c.selectedDays.map(String));
+        }
       }
 
       let apptUrl = '/api/appointments?';
@@ -664,7 +709,7 @@ export default function Dashboard() {
       setPatPhone(formatPhoneBR(patToEdit.phone) || patToEdit.phone);
       setPatCpf(patToEdit.cpf || '');
       setPatEmail(patToEdit.email || '');
-      setPatBirthDate(patToEdit.birthDate || '');
+      setPatBirthDate(formatBirthDateForInput(patToEdit.birthDate));
       setPatCep(patToEdit.cep || '');
       setPatStreet(patToEdit.street || '');
       setPatNumber(patToEdit.number || '');
@@ -2416,7 +2461,7 @@ export default function Dashboard() {
                               )}
                             </div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">
-                              {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'Sem CPF'} • {p.birthDate ? `${p.birthDate.split('-').reverse().join('/')} (${calculateAge(p.birthDate)})` : 'Idade N/D'}
+                              {p.cpf ? `CPF: ${applyCPFMask(p.cpf)}` : 'Sem CPF'} • {p.birthDate ? `${formatBirthDateDisplay(p.birthDate)} (${calculateAge(p.birthDate)})` : 'Idade N/D'}
                             </div>
                           </div>
                         </div>
@@ -2526,7 +2571,7 @@ export default function Dashboard() {
                           {p.birthDate ? (
                             <div>
                               <div className="font-bold text-slate-800 text-sm">
-                                {p.birthDate.split('-').reverse().join('/')}
+                                {formatBirthDateDisplay(p.birthDate)}
                               </div>
                               <div className="text-xs text-slate-400 font-medium">
                                 {calculateAge(p.birthDate)}

@@ -204,9 +204,24 @@ export default function GoogleCalendarView({
         wh = null;
       }
     }
-    if (wh && typeof wh === 'object') return wh;
-    return null;
-  }, [clinic?.workingHours]);
+    // Suporte se workingHours já for um objeto ou se as propriedades vierem direto do clinic
+    let result: any = (wh && typeof wh === 'object') ? { ...wh } : {};
+    if (!result.meta) {
+      result.meta = {};
+    }
+    if (clinic.scheduleStartDate && !result.meta.scheduleStartDate) result.meta.scheduleStartDate = clinic.scheduleStartDate;
+    if (clinic.scheduleEndDate && !result.meta.scheduleEndDate) result.meta.scheduleEndDate = clinic.scheduleEndDate;
+    if (clinic.selectedDays && (!result.meta.selectedDays || result.meta.selectedDays.length === 0)) result.meta.selectedDays = clinic.selectedDays;
+    if (clinic.workStartTime && !result.meta.workStartTime) result.meta.workStartTime = clinic.workStartTime;
+    if (clinic.workEndTime && !result.meta.workEndTime) result.meta.workEndTime = clinic.workEndTime;
+    if (clinic.breakEnabled !== undefined && result.meta.breakEnabled === undefined) result.meta.breakEnabled = clinic.breakEnabled;
+    if (clinic.breakStartTime && !result.meta.breakStartTime) result.meta.breakStartTime = clinic.breakStartTime;
+    if (clinic.breakEndTime && !result.meta.breakEndTime) result.meta.breakEndTime = clinic.breakEndTime;
+    if (clinic.slotDurationMinutes && !result.meta.slotDurationMinutes) result.meta.slotDurationMinutes = clinic.slotDurationMinutes;
+    if (clinic.returnSlotDurationMinutes && !result.meta.returnSlotDurationMinutes) result.meta.returnSlotDurationMinutes = clinic.returnSlotDurationMinutes;
+
+    return result;
+  }, [clinic]);
 
   const slotDuration = clinic?.slotDurationMinutes || 30;
 
