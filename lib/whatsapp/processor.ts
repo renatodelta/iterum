@@ -197,9 +197,25 @@ export async function executeWhatsAppMessageJob(
     // 8. Normalizar formatação para WhatsApp (elimina asteriscos duplos e resíduos visuais mantendo negritos limpos)
     const formattedReply = formatForWhatsApp(agentResult.reply);
 
-    // 9. Disparo imediato da resposta no WhatsApp e persistência no banco em paralelo
+    // 9. Detectar se a resposta é um pedido de confirmação de agendamento ou presença
+    // para anexar botões interativos nativos da Meta no WhatsApp ("Sim, confirmar" e "Não, alterar")
+    const isConfirmationQuestion =
+      /posso confirmar/i.test(formattedReply) ||
+      /deseja confirmar/i.test(formattedReply) ||
+      /confirma seu agendamento/i.test(formattedReply) ||
+      /confirma para você/i.test(formattedReply) ||
+      /confirmo para você/i.test(formattedReply);
+
+    const confirmationButtons = isConfirmationQuestion
+      ? [
+          { id: 'btn_confirmar_sim', title: 'Sim, confirmar' },
+          { id: 'btn_confirmar_nao', title: 'Não, alterar' },
+        ]
+      : undefined;
+
+    // 10. Disparo imediato da resposta no WhatsApp e persistência no banco em paralelo
     await Promise.all([
-      sendWhatsAppMessage(formattedPhone, formattedReply, undefined, customCreds),
+      sendWhatsAppMessage(formattedPhone, formattedReply, confirmationButtons, customCreds),
       prisma.message.create({
         data: {
           clinicId: clinic.id,

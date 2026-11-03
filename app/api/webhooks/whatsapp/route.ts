@@ -92,12 +92,28 @@ export async function POST(req: NextRequest) {
       const isAudio = msg.type === 'audio' && msg.audio?.id;
       audioId = isAudio ? msg.audio.id : undefined;
 
-      // Extrai texto de mensagens normais, respostas interativas ou áudio
+      // Captura reações com emojis na bolha da mensagem (ex: joinha 👍, coração, check)
+      const isReaction = msg.type === 'reaction' && msg.reaction?.emoji;
+      let reactionText = '';
+      if (isReaction) {
+        const emoji = msg.reaction.emoji;
+        if (emoji === '👍' || emoji === '👌' || emoji === '👏' || emoji === '❤️' || emoji === '✅') {
+          reactionText = 'Sim, confirmo! 👍';
+        } else if (emoji === '👎' || emoji === '❌') {
+          reactionText = 'Não, quero alterar';
+        } else {
+          reactionText = emoji;
+        }
+        console.log(`👍 [Webhook Meta] Reação capturada na mensagem (${msg.reaction.message_id}): "${emoji}" convertida para "${reactionText}"`);
+      }
+
+      // Extrai texto de mensagens normais, respostas interativas de botões, reações na mensagem ou áudio
       userText =
         msg.text?.body ||
         msg.interactive?.button_reply?.title ||
         msg.interactive?.list_reply?.title ||
         msg.button?.text ||
+        reactionText ||
         (isAudio ? '[Mensagem de Áudio]' : '');
 
       if (!senderPhone || (!userText.trim() && !isAudio)) {
