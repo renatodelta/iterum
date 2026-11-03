@@ -624,15 +624,6 @@ export default function GoogleCalendarView({
       <header className="h-14 sm:h-16 border-b border-[#dadce0] bg-white flex items-center justify-between px-2 sm:px-4 z-30 shrink-0">
         {/* LADO ESQUERDO: HAMBURGUER + BOTÃO HOJE + SETAS < > + MÊS E ANO */}
         <div className="flex items-center space-x-1 sm:space-x-3">
-          {/* BOTÃO DO MENU HAMBÚRGUER */}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] active:bg-[#e8eaed] transition"
-            aria-label="Menu principal"
-            title="Menu principal"
-          >
-            <Menu className="w-5 h-5 text-[#3c4043]" />
-          </button>
 
           {/* BOTÃO "HOJE" (ESTILO GOOGLE AGENDA) */}
           <button
