@@ -75,6 +75,8 @@ import {
   MapPin,
   Gift,
   LogOut,
+  Camera,
+  Upload,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -238,6 +240,10 @@ export default function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  // Notificações e Perfil do Médico
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showDoctorProfileModal, setShowDoctorProfileModal] = useState(false);
 
   // Cron
   const [cronRunning, setCronRunning] = useState(false);
@@ -1285,6 +1291,7 @@ export default function Dashboard() {
           acceptsInsurance: Boolean(clinic?.acceptsInsurance),
           insurancePlans: clinic?.insurancePlans || '',
           insuranceNotes: clinic?.insuranceNotes || '',
+          doctorPhoto: clinic?.doctorPhoto || '',
         }),
       });
       const data = await res.json();
@@ -1553,6 +1560,7 @@ export default function Dashboard() {
         phone: doctorUser.phone || clinic?.phone || '(11) 98888-7777',
         room: 'Consultório Principal',
         address: clinic?.address || 'Av. Paulista, 1000',
+        photo: clinic?.doctorPhoto || '',
       };
     }
     // Fallback: perfil das configurações da clínica
@@ -1564,6 +1572,7 @@ export default function Dashboard() {
       phone: clinic?.phone || '(11) 98888-7777',
       room: 'Consultório Principal',
       address: clinic?.address || 'Av. Paulista, 1000',
+      photo: clinic?.doctorPhoto || '',
     };
   }, [users, clinic]);
 
@@ -2131,21 +2140,127 @@ export default function Dashboard() {
 
             {/* CONTROLES DIREITOS: SINO COM BADGE 3 E PERFIL DO MÉDICO CAREHUB */}
             <div className="flex items-center space-x-3.5">
-              {/* Sino de Notificação */}
-              <div className="relative p-2.5 rounded-full bg-white border border-[#e5efe9] hover:bg-slate-50 text-slate-600 transition cursor-pointer shadow-2xs">
-                <Bell className="w-4.5 h-4.5 text-slate-600" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
-                  3
-                </span>
+              {/* Sino de Notificação com Dropdown Interativo */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-2.5 rounded-full bg-white border border-[#e5efe9] hover:bg-slate-50 text-slate-600 transition cursor-pointer shadow-2xs focus:outline-none"
+                  title="Notificações do Sistema"
+                >
+                  <Bell className="w-4.5 h-4.5 text-slate-600" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                    3
+                  </span>
+                </button>
+
+                {/* Popover / Dropdown de Notificações */}
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200/90 z-50 p-4 animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                          <Bell className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-slate-900 text-sm">Notificações</h4>
+                          <span className="text-[10px] text-slate-400 font-medium">Alertas e atualizações do consultório</span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black">
+                        3 Novas
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 mt-2 max-h-72 overflow-y-auto pr-1 space-y-1">
+                      {/* Alerta 1 */}
+                      <div className="py-2.5 flex items-start gap-3 hover:bg-slate-50/80 p-2 rounded-2xl transition">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-800 leading-snug">
+                            Lembretes D-1 disparados
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Mensagens automáticas via WhatsApp enviadas aos pacientes das próximas 24h.
+                          </p>
+                          <span className="text-[10px] text-slate-400 font-medium mt-1 block">Hoje às 08:00</span>
+                        </div>
+                      </div>
+
+                      {/* Alerta 2 */}
+                      <div className="py-2.5 flex items-start gap-3 hover:bg-slate-50/80 p-2 rounded-2xl transition">
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-800 leading-snug">
+                            Fila de Espera ativa
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {waitlist.length > 0 ? `${waitlist.length} paciente(s) aguardando desistências ou vagas na agenda.` : 'Nenhum paciente aguardando no momento.'}
+                          </p>
+                          <span className="text-[10px] text-slate-400 font-medium mt-1 block">Tempo real</span>
+                        </div>
+                      </div>
+
+                      {/* Alerta 3 */}
+                      <div className="py-2.5 flex items-start gap-3 hover:bg-slate-50/80 p-2 rounded-2xl transition">
+                        <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <Zap className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-800 leading-snug">
+                            Assistente IA Sofia Operante
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Agendamentos e dúvidas dos pacientes respondidos automaticamente no WhatsApp.
+                          </p>
+                          <span className="text-[10px] text-slate-400 font-medium mt-1 block">Sistema Ativo</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setActiveTab('agenda');
+                        }}
+                        className="text-xs font-bold text-[#005a43] hover:underline"
+                      >
+                        Ver Agenda de Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowNotifications(false)}
+                        className="text-xs font-semibold text-slate-400 hover:text-slate-600"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Perfil do Médico Estilo CareHub */}
+              {/* Perfil do Médico Estilo CareHub com Foto ou Iniciais */}
               <div
-                onClick={() => setActiveTab('settings')}
+                onClick={() => setShowDoctorProfileModal(true)}
                 className="flex items-center space-x-3 pl-2 py-1.5 pr-3 cursor-pointer bg-white border border-[#e5efe9] hover:border-[#10b981]/40 rounded-full shadow-2xs transition group"
+                title="Clique para ver os dados do perfil do profissional"
               >
-                <div className="w-9 h-9 rounded-full bg-[#005a43] text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                  {getInitials(activeDoctor.name)}
+                <div className="w-9 h-9 rounded-full bg-[#005a43] text-white font-bold flex items-center justify-center text-xs shadow-xs overflow-hidden shrink-0 border border-white">
+                  {activeDoctor.photo ? (
+                    <img
+                      src={activeDoctor.photo}
+                      alt={activeDoctor.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{getInitials(activeDoctor.name)}</span>
+                  )}
                 </div>
                 <div className="text-left hidden xl:block">
                   <span className="block text-xs font-black text-[#1e293b] leading-tight group-hover:text-[#005a43] transition">
@@ -4025,16 +4140,84 @@ export default function Dashboard() {
               {/* FORMULÁRIO DE DADOS PROFISSIONAIS */}
               <form onSubmit={handleSaveProfissionais} className="space-y-6 max-w-4xl text-sm">
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
-                    <Stethoscope className="w-4.5 h-4.5 text-[#005a43]" />
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 text-sm">Identificação do Médico Titular</h3>
-                      <p className="text-[11px] text-slate-400 font-medium">
-                        Nome, especialidade e registro de conselho de classe
-                      </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200/70">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 text-[#005a43] flex items-center justify-center shrink-0 font-bold">
+                        <Stethoscope className="w-4.5 h-4.5 text-[#005a43]" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm">Identificação do Médico</h3>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Foto de perfil, nome completo, especialidade e registro de conselho de classe
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Componente de Upload e Preview da Foto do Médico */}
+                    <div className="flex items-center gap-3 bg-white p-2 sm:px-3 sm:py-2 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="relative group shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-[#005a43] text-white font-bold flex items-center justify-center text-xs overflow-hidden border-2 border-white shadow-xs">
+                          {clinic.doctorPhoto ? (
+                            <img
+                              src={clinic.doctorPhoto}
+                              alt="Foto do Médico"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{getInitials(clinic.doctorName || clinic.name || 'Médico')}</span>
+                          )}
+                        </div>
+                        <label
+                          htmlFor="doctor-photo-upload"
+                          className="absolute inset-0 bg-black/40 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                          title="Alterar foto do perfil"
+                        >
+                          <Camera className="w-4 h-4" />
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col">
+                        <label
+                          htmlFor="doctor-photo-upload"
+                          className="px-3 py-1.5 rounded-xl bg-[#e8f7f0] hover:bg-[#d1fae5] text-[#005a43] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{clinic.doctorPhoto ? 'Trocar Foto' : 'Carregar Foto'}</span>
+                        </label>
+                        <input
+                          id="doctor-photo-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 2 * 1024 * 1024) {
+                              alert('A imagem deve ter no máximo 2MB.');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (uploadEvent) => {
+                              const base64 = uploadEvent.target?.result as string;
+                              if (base64) {
+                                setClinic({ ...clinic, doctorPhoto: base64 });
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        {clinic.doctorPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => setClinic({ ...clinic, doctorPhoto: '' })}
+                            className="text-[10px] text-rose-500 hover:text-rose-700 font-semibold mt-0.5 text-left"
+                          >
+                            Remover foto
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block font-bold text-slate-800 mb-1 text-xs">Nome Completo do Médico</label>
@@ -5226,6 +5409,123 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: DADOS DO PERFIL DO PROFISSIONAL (AO CLICAR NO NOME DO MÉDICO)
+      ========================================================================= */}
+      {showDoctorProfileModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-2xl border border-slate-100 space-y-6 my-auto animate-in zoom-in-95 duration-200">
+            {/* TOPO COM FOTO, NOME E STATUS */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-3xl bg-[#005a43] text-white font-bold flex items-center justify-center text-lg shadow-md overflow-hidden shrink-0 border-2 border-emerald-100">
+                  {activeDoctor.photo ? (
+                    <img
+                      src={activeDoctor.photo}
+                      alt={activeDoctor.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{getInitials(activeDoctor.name)}</span>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight">
+                      {activeDoctor.name}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43] font-bold text-[10px]">
+                      Titular
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    {activeDoctor.specialty}
+                  </p>
+                  <p className="text-[11px] font-bold text-[#005a43] mt-0.5">
+                    {activeDoctor.crm}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDoctorProfileModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* DADOS DETALHADOS DO PROFISSIONAL */}
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white text-[#005a43] flex items-center justify-center shrink-0 shadow-2xs border border-slate-100">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 font-medium block">E-mail Profissional</span>
+                    <span className="font-bold text-slate-800 truncate block">{activeDoctor.email || 'Não informado'}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white text-[#005a43] flex items-center justify-center shrink-0 shadow-2xs border border-slate-100">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 font-medium block">Telefone / WhatsApp</span>
+                    <span className="font-bold text-slate-800 truncate block">{activeDoctor.phone || 'Não informado'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-white text-[#005a43] flex items-center justify-center shrink-0 shadow-2xs border border-slate-100">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] text-slate-400 font-medium block">Endereço do Consultório</span>
+                  <span className="font-bold text-slate-800 block">{activeDoctor.address || 'Não cadastrado'}</span>
+                </div>
+              </div>
+
+              {/* Informações de Atendimento */}
+              <div className="p-3.5 rounded-2xl bg-[#e8f7f0]/60 border border-[#d1fae5] flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-[#005a43] font-bold uppercase tracking-wider block">Duração Padrão da Consulta</span>
+                  <span className="font-extrabold text-[#004735] text-sm">{clinic?.slotDurationMinutes || 30} minutos por atendimento</span>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-white text-[#005a43] flex items-center justify-center shadow-2xs font-bold text-xs">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+
+            {/* BOTÕES DE AÇÃO */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDoctorProfileModal(false);
+                  setActiveTab('profissionais');
+                }}
+                className="px-4 py-2.5 rounded-xl bg-[#005a43] hover:bg-[#004735] text-white font-bold text-xs shadow-md shadow-[#005a43]/15 transition active:scale-95 flex items-center gap-2"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Editar Dados & Foto</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDoctorProfileModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs transition"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

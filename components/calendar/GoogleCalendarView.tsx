@@ -58,6 +58,7 @@ interface GoogleCalendarViewProps {
     specialty: string;
     crm?: string;
     room?: string;
+    photo?: string;
   };
 }
 
@@ -1697,8 +1698,16 @@ export default function GoogleCalendarView({
             {/* RODAPÉ DO DRAWER COM STATUS DO MÉDICO */}
             <div className="p-4 border-t border-slate-100 bg-slate-50/70">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-[#1a73e8] font-bold flex items-center justify-center text-sm">
-                  {activeDoctor.name.slice(0, 2).toUpperCase()}
+                <div className="w-9 h-9 rounded-full bg-blue-100 text-[#1a73e8] font-bold flex items-center justify-center text-sm overflow-hidden shrink-0 border border-white">
+                  {activeDoctor.photo ? (
+                    <img
+                      src={activeDoctor.photo}
+                      alt={activeDoctor.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{activeDoctor.name.slice(0, 2).toUpperCase()}</span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-slate-800 truncate">{activeDoctor.name}</p>

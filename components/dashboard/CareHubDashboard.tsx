@@ -28,6 +28,7 @@ interface CareHubDashboardProps {
     specialty: string;
     crm?: string;
     room?: string;
+    photo?: string;
   };
   onNavigateToTab: (tab: 'overview' | 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings') => void;
   onOpenNewAppt: () => void;
