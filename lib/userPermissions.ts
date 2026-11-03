@@ -60,6 +60,12 @@ export const USER_PERMISSIONS: PermissionItem[] = [
     description: 'Permite abrir e gerar novos períodos de agendamento na grade',
     category: 'Agenda',
   },
+  {
+    id: 'visualizar_relatorios',
+    label: 'Visualizar relatórios e inteligência',
+    description: 'Permite consultar indicadores executivos, ROI da IA, taxa de ocupação e faturamento',
+    category: 'Consultas',
+  },
 ];
 
 // Gera login único automático: primeiro nome em minúsculo + iniciais dos sobrenomes

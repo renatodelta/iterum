@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MetaEmbeddedSignupButton } from '@/components/whatsapp/MetaEmbeddedSignupButton';
 import CareHubDashboard from '@/components/dashboard/CareHubDashboard';
+import ReportsView from '@/components/reports/ReportsView';
 import GoogleCalendarView, { AgendaViewMode } from '@/components/calendar/GoogleCalendarView';
 import {
   USER_PERMISSIONS,
@@ -14,6 +15,7 @@ import {
   Calendar as CalendarIcon,
   CalendarPlus,
   LayoutDashboard,
+  BarChart3,
   Bell,
   ChevronDown,
   Clock,
@@ -208,7 +210,7 @@ const WEEKDAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábad
 const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:00', '13:45', '14:30', '15:15', '16:00', '16:45', '17:30'];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings' | 'profissionais'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'relatorios' | 'users' | 'settings' | 'profissionais'>('agenda');
   const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
@@ -1858,6 +1860,22 @@ export default function Dashboard() {
             </div>
 
             <button
+              onClick={() => setActiveTab('relatorios')}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'relatorios'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
+            >
+              <div className="flex items-center gap-3">
+                <BarChart3 className={`w-5 h-5 ${activeTab === 'relatorios' ? 'text-[#059669]' : 'text-slate-400'}`} />
+                <span>Inteligência e Relatórios</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#005a43]">
+                ROI
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('users')}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'users'
                 ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
@@ -2011,7 +2029,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <MessageSquare className="w-5 h-5 text-slate-500" />
-                    <span>WhatsApp & Lembretes</span>
+                    <span>WhatsApp e Lembretes</span>
                   </div>
                   <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Cloud
@@ -2021,6 +2039,25 @@ export default function Dashboard() {
                 <div className="pt-4 pb-1 px-4">
                   <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Gestão</span>
                 </div>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('relatorios');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'relatorios'
+                    ? 'bg-slate-900 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <BarChart3 className="w-5 h-5 text-teal-400" />
+                    <span>Inteligência e Relatórios</span>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                    ROI
+                  </span>
+                </button>
 
                 <button
                   onClick={() => {
@@ -2334,7 +2371,7 @@ export default function Dashboard() {
         {/* =========================================================================
             3. CONTEÚDO DINÂMICO CONFORME ABA SELECIONADA
         ========================================================================= */}
-        <main className={`flex-1 flex flex-col ${activeTab === 'agenda' ? 'p-0' : 'p-3.5 sm:p-4 lg:p-6 lg:flex-row gap-4 lg:gap-6'} overflow-y-auto lg:overflow-hidden`}>
+        <main className={`flex-1 flex flex-col ${activeTab === 'agenda' || activeTab === 'relatorios' ? 'p-0' : 'p-3.5 sm:p-4 lg:p-6 lg:flex-row gap-4 lg:gap-6'} overflow-y-auto lg:overflow-hidden`}>
           {/* ---------------------------------------------------------------------
               ABA: AGENDA MÉDICA (EXPERIÊNCIA GOOGLE CALENDAR COMPLETA)
           --------------------------------------------------------------------- */}
@@ -4531,6 +4568,12 @@ export default function Dashboard() {
               </form>
             </div>
           )}
+        {/* ---------------------------------------------------------------------
+              ABA: INTELIGÊNCIA E RELATÓRIOS DO CONSULTÓRIO
+          --------------------------------------------------------------------- */}
+          {activeTab === 'relatorios' && (
+            <ReportsView clinicId={clinic?.id} defaultTicketMedio={350} />
+          )}
         </main>
       </div>
 
@@ -4585,6 +4628,18 @@ export default function Dashboard() {
             <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
           </div>
           <span className="text-[10px] mt-0.5">WhatsApp</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('relatorios')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${activeTab === 'relatorios' ? 'text-[#00875a] font-bold' : 'text-slate-400 hover:text-slate-700 font-medium'
+            }`}
+        >
+          <div className="relative">
+            <BarChart3 className="w-5 h-5" />
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
+          </div>
+          <span className="text-[10px] mt-0.5">Relatórios</span>
         </button>
       </nav>
 
