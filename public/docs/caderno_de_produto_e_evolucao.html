@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>ITERUM — Caderno de Produto e Evolução</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 18mm 14mm;
+      @bottom-right {
+        content: counter(page);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      line-height: 1.45;
+      font-size: 9pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    .doc-header {
+      border-bottom: 2px solid #005a43;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .doc-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .doc-logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+    }
+
+    .doc-title-group h1 {
+      font-size: 15pt;
+      color: #005a43;
+      margin: 0;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .doc-title-group .doc-sub {
+      font-size: 9pt;
+      color: #059669;
+      font-weight: 600;
+      margin: 2px 0 0 0;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 8pt;
+      color: #64748b;
+      line-height: 1.3;
+    }
+
+    .doc-meta strong {
+      color: #1e293b;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    .page-indicator {
+      font-size: 7.5pt;
+      color: #94a3b8;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h2 {
+      color: #005a43;
+      font-size: 11pt;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-weight: 700;
+      border-left: 3.5px solid #059669;
+      padding-left: 8px;
+      page-break-after: avoid;
+    }
+
+    h3 {
+      color: #1e293b;
+      font-size: 9.5pt;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      font-weight: 700;
+      page-break-after: avoid;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 6px;
+      text-align: justify;
+    }
+
+    ul, ol {
+      margin-top: 2px;
+      margin-bottom: 8px;
+      padding-left: 18px;
+    }
+
+    li {
+      margin-bottom: 3px;
+    }
+
+    .intro-box {
+      background: #f0fdf4;
+      border-left: 4px solid #059669;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+      font-size: 8.5pt;
+    }
+
+    .decision-card {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: #f8fafc;
+      page-break-inside: avoid;
+    }
+
+    .decision-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+    }
+
+    .decision-title {
+      font-weight: 800;
+      color: #005a43;
+      font-size: 9pt;
+    }
+
+    .decision-date {
+      font-size: 7.5pt;
+      color: #64748b;
+      background: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 8px 0;
+      page-break-inside: avoid;
+    }
+
+    .card {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #ffffff;
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: #005a43;
+      font-size: 9pt;
+      margin-bottom: 4px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      border-radius: 4px;
+    }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; }
+  </style>
+</head>
+<body>
+
+  <!-- CABEÇALHO EXECUTIVO -->
+  <div class="doc-header">
+    <div class="doc-header-left">
+      <img src="../iterum-icon.png" class="doc-logo" alt="Iterum">
+      <div class="doc-title-group">
+        <h1>Caderno de Produto & Evolução do Iterum</h1>
+        <div class="doc-sub">Guia Executivo, Decisões de Negócio e Manual Não Técnico de Funcionamento</div>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <strong>ITERUM SAÚDE</strong><br>
+      Versão 1.0 — 03/11/2026<br>
+      Linguagem: 100% Acessível
+    </div>
+  </div>
+
+  <div class="intro-box">
+    <strong>💡 Para quem é este documento?</strong><br>
+    Este material foi escrito para pessoas de negócios, médicos, parceiros e gestores que <strong>não possuem formação técnica em informática</strong>. Aqui você acompanha a lógica do produto, o motivo de cada decisão tomada e como a plataforma funciona hoje na prática.
+  </div>
+
+  <!-- SEÇÃO 1: VISÃO GERAL -->
+  <h2>1. O que é o Iterum na prática?</h2>
+  <p>
+    O <strong>Iterum</strong> é a <strong>secretária virtual inteligente do consultório médico</strong>. Ele funciona como uma secretária de alta performance que nunca dorme e resolve as tarefas mais importantes do consultório:
+  </p>
+  <ul>
+    <li><strong>Atendimento no WhatsApp 24 horas por dia:</strong> responde pacientes em menos de 10 segundos, dia e noite, inclusive nos fins de semana e feriados.</li>
+    <li><strong>Conversa Humanizada:</strong> dialoga como uma pessoa real, sem menus mecânicos do tipo "digite 1 ou 2".</li>
+    <li><strong>Organização da Agenda:</strong> verifica em tempo real os horários vagos do médico e nunca marca duas pessoas no mesmo horário.</li>
+    <li><strong>Recuperação de Pacientes (Fila de Espera):</strong> quando alguém desmarca uma consulta, a assistente avisa imediatamente quem estava aguardando uma vaga.</li>
+    <li><strong>Painel de Gestão:</strong> uma tela bonita e simples no computador ou celular onde o médico e sua secretária física acompanham todas as consultas do dia.</li>
+  </ul>
+
+  <!-- SEÇÃO 2: A ASSISTENTE SOFIA -->
+  <h2>2. Como a Sofia se comporta com os pacientes?</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">💬 Acolhedora, mas Focada em Consultas</div>
+      <p>
+        A Sofia é educada e gentil, mas <strong>não é psicóloga nem ouvinte de desabafos</strong>. Se o paciente puxar assuntos aleatórios (clima, piadas, desabafos cotidianos), ela acolhe em uma frase e reorienta a conversa para a saúde e marcação de consultas.
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">🩺 Limite Ético e Responsabilidade Médica</div>
+      <p>
+        A Sofia <strong>nunca dá diagnóstico e nunca indica remédios</strong>. O papel dela é de recepcionista. Em qualquer suspeita de emergência grave, orienta a pessoa a buscar o <strong>SAMU (192)</strong> ou um pronto-socorro.
+      </p>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 3: DIÁRIO DE DECISÕES (PARTE 1) -->
+  <h2>3. Diário de Bordo de Decisões do Produto</h2>
+
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 01: O Conceito Humanizado de "Desmarcar" vs. "Cancelar"</span>
+      <span class="decision-date">03/11/2026</span>
+    </div>
+    <p><strong>Contexto:</strong> A palavra "cancelar" soa fria, burocrática e pode causar desconforto no paciente.</p>
+    <p><strong>O que foi definido:</strong></p>
+    <ul>
+      <li>Sempre usamos o verbo <strong>"desmarcar"</strong> na comunicação com o paciente.</li>
+      <li>Se o paciente pedir para desmarcar, a Sofia oferece primeiro <strong>remarcar para outra data</strong>, evitando a perda da consulta.</li>
+      <li><strong>Se o paciente já tinha confirmado presença:</strong> A Sofia agradece muito pelo aviso prévio, explicando que ao avisar com antecedência ele ajudou a liberar a vaga para quem aguardava na fila de espera.</li>
+      <li><strong>No painel da secretária:</strong> O botão agora alerta se a consulta já estava confirmada (<em>"Desmarcar (Já Confirmado)"</em>), evitando cliques acidentais.</li>
+    </ul>
+  </div>
+
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 02: Respeito à Especialidade do Médico (Sem Regras Manuais)</span>
+      <span class="decision-date">01/11/2026</span>
+    </div>
+    <p><strong>Contexto:</strong> O sistema atende vários médicos (Pediatras, Cardiologistas, Dermatologistas). Como evitar que a Sofia se confunda com queixas médicas fora da área do doutor?</p>
+    <p><strong>O que foi definido:</strong> A Sofia recebe a especialidade do médico. Se um adulto reclamar de dor no pescoço para um consultório de Pediatria, ela acolhe a dor e pergunta com delicadeza: <em>"Como a Dra. é Pediatra e atende crianças e jovens, essa consulta seria para o seu filho(a) ou para você mesmo?"</em>.</p>
+  </div>
+
+  <!-- SEGUNDA PÁGINA -->
+  <div class="page-break"></div>
+  <div class="page-indicator">
+    <span>ITERUM • CADERNO DE PRODUTO & EVOLUÇÃO NÃO TÉCNICO</span>
+    <span>Página 2</span>
+  </div>
+
+  <!-- DIÁRIO DE DECISÕES (PARTE 2) -->
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 03: Quem fala no WhatsApp nem sempre é quem consulta</span>
+      <span class="decision-date">02/11/2026</span>
+    </div>
+    <p><strong>Contexto:</strong> Mães marcam para filhos bebês, filhos marcam para pais idosos.</p>
+    <p><strong>O que foi definido:</strong> A Sofia trata o contato pelo nome dele (ex: <em>"Olá, Elizabeth!"</em>), mas cadastra a consulta no nome do paciente real (<em>Pedro Henrique</em>), garantindo que o prontuário do médico fique correto.</p>
+  </div>
+
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 04: Cadastro Obrigatório em 3 Passos</span>
+      <span class="decision-date">31/10/2026</span>
+    </div>
+    <p><strong>O que foi definido:</strong> Nenhuma consulta é gravada sem 3 dados mínimos: <strong>Nome Completo</strong>, <strong>Data de Nascimento</strong> e <strong>CEP</strong>. A Sofia recolhe isso naturalmente durante o diálogo.</p>
+  </div>
+
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 05: Fila de Espera Ativa (Recuperação Automática de Vagas)</span>
+      <span class="decision-date">30/10/2026</span>
+    </div>
+    <p><strong>O que foi definido:</strong> Assim que uma consulta é desmarcada, o sistema notifica o primeiro paciente da lista de espera pelo WhatsApp oferecendo o horário vago. Isso reduz drasticamente a ociosidade do consultório.</p>
+  </div>
+
+  <div class="decision-card">
+    <div class="decision-header">
+      <span class="decision-title">Decisão 06: Botão de Intervenção Humana (A Secretária sempre no controle)</span>
+      <span class="decision-date">28/10/2026</span>
+    </div>
+    <p><strong>O que foi definido:</strong> Se a secretária ou o médico precisarem falar pessoalmente com o paciente, basta clicar no botão de <em>Intervenção Humana</em>. A Sofia silencia na hora para aquele contato.</p>
+  </div>
+
+  <!-- SEÇÃO 4: COMO O MÉDICO USA O SISTEMA HOJE -->
+  <h2>4. Como o Consultório opera o sistema no dia a dia</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📱 Visualização da Agenda no Painel</div>
+      <p>O médico bate o olho e vê os pacientes do dia identificados por cores:</p>
+      <ul>
+        <li><span class="status-badge badge-green">Confirmado</span> Paciente confirmou presença (respondeu ao lembrete de 24h).</li>
+        <li><span class="status-badge badge-blue">Agendado</span> Vaga reservada na grade do médico.</li>
+        <li><span class="status-badge badge-purple">Encaixe</span> Paciente resgatado da fila de espera após uma desmarcação.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ Segurança e Tranquilidade</div>
+      <p>
+        O médico não precisa ficar respondendo mensagens fora do horário de trabalho. A Sofia atende as dúvidas de endereço, convênios, prepara os agendamentos e deixa a recepção livre para acolher quem chega presencialmente ao consultório.
+      </p>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 5: PRÓXIMOS PASSOS -->
+  <h2>5. Próximas Evoluções no Radar do Produto</h2>
+  <ol>
+    <li><strong>Sincronização com Google Agenda:</strong> Tudo que a Sofia marcar no Iterum aparecer no Google Agenda pessoal do celular do médico.</li>
+    <li><strong>Cobrança de Sinal via Pix:</strong> Possibilidade de receber o valor ou um sinal da consulta antes de confirmar, diminuindo ainda mais as faltas.</li>
+    <li><strong>Sofia por Voz (Telefone):</strong> Atendimento telefônico com voz humanizada para quem prefere ligar em vez de mandar mensagem.</li>
+  </ol>
+
+  <div style="margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 8pt; color: #64748b; text-align: center;">
+    Iterum Saúde • Documento vivo mantido e atualizado a cada evolução do projeto.
+  </div>
+
+</body>
+</html>
