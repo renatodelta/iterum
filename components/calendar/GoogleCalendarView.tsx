@@ -11,6 +11,7 @@ import {
   Calendar as CalendarIcon,
   CalendarPlus,
   Plus,
+  HelpCircle,
   Clock,
   User,
   Phone,
@@ -130,6 +131,7 @@ export default function GoogleCalendarView({
   // Estados de controle da interface
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [viewSelectOpen, setViewSelectOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuMoreOpen, setMenuMoreOpen] = useState(false);
   const [filterVagosOnly, setFilterVagosOnly] = useState(false);
@@ -601,28 +603,59 @@ export default function GoogleCalendarView({
   return (
     <div className="flex-1 flex flex-col h-full bg-white select-none relative overflow-hidden font-sans">
       {/* =========================================================================
-          1. TOP APP BAR (GOOGLE CALENDAR ESTILO MOBILE FIEL)
+          1. TOP APP BAR (GOOGLE CALENDAR ESTILO GOOGLE AGENDA DESKTOP & MOBILE)
       ========================================================================= */}
       <header className="h-14 sm:h-16 border-b border-[#dadce0] bg-white flex items-center justify-between px-2 sm:px-4 z-30 shrink-0">
-        {/* LADO ESQUERDO: HAMBURGUER + TÍTULO DO MÊS COM CHEVRON */}
-        <div className="flex items-center space-x-1 sm:space-x-2">
+        {/* LADO ESQUERDO: HAMBURGUER + BOTÃO HOJE + SETAS < > + MÊS E ANO */}
+        <div className="flex items-center space-x-1 sm:space-x-3">
           {/* BOTÃO DO MENU HAMBÚRGUER */}
           <button
             onClick={() => setDrawerOpen(true)}
             className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] active:bg-[#e8eaed] transition"
-            aria-label="Abrir menu"
+            aria-label="Menu principal"
+            title="Menu principal"
           >
             <Menu className="w-5 h-5 text-[#3c4043]" />
           </button>
 
-          {/* TÍTULO DO MÊS COM DROPDOWN */}
+          {/* BOTÃO "HOJE" (ESTILO GOOGLE AGENDA) */}
+          <button
+            onClick={handleGoToday}
+            className="px-4 py-1.5 rounded-full border border-[#dadce0] hover:bg-[#f1f3f4] text-[#3c4043] font-medium text-sm transition tracking-normal shadow-2xs active:bg-[#e8eaed]"
+            title="Ir para o dia de hoje"
+          >
+            Hoje
+          </button>
+
+          {/* SETAS DE NAVEGAÇÃO ANTERIOR / PRÓXIMO */}
+          <div className="flex items-center space-x-0.5">
+            <button
+              onClick={() => handleNavigate('prev')}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] active:bg-[#e8eaed] transition"
+              title="Período anterior"
+              aria-label="Período anterior"
+            >
+              <ChevronLeft className="w-4 h-4 text-[#3c4043] stroke-[2.2]" />
+            </button>
+            <button
+              onClick={() => handleNavigate('next')}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] active:bg-[#e8eaed] transition"
+              title="Próximo período"
+              aria-label="Próximo período"
+            >
+              <ChevronRight className="w-4 h-4 text-[#3c4043] stroke-[2.2]" />
+            </button>
+          </div>
+
+          {/* TÍTULO DO MÊS E ANO (EX: Novembro de 2026) COM DROPDOWN DE SELEÇÃO RÁPIDA */}
           <div className="relative">
             <button
               onClick={() => setMonthPickerOpen(!monthPickerOpen)}
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg hover:bg-[#f1f3f4] text-[#202124] transition font-medium text-lg sm:text-xl tracking-tight"
+              className="flex items-center space-x-1 px-2 py-1 rounded-lg hover:bg-[#f1f3f4] text-[#3c4043] hover:text-[#202124] transition font-medium text-lg sm:text-xl tracking-tight"
+              title="Selecionar outro mês"
             >
-              <span>{MONTH_NAMES[selectedDate.getMonth()]}</span>
-              <ChevronDown className="w-4 h-4 text-[#5f6368] stroke-[2.5]" />
+              <span>{MONTH_NAMES[selectedDate.getMonth()]} de {selectedDate.getFullYear()}</span>
+              <ChevronDown className="w-4 h-4 text-[#5f6368] stroke-[2.2] ml-0.5" />
             </button>
 
             {/* POPUP DE SELEÇÃO RÁPIDA DE MÊS */}
@@ -684,8 +717,8 @@ export default function GoogleCalendarView({
           </div>
         </div>
 
-        {/* LADO DIREITO: ÍCONES DE BUSCA, HOJE (CALENDÁRIO COM PONTO AZUL), MENU 3 PONTOS */}
-        <div className="flex items-center space-x-0.5 sm:space-x-1">
+        {/* LADO DIREITO: PESQUISA, AJUDA, CONFIGURAÇÕES, SELETOR DE VISUALIZAÇÃO (Mês / Semana / Dia) */}
+        <div className="flex items-center space-x-1 sm:space-x-1.5">
           {/* BUSCADOR */}
           <button
             onClick={() => setSearchOpen(!searchOpen)}
@@ -694,41 +727,56 @@ export default function GoogleCalendarView({
             }`}
             title="Pesquisar consultas"
           >
-            <Search className="w-5 h-5" />
+            <Search className="w-5 h-5 text-[#5f6368]" />
           </button>
 
-          {/* ÍCONE DE "HOJE" (CALENDÁRIO GOOGLE COM DIA DO MÊS / PONTO AZUL) */}
+          {/* AJUDA / SUPORTE */}
           <button
-            onClick={handleGoToday}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] relative transition"
-            title="Ir para Hoje"
+            onClick={() => {
+              if (onSwitchTab) onSwitchTab('whatsapp');
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] transition hidden sm:flex"
+            title="Suporte e Notificações"
           >
-            <div className="w-5 h-5 border-2 border-[#5f6368] rounded-[4px] flex flex-col items-center justify-center relative">
-              <div className="w-full h-1 bg-[#5f6368] absolute top-0 left-0 right-0"></div>
-              {/* Ponto azul indicador do Google Calendar */}
-              <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] mt-0.5"></span>
-            </div>
+            <HelpCircle className="w-5 h-5 text-[#5f6368]" />
           </button>
 
-          {/* MENU 3 PONTOS */}
+          {/* CONFIGURAÇÕES DA AGENDA */}
+          <button
+            onClick={() => {
+              if (onSwitchTab) onSwitchTab('settings');
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] transition hidden sm:flex"
+            title="Configurações da Agenda"
+          >
+            <Settings className="w-5 h-5 text-[#5f6368]" />
+          </button>
+
+          {/* SELETOR DE VISUALIZAÇÃO ESTILO GOOGLE AGENDA (Mês v, Semana, Dia) */}
           <div className="relative">
             <button
-              onClick={() => setMenuMoreOpen(!menuMoreOpen)}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] transition"
-              title="Mais opções"
+              onClick={() => setViewSelectOpen(!viewSelectOpen)}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-full border border-[#dadce0] hover:bg-[#f1f3f4] text-[#3c4043] font-medium text-sm transition tracking-normal active:bg-[#e8eaed]"
+              title="Mudar visualização"
             >
-              <MoreVertical className="w-5 h-5 text-[#3c4043]" />
+              <span>
+                {agendaViewMode === 'mes'
+                  ? 'Mês'
+                  : agendaViewMode === 'semana'
+                  ? 'Semana'
+                  : agendaViewMode === '3dias'
+                  ? '3 dias'
+                  : 'Dia'}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-[#5f6368] stroke-[2.2] ml-1" />
             </button>
 
-            {menuMoreOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in">
-                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Visualização
-                </div>
+            {viewSelectOpen && (
+              <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in">
                 <button
                   onClick={() => {
                     setAgendaViewMode('dia');
-                    setMenuMoreOpen(false);
+                    setViewSelectOpen(false);
                   }}
                   className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
                     agendaViewMode === 'dia' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
@@ -740,7 +788,7 @@ export default function GoogleCalendarView({
                 <button
                   onClick={() => {
                     setAgendaViewMode('3dias');
-                    setMenuMoreOpen(false);
+                    setViewSelectOpen(false);
                   }}
                   className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
                     agendaViewMode === '3dias' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
@@ -752,7 +800,7 @@ export default function GoogleCalendarView({
                 <button
                   onClick={() => {
                     setAgendaViewMode('semana');
-                    setMenuMoreOpen(false);
+                    setViewSelectOpen(false);
                   }}
                   className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
                     agendaViewMode === 'semana' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
@@ -764,7 +812,7 @@ export default function GoogleCalendarView({
                 <button
                   onClick={() => {
                     setAgendaViewMode('mes');
-                    setMenuMoreOpen(false);
+                    setViewSelectOpen(false);
                   }}
                   className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 transition ${
                     agendaViewMode === 'mes' ? 'font-bold text-[#1a73e8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'
@@ -779,7 +827,7 @@ export default function GoogleCalendarView({
                 <button
                   onClick={() => {
                     onOpenNewAppt(selectedDate);
-                    setMenuMoreOpen(false);
+                    setViewSelectOpen(false);
                   }}
                   className="w-full px-4 py-2 text-left text-sm font-bold text-[#1a73e8] hover:bg-blue-50 flex items-center gap-2"
                 >
