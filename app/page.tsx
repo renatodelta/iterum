@@ -1534,7 +1534,12 @@ export default function Dashboard() {
   }
 
   async function handleManualCancel(apptId: string) {
-    if (!confirm('Deseja realmente cancelar este agendamento? O horário vago será oferecido automaticamente ao 1º paciente da Fila de Espera via WhatsApp.')) {
+    const isConfirmed = selectedApptDetails?.status === 'CONFIRMADO' || selectedApptDetails?.status === 'CONFIRMED';
+    const confirmMessage = isConfirmed
+      ? 'Atenção: O paciente já havia confirmado presença nesta consulta.\n\nDeseja realmente desmarcar este horário e cancelar a confirmação?\nA vaga ficará disponível e o 1º paciente da Fila de Espera será notificado automaticamente via WhatsApp.'
+      : 'Deseja realmente desmarcar esta consulta?\n\nO horário ficará vago e será oferecido automaticamente ao 1º paciente da Fila de Espera via WhatsApp.';
+
+    if (!confirm(confirmMessage)) {
       return;
     }
     try {
@@ -1553,10 +1558,10 @@ export default function Dashboard() {
         fetchWaitlist();
         if (data.waitlistNotification?.contacted) {
           setWaitlistNotice(
-            `Consulta cancelada! A lacuna foi liberada e o 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
+            `Consulta desmarcada! O horário foi liberado e o 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
           );
         } else {
-          setWaitlistNotice('Consulta cancelada com sucesso.');
+          setWaitlistNotice('Consulta desmarcada com sucesso.');
         }
         setTimeout(() => setWaitlistNotice(null), 8000);
       } else {
@@ -5058,7 +5063,11 @@ export default function Dashboard() {
                   className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Cancelar</span>
+                  <span>
+                    {selectedApptDetails?.status === 'CONFIRMADO' || selectedApptDetails?.status === 'CONFIRMED'
+                      ? 'Desmarcar (Já Confirmado)'
+                      : 'Desmarcar Consulta'}
+                  </span>
                 </button>
               </div>
 
