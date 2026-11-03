@@ -1009,7 +1009,7 @@ export default function GoogleCalendarView({
                     key={idx}
                     onClick={() => {
                       setSelectedDate(cell.date);
-                      onOpenNewAppt(cell.date);
+                      setAgendaViewMode('dia'); // Ao clicar no dia do mês, abre o dia!
                     }}
                     className={`min-h-[70px] sm:min-h-[95px] p-1 pt-1.5 flex flex-col items-center text-center transition-colors relative hover:bg-slate-50/60 active:bg-blue-50/30 ${
                       !cell.inCurrentMonth ? 'bg-slate-50/30' : 'bg-white'
@@ -1159,7 +1159,10 @@ export default function GoogleCalendarView({
                   return (
                     <div
                       key={hour}
-                      className="min-h-[64px] border-b border-[#f1f3f4] flex relative group hover:bg-slate-50/40 transition"
+                      onClick={() => {
+                        onOpenNewAppt(selectedDate, hourFormatted);
+                      }}
+                      className="min-h-[64px] border-b border-[#f1f3f4] flex relative group hover:bg-slate-50/40 transition cursor-pointer"
                     >
                       {/* RÓTULO DA HORA À ESQUERDA */}
                       <div className="w-14 sm:w-16 shrink-0 text-right pr-3 -mt-2.5 text-[11px] font-semibold text-[#70757a] select-none">
@@ -1359,9 +1362,7 @@ export default function GoogleCalendarView({
                                 : 'bg-slate-50/40 cursor-default select-none'
                             }`}
                             onClick={() => {
-                              if (daySlots.isActive) {
-                                onOpenNewAppt(colDate, hourFormatted);
-                              }
+                              onOpenNewAppt(colDate, hourFormatted);
                             }}
                           >
                             {colItems.map((item) => {
@@ -1483,9 +1484,7 @@ export default function GoogleCalendarView({
                                 : 'bg-slate-50/40 cursor-default select-none'
                             }`}
                             onClick={() => {
-                              if (daySlots.isActive) {
-                                onOpenNewAppt(colDate, hourFormatted);
-                              }
+                              onOpenNewAppt(colDate, hourFormatted);
                             }}
                           >
                             {apptsInHour.map((appt) => {
