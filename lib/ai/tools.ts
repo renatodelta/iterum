@@ -1274,6 +1274,14 @@ export async function obterInformacoesClinica(clinicId?: string): Promise<ToolRe
       where: { role: 'MEDICO', status: 'ACTIVE' },
     });
 
+    let meta: any = {};
+    if (clinic.workingHours) {
+      try {
+        const wh = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
+        meta = wh?.meta || {};
+      } catch (err) {}
+    }
+
     return {
       success: true,
       message: 'Informações do consultório recuperadas com sucesso.',
@@ -1287,6 +1295,10 @@ export async function obterInformacoesClinica(clinicId?: string): Promise<ToolRe
         endereco: clinic.address || 'Consultório Iterum - Atendimento presencial e telemedicina',
         tempoConsultaMinutos: clinic.slotDurationMinutes,
         prazoMinimoCancelamentoHoras: clinic.minCancelHours,
+        valorConsulta: meta.consultationFee || 'Não informado / sob consulta',
+        atendeConvenio: Boolean(meta.acceptsInsurance),
+        conveniosAtendidos: meta.insurancePlans || 'Nenhum convênio cadastrado (somente particular)',
+        observacoesConvenio: meta.insuranceNotes || '',
       },
     };
   } catch (error: any) {

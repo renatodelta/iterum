@@ -20,12 +20,33 @@ import {
 } from './tools';
 import { formatForWhatsApp } from '@/lib/whatsapp/client';
 
-let cachedDoctorInfo: Map<string, { info: { name: string; specialty: string; link: string; address: string }; expiresAt: number }> = new Map();
+let cachedDoctorInfo: Map<string, {
+  info: {
+    name: string;
+    specialty: string;
+    link: string;
+    address: string;
+    consultationFee?: string;
+    acceptsInsurance?: boolean;
+    insurancePlans?: string;
+    insuranceNotes?: string;
+  };
+  expiresAt: number;
+}> = new Map();
 
 /**
- * Obtém os dados, nome, especialidade, link institucional e endereço do médico/clínica (com cache em memória para velocidade máxima)
+ * Obtém os dados, nome, especialidade, link institucional, endereço, valor da consulta e convênios do médico/clínica (com cache em memória para velocidade máxima)
  */
-export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; specialty: string; link: string; address: string }> {
+export async function getDoctorInfo(clinicId?: string): Promise<{
+  name: string;
+  specialty: string;
+  link: string;
+  address: string;
+  consultationFee?: string;
+  acceptsInsurance?: boolean;
+  insurancePlans?: string;
+  insuranceNotes?: string;
+}> {
   const cacheKey = clinicId || 'default';
   const now = Date.now();
   const cached = cachedDoctorInfo.get(cacheKey);
@@ -38,6 +59,10 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     specialty: 'Pediatria',
     link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
     address: 'Consultório Médico - Atendimento presencial e telemedicina',
+    consultationFee: '',
+    acceptsInsurance: false,
+    insurancePlans: '',
+    insuranceNotes: '',
   };
 
   try {
@@ -59,11 +84,23 @@ export async function getDoctorInfo(clinicId?: string): Promise<{ name: string; 
     const docSpecialty = clinic?.specialty || doctor?.specialty || 'Clínica Geral';
     const docAddress = clinic?.address || 'Consultório Médico - Atendimento presencial e telemedicina';
 
+    let meta: any = {};
+    if (clinic?.workingHours) {
+      try {
+        const wh = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
+        meta = wh?.meta || {};
+      } catch (err) {}
+    }
+
     result = {
       name: formattedName,
       specialty: docSpecialty,
       link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
       address: docAddress,
+      consultationFee: meta.consultationFee || '',
+      acceptsInsurance: Boolean(meta.acceptsInsurance),
+      insurancePlans: meta.insurancePlans || '',
+      insuranceNotes: meta.insuranceNotes || '',
     };
   } catch (e) {}
 
@@ -184,9 +221,16 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
    - Se o paciente desejar remarcar ou cancelar, use 'buscar_consulta_atual' para localizar o agendamento futuro.
    - Valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
-8. **Dúvidas Institucionais:**
-   - Você pode usar 'obter_informacoes_clinica' para informar endereço, especialidade e dados de contato.
-   - Se perguntarem sobre planos de saúde: informe que os atendimentos são particulares com emissão de recibo detalhado para solicitação de reembolso no convênio.
+8. **Dúvidas Institucionais, Valores e Convênios (REGRA MANDATÓRIA):**
+   - Você pode usar 'obter_informacoes_clinica' para consultar informações cadastrais oficiais do consultório.
+   - **SOBRE CONVÊNIOS / PLANOS DE SAÚDE:**
+     * Verifique no seu contexto abaixo as informações cadastradas em "Política de Convênios".
+     * Se o consultório aceitar convênios e houver convênios cadastrados (ex: Unimed, Bradesco, etc.): informe com clareza quais convênios são atendidos e acolha o paciente para agendar.
+     * Se o consultório atender apenas particular (ou se não aceitar o convênio específico perguntado): informe cordialmente que os atendimentos são particulares e que é fornecido recibo detalhado para o paciente solicitar reembolso junto ao seu plano de saúde.
+   - **SOBRE VALOR DA CONSULTA / PREÇO:**
+     * Verifique no seu contexto abaixo a informação em "Valor da Consulta".
+     * Se houver valor cadastrado pelo médico (ex: R$ 350,00): informe o valor com transparência, cordialidade e profissionalismo.
+     * Se não houver valor predefinido cadastrado no contexto: informe que o agendamento pode ser realizado e que para confirmação precisa do valor da especialidade a equipe da recepção está à disposição para detalhar.
    - NUNCA realize diagnóstico médico nem prescreva remédios. Em caso de emergências relatadas pelo paciente, oriente a procurar o pronto-socorro imediatamente.
 
 9. **Transbordo para Atendente Humano:**
@@ -611,6 +655,14 @@ export async function processAgentMessage({
             ? patientName
             : 'Titular do WhatsApp';
 
+      const insuranceContext = doctorInfo.acceptsInsurance
+        ? `Atende convênios médicos: SIM. Convênios aceitos: ${doctorInfo.insurancePlans || 'Convênios cadastrados no consultório'}.${doctorInfo.insuranceNotes ? ` Observações adicionais: ${doctorInfo.insuranceNotes}` : ''}`
+        : `Atende convênios médicos: NÃO. Atendimentos estritamente particulares. (É fornecido recibo detalhado para solicitação de reembolso junto ao convênio).${doctorInfo.insuranceNotes ? ` Observação: ${doctorInfo.insuranceNotes}` : ''}`;
+
+      const feeContext = doctorInfo.consultationFee
+        ? `Valor da Consulta Particular: ${doctorInfo.consultationFee}`
+        : 'Valor da Consulta: Sob consulta na recepção';
+
       const systemContent = `${SYSTEM_PROMPT}
 
 CONHECIMENTO E CONTEXTO DO ATENDIMENTO:
@@ -619,6 +671,8 @@ CONHECIMENTO E CONTEXTO DO ATENDIMENTO:
 - Especialidade Médica Principal do Consultório: ${doctorInfo.specialty}
 - Endereço Oficial do Consultório: ${doctorInfo.address}
 - Link Institucional: ${doctorInfo.link}
+- Valor da Consulta: ${feeContext}
+- Política de Convênios: ${insuranceContext}
 - Interlocutor no WhatsApp (Quem está no aparelho digitando): ${interlocutorName} (Telefone: ${patientPhone})
 - Pacientes cadastrados vinculados a esta linha/contato:
 ${relatedPatientsSummary || `• ${interlocutorName}`}

@@ -14,6 +14,11 @@ let memoryClinic: any = {
   email: 'contato@drrenatosilva.med.br',
   phone: '(11) 98888-7777',
   address: 'Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP',
+  doctorPhoto: '', // Foto do Médico Titular em Base64 ou URL
+  consultationFee: '', // Ex: "R$ 350,00" ou "350"
+  acceptsInsurance: false, // Atende convênio?
+  insurancePlans: '', // Lista de convênios atendidos (ex: "Unimed, Bradesco Saúde, SulAmérica")
+  insuranceNotes: '', // Observações (ex: "Emite recibo para reembolso em outros convênios")
   slotDurationMinutes: 30,
   returnSlotDurationMinutes: 20,
   scheduleStartDate: '',
@@ -46,6 +51,10 @@ let memoryClinic: any = {
       maxReturnSlotsPerDay: 4,
       returnSlotTimes: [],
       selectedDays: [],
+      consultationFee: '',
+      acceptsInsurance: false,
+      insurancePlans: '',
+      insuranceNotes: '',
     },
   },
   createdAt: new Date().toISOString(),
@@ -89,6 +98,11 @@ export async function GET(req: NextRequest) {
             breakStartTime: meta.breakStartTime || memoryClinic.breakStartTime,
             breakEndTime: meta.breakEndTime || memoryClinic.breakEndTime,
             selectedDays: meta.selectedDays !== undefined ? meta.selectedDays : memoryClinic.selectedDays,
+            consultationFee: meta.consultationFee !== undefined ? meta.consultationFee : memoryClinic.consultationFee,
+            acceptsInsurance: meta.acceptsInsurance !== undefined ? meta.acceptsInsurance : memoryClinic.acceptsInsurance,
+            insurancePlans: meta.insurancePlans !== undefined ? meta.insurancePlans : memoryClinic.insurancePlans,
+            insuranceNotes: meta.insuranceNotes !== undefined ? meta.insuranceNotes : memoryClinic.insuranceNotes,
+            doctorPhoto: meta.doctorPhoto !== undefined ? meta.doctorPhoto : (memoryClinic.doctorPhoto || ''),
             workingHours: parsedWorkingHours,
           },
         });
@@ -136,6 +150,11 @@ export async function POST(req: NextRequest) {
       selectedDays,
       minCancelHours,
       workingHours,
+      consultationFee,
+      acceptsInsurance,
+      insurancePlans,
+      insuranceNotes,
+      doctorPhoto,
     } = body;
 
     // Montar o objeto completo de workingHours com a grade de dias e meta-parâmetros da agenda
@@ -163,6 +182,10 @@ export async function POST(req: NextRequest) {
     const currentReturnSlotTimes: string[] = Array.isArray(returnSlotTimes)
       ? returnSlotTimes
       : (finalWorkingHours.meta?.returnSlotTimes || []);
+    const currentConsultationFee: string = consultationFee !== undefined ? String(consultationFee) : (finalWorkingHours.meta?.consultationFee || memoryClinic.consultationFee || '');
+    const currentAcceptsInsurance: boolean = acceptsInsurance !== undefined ? Boolean(acceptsInsurance) : (finalWorkingHours.meta?.acceptsInsurance !== undefined ? finalWorkingHours.meta.acceptsInsurance : memoryClinic.acceptsInsurance || false);
+    const currentInsurancePlans: string = insurancePlans !== undefined ? String(insurancePlans) : (finalWorkingHours.meta?.insurancePlans || memoryClinic.insurancePlans || '');
+    const currentInsuranceNotes: string = insuranceNotes !== undefined ? String(insuranceNotes) : (finalWorkingHours.meta?.insuranceNotes || memoryClinic.insuranceNotes || '');
 
     // Gerar horários para os 7 dias da semana (0 = Domingo a 6 = Sábado)
     ['0', '1', '2', '3', '4', '5', '6'].forEach((day) => {
@@ -189,6 +212,11 @@ export async function POST(req: NextRequest) {
       maxReturnSlotsPerDay: currentMaxReturnSlots,
       returnSlotTimes: currentReturnSlotTimes,
       selectedDays: currentSelectedDays,
+      consultationFee: currentConsultationFee,
+      acceptsInsurance: currentAcceptsInsurance,
+      insurancePlans: currentInsurancePlans,
+      insuranceNotes: currentInsuranceNotes,
+      doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || memoryClinic.doctorPhoto || ''),
     };
 
     const dataToUpdate: any = {
@@ -227,6 +255,11 @@ export async function POST(req: NextRequest) {
       breakStartTime: currentBreakStart,
       breakEndTime: currentBreakEnd,
       selectedDays: currentSelectedDays,
+      consultationFee: currentConsultationFee,
+      acceptsInsurance: currentAcceptsInsurance,
+      insurancePlans: currentInsurancePlans,
+      insuranceNotes: currentInsuranceNotes,
+      doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (memoryClinic.doctorPhoto || ''),
       minCancelHours: minCancelHours ? parseInt(minCancelHours, 10) : memoryClinic.minCancelHours,
       workingHours: finalWorkingHours,
       updatedAt: new Date().toISOString(),
@@ -272,6 +305,11 @@ export async function POST(req: NextRequest) {
           slotDurationMinutes: currentSlotDuration,
           returnSlotDurationMinutes: currentReturnDuration,
           selectedDays: currentSelectedDays,
+          consultationFee: currentConsultationFee,
+          acceptsInsurance: currentAcceptsInsurance,
+          insurancePlans: currentInsurancePlans,
+          insuranceNotes: currentInsuranceNotes,
+          doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || memoryClinic.doctorPhoto || ''),
           workingHours: finalWorkingHours,
         },
       });

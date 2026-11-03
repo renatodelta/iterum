@@ -30,6 +30,8 @@ import {
   Zap,
   Plus,
   ShieldCheck,
+  CreditCard,
+  BadgeCheck,
   Stethoscope,
   Users,
   UserPlus,
@@ -1279,6 +1281,10 @@ export default function Dashboard() {
           phone: clinic?.phone,
           address: clinic?.address,
           minCancelHours: Number(clinic?.minCancelHours) || 2,
+          consultationFee: clinic?.consultationFee || '',
+          acceptsInsurance: Boolean(clinic?.acceptsInsurance),
+          insurancePlans: clinic?.insurancePlans || '',
+          insuranceNotes: clinic?.insuranceNotes || '',
         }),
       });
       const data = await res.json();
@@ -4140,6 +4146,133 @@ export default function Dashboard() {
                     <p className="text-[11px] text-slate-400 mt-1">
                       Tempo mínimo que o paciente precisa para cancelar via bot antes de exigir contato com a recepção.
                     </p>
+                  </div>
+                </div>
+
+                {/* VALORES DA CONSULTA E CONVÊNIOS ATENDIDOS (BASE DE CONHECIMENTO DA SOFIA) */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50/40 via-white to-slate-50 border border-emerald-200/80 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-emerald-100">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4.5 h-4.5 text-[#005a43]" />
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                          <span>Honorários e Convênios Médicos</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            Base da Sofia IA
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Informações utilizadas pela Sofia para responder dúvidas de pacientes sobre preços e planos de saúde
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* VALOR DA CONSULTA */}
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1 text-xs">
+                      Valor da Consulta Particular (R$)
+                    </label>
+                    <div className="relative max-w-sm">
+                      <input
+                        type="text"
+                        value={clinic.consultationFee || ''}
+                        onChange={(e) => setClinic({ ...clinic, consultationFee: e.target.value })}
+                        placeholder="Ex: R$ 350,00 ou 350"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      A Sofia informará este valor com transparência quando o paciente perguntar quanto custa a consulta.
+                    </p>
+                  </div>
+
+                  {/* ATENDIMENTO A CONVÊNIOS */}
+                  <div className="pt-2 border-t border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div>
+                        <span className="font-bold text-slate-800 text-xs block">O consultório atende convênios / planos de saúde?</span>
+                        <span className="text-[11px] text-slate-500">
+                          {clinic.acceptsInsurance
+                            ? 'Sim, o consultório aceita os convênios cadastrados abaixo.'
+                            : 'Não, o consultório atende estritamente de forma particular (com emissão de recibo para reembolso).'}
+                        </span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(clinic.acceptsInsurance)}
+                          onChange={(e) => setClinic({ ...clinic, acceptsInsurance: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#005a43]"></div>
+                      </label>
+                    </div>
+
+                    {/* SE ATENDE CONVÊNIO: LISTA DE CONVÊNIOS ACEITOS */}
+                    {clinic.acceptsInsurance && (
+                      <div className="space-y-3 p-4 rounded-xl bg-emerald-50/50 border border-emerald-200 animate-in fade-in duration-200">
+                        <div>
+                          <label className="block font-bold text-slate-800 mb-1 text-xs">
+                            Quais convênios são atendidos?
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={clinic.insurancePlans || ''}
+                            onChange={(e) => setClinic({ ...clinic, insurancePlans: e.target.value })}
+                            placeholder="Ex: Unimed, Bradesco Saúde, SulAmérica, Amil, Cassi, Porto Seguro..."
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                          />
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            <span className="text-[11px] font-bold text-slate-500">Adicionar rápido:</span>
+                            {['Unimed', 'Bradesco Saúde', 'SulAmérica', 'Amil', 'Cassi', 'Porto Seguro', 'Allianz', 'NotreDame Intermédica'].map((plan) => (
+                              <button
+                                key={plan}
+                                type="button"
+                                onClick={() => {
+                                  const current = clinic.insurancePlans ? clinic.insurancePlans.trim() : '';
+                                  if (!current.toLowerCase().includes(plan.toLowerCase())) {
+                                    setClinic({
+                                      ...clinic,
+                                      insurancePlans: current ? `${current}, ${plan}` : plan,
+                                    });
+                                  }
+                                }}
+                                className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-800 transition cursor-pointer"
+                              >
+                                + {plan}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-800 mb-1 text-xs">
+                            Observações ou Orientações sobre Convênios (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={clinic.insuranceNotes || ''}
+                            onChange={(e) => setClinic({ ...clinic, insuranceNotes: e.target.value })}
+                            placeholder="Ex: Para outros planos emitimos recibo com CRM para solicitação de reembolso."
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SE NÃO ATENDE CONVÊNIO: ORIENTAÇÃO DE REEMBOLSO */}
+                    {!clinic.acceptsInsurance && (
+                      <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Atendimento Particular com Emissão de Recibo</p>
+                          <p className="text-blue-800 mt-0.5 leading-relaxed">
+                            A Sofia informará aos pacientes que o médico atende exclusivamente de forma particular, mas que fornece recibo completo para que o paciente solicite o reembolso integral ou parcial junto ao seu plano de saúde.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
