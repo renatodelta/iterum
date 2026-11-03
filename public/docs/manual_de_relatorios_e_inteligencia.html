@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>ITERUM — Manual de Inteligência e Relatórios do Consultório</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 14mm 16mm 14mm;
+      @bottom-right {
+        content: counter(page);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      line-height: 1.45;
+      font-size: 9pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    .doc-header {
+      border-bottom: 2.5px solid #005a43;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .doc-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .doc-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+
+    .doc-title-group h1 {
+      font-size: 15pt;
+      color: #005a43;
+      margin: 0;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .doc-title-group .doc-sub {
+      font-size: 9pt;
+      color: #059669;
+      font-weight: 600;
+      margin: 2px 0 0 0;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 8pt;
+      color: #64748b;
+      line-height: 1.35;
+    }
+
+    .doc-meta strong {
+      color: #1e293b;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    .page-indicator {
+      font-size: 7.5pt;
+      color: #94a3b8;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h2 {
+      color: #005a43;
+      font-size: 11pt;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-weight: 700;
+      border-left: 3.5px solid #059669;
+      padding-left: 8px;
+      page-break-after: avoid;
+    }
+
+    h3 {
+      color: #1e293b;
+      font-size: 9.5pt;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      font-weight: 700;
+      page-break-after: avoid;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 6px;
+      text-align: justify;
+    }
+
+    ul, ol {
+      margin-top: 2px;
+      margin-bottom: 8px;
+      padding-left: 18px;
+    }
+
+    li {
+      margin-bottom: 3px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 8px 0;
+      page-break-inside: avoid;
+    }
+
+    .card-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin: 8px 0;
+      page-break-inside: avoid;
+    }
+
+    .card-grid-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin: 8px 0;
+      page-break-inside: avoid;
+    }
+
+    .card {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 9px 11px;
+      background: #f8fafc;
+    }
+
+    .card-highlight {
+      border-left: 4px solid #005a43;
+      background: #f0fdf4;
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: #005a43;
+      font-size: 8.5pt;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .card-value {
+      font-size: 14pt;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 2px 0;
+    }
+
+    .card-desc {
+      font-size: 7.5pt;
+      color: #64748b;
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .hero-roi {
+      background: linear-gradient(135deg, #004735 0%, #005a43 50%, #007050 100%);
+      color: #ffffff;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 10px 0 14px 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      page-break-inside: avoid;
+    }
+
+    .hero-roi h3 {
+      color: #ffffff;
+      font-size: 10.5pt;
+      margin: 0 0 2px 0;
+      font-weight: 800;
+    }
+
+    .hero-roi p {
+      color: #a7f3d0;
+      font-size: 8pt;
+      margin-bottom: 10px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .hero-card {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .hero-label {
+      font-size: 7.5pt;
+      color: #a7f3d0;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .hero-value {
+      font-size: 15pt;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 2px 0;
+    }
+
+    .hero-sub {
+      font-size: 7pt;
+      color: #e2e8f0;
+      line-height: 1.25;
+    }
+
+    .alert {
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 8.5pt;
+      page-break-inside: avoid;
+    }
+
+    .alert-green {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #14532d;
+    }
+
+    .alert-amber {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #78350f;
+    }
+
+    .alert-blue {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e3a8a;
+    }
+
+    .formula-box {
+      background: #f1f5f9;
+      border-left: 3px solid #005a43;
+      padding: 7px 12px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 8pt;
+      margin: 6px 0;
+      border-radius: 0 6px 6px 0;
+      color: #0f172a;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 8pt;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f8fafc;
+      color: #005a43;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 7.5pt;
+      letter-spacing: 0.3px;
+    }
+
+    tr:nth-child(even) td {
+      background-color: #fbfcfe;
+    }
+
+    .whatsapp-preview {
+      background: #f0fdf4;
+      border: 1px dashed #86efac;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 8pt;
+      color: #064e3b;
+      margin: 8px 0;
+      line-height: 1.4;
+    }
+
+    .whatsapp-preview strong {
+      color: #022c22;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- CABEÇALHO DO DOCUMENTO -->
+  <div class="doc-header">
+    <div class="doc-header-left">
+      <img src="../iterum-icon.png" alt="Iterum Logo" class="doc-logo" onerror="this.style.display='none'">
+      <div class="doc-title-group">
+        <h1>ITERUM — INTELIGÊNCIA E RELATÓRIOS DO CONSULTÓRIO</h1>
+        <div class="doc-sub">Manual Executivo de Métricas Clínicas, Retorno sobre Investimento (ROI) e Gestão de Agenda</div>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <strong>Versão:</strong> 1.0 (Oficial)<br>
+      <strong>Data:</strong> Novembro de 2026<br>
+      <strong>Público:</strong> Médicos e Gestores
+    </div>
+  </div>
+
+  <!-- SEÇÃO 1: VISÃO GERAL -->
+  <h2>1. Visão Geral e Proposta de Valor</h2>
+  <p>
+    A central de <strong>Inteligência e Relatórios</strong> do Iterum foi desenvolvida com um posicionamento claro de mercado: 
+    <strong>oferecer inteligência prática e executiva ao médico titular</strong>, rompendo com o modelo tradicional de sistemas que geram 
+    planilhas burocráticas e tabelas indecifráveis.
+  </p>
+  <p>
+    Em consultórios médicos particulares, a prioridade máxima do profissional divide-se em duas perguntas essenciais:
+  </p>
+  <ul>
+    <li><strong>Qual é o retorno financeiro real gerado pela assistente virtual Sofia?</strong> Quanto dinheiro a clínica faturou fora do expediente comercial e quanto deixou de perder em cancelamentos?</li>
+    <li><strong>Onde estão as oportunidades e os buracos na agenda médica?</strong> Quais dias têm maior ociosidade e quais pacientes sumiram do consultório e precisam de acompanhamento preventivo?</li>
+  </ul>
+
+  <!-- SEÇÃO 2: RETORNO SOBRE INVESTIMENTO DA SOFIA -->
+  <h2>2. Retorno sobre Investimento da Sofia (Inteligência Artificial)</h2>
+  <p>
+    O módulo de topo da central de relatórios sintetiza o valor monetário direto entregue pela Sofia em tempo real.
+  </p>
+
+  <div class="hero-roi">
+    <h3>RETORNO SOBRE INVESTIMENTO DA SOFIA (INTELIGÊNCIA ARTIFICIAL)</h3>
+    <p>Receita direta gerada e vagas resgatadas automaticamente no período selecionado</p>
+    <div class="hero-grid">
+      <div class="hero-card">
+        <div class="hero-label">Receita Protegida e Gerada</div>
+        <div class="hero-value">R$ 16.450,00</div>
+        <div class="hero-sub">Garantidos fora do expediente e resgatados na fila de espera.</div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-label">Fora do Expediente</div>
+        <div class="hero-value">38 consultas</div>
+        <div class="hero-sub">Noites, madrugadas e fins de semana sem perda de pacientes.</div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-label">Salvas na Fila</div>
+        <div class="hero-value">9 vagas</div>
+        <div class="hero-sub">Horários vagos após desistências preenchidos em minutos.</div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-label">Autonomia da IA</div>
+        <div class="hero-value">92%</div>
+        <div class="hero-sub">Economizou cerca de 28 horas de telefone da recepção.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>2.1. Métricas e Fórmulas de Cálculo do ROI</h3>
+  <ul>
+    <li>
+      <strong>Receita Protegida e Gerada:</strong> Representa o faturamento bruto que o consultório conquistou graças à disponibilidade ininterrupta da IA.
+      <div class="formula-box">Receita Protegida = (Consultas Fora do Expediente + Vagas Salvas na Fila) × Ticket Médio</div>
+    </li>
+    <li>
+      <strong>Ticket Médio por Consulta:</strong> Valor padrão de referência por atendimento particular (R$ 350,00). Pode ser ajustado em um clique na tela pelo médico (ex: R$ 450, R$ 500 ou R$ 600), recalculando todas as projeções em tempo real.
+    </li>
+    <li>
+      <strong>Agendamentos Fora do Expediente Comercial:</strong> Consultas agendadas pela Sofia de segunda a sexta antes das 08h ou após as 18h, além de sábados, domingos e feriados. Pacientes particulares que buscam atendimento à noite costumam agendar com o primeiro profissional que os acolhe de imediato; sem a IA, procurariam concorrentes.
+    </li>
+    <li>
+      <strong>Vagas Resgatadas pela Fila de Espera:</strong> Vagas ociosas causadas por desistências de última hora que foram preenchidas automaticamente pelo disparo de vagas para os pacientes em lista de espera. Evita que a cadeira do médico fique vazia.
+    </li>
+    <li>
+      <strong>Autonomia da IA e Tempo Economizado:</strong> Percentual de atendimentos concluídos de ponta a ponta sem transbordo para recepcionista humana. Considera que cada atendimento manual de WhatsApp/telefone dura cerca de 9 minutos; assim, a Sofia libera dezenas de horas mensais da equipe para o acolhimento presencial na clínica.
+    </li>
+  </ul>
+
+  <!-- SEÇÃO 3: MÉTRICAS CLÍNICAS E GESTÃO DE AGENDA -->
+  <h2>3. Métricas Clínicas e Gestão de Agenda</h2>
+  <p>
+    Consolida o volume assistencial do período e a disciplina de comparecimento dos pacientes.
+  </p>
+
+  <div class="card-grid-4">
+    <div class="card card-highlight">
+      <div class="card-title">Total de Consultas</div>
+      <div class="card-value">124</div>
+      <div class="card-desc">Volume total de atendimentos gerenciados no período.</div>
+    </div>
+    <div class="card card-highlight">
+      <div class="card-title">Taxa de Confirmação</div>
+      <div class="card-value">91%</div>
+      <div class="card-desc">Presenças confirmadas pelo lembrete de véspera (D-1).</div>
+    </div>
+    <div class="card card-highlight">
+      <div class="card-title">Taxa de Ocupação</div>
+      <div class="card-value">86%</div>
+      <div class="card-desc">Aproveitamento da capacidade teórica configurada.</div>
+    </div>
+    <div class="card card-highlight">
+      <div class="card-title">Faturamento Estimado</div>
+      <div class="card-value">R$ 39.200</div>
+      <div class="card-desc">Volume bruto projetado para as consultas ativas.</div>
+    </div>
+  </div>
+
+  <ul>
+    <li><strong>Consultas Ativas:</strong> Soma de consultas confirmadas, agendadas e já realizadas (exclui cancelamentos).</li>
+    <li><strong>Taxa de Confirmação (Combate ao No-Show):</strong> Avalia a eficiência do disparo automático D-1 da Sofia. Reduz o absenteísmo médico de patamares tradicionais de 25% para menos de 9%.</li>
+    <li>
+      <strong>Taxa de Ocupação da Grade:</strong> O sistema lê a tabela de expediente do médico (dias ativos, hora de início/término, intervalo de almoço e duração do slot) para calcular o total de vagas possíveis no período:
+      <div class="formula-box">Taxa de Ocupação (%) = (Consultas Ativas ÷ Capacidade Teórica de Vagas) × 100</div>
+    </li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <!-- CABEÇALHO PÁGINA 2 -->
+  <div class="page-indicator">
+    <span>ITERUM — Manual de Inteligência e Relatórios</span>
+    <span>Página 2</span>
+  </div>
+
+  <!-- SEÇÃO 4: OCUPAÇÃO E OCIOSIDADE POR DIA DA SEMANA -->
+  <h2>4. Ocupação e Ociosidade por Dia da Semana e Turnos</h2>
+  <p>
+    Permite ao médico diagnosticar a distribuição temporal dos pacientes e identificar dias subutilizados para planejar cirurgias, estudos, viagens ou congressos sem prejuízo de faturamento.
+  </p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">Análise de Dias da Semana</div>
+      <p class="card-desc" style="margin-bottom: 6px;">
+        O sistema categoriza a ocupação de cada dia útil em três faixas de performance:
+      </p>
+      <ul>
+        <li><strong style="color: #005a43;">Verde (&ge; 80%):</strong> Dias de alta procura e agenda lotada.</li>
+        <li><strong style="color: #0284c7;">Azul Petróleo (50% a 79%):</strong> Demanda equilibrada e estável.</li>
+        <li><strong style="color: #b45309;">Âmbar (&lt; 50%):</strong> Alta ociosidade; oportunidade de otimização de grade.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Distribuição por Turno</div>
+      <p class="card-desc" style="margin-bottom: 6px;">
+        Mapeia a preferência do público entre os períodos de atendimento:
+      </p>
+      <ul>
+        <li><strong>Turno da Manhã (até 12h):</strong> Comum para exames em jejum e adultos executivos.</li>
+        <li><strong>Turno da Tarde (após 12h):</strong> Forte preferência em pediatria para compatibilizar com horários escolares.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SEÇÃO 5: RETENÇÃO DE PACIENTES E REATIVAÇÃO -->
+  <h2>5. Retenção de Pacientes e Renovação de Carteira</h2>
+  <p>
+    Um consultório particular saudável não vive apenas de novos clientes; a fidelização contínua garante previsibilidade e estabilidade de receita ao longo dos anos.
+  </p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">Pacientes Novos vs. Recorrentes</div>
+      <p class="card-desc">
+        Identifica a proporção de primeiras consultas em comparação a consultas de acompanhamento e retornos periódicos.
+        Em consultórios consolidados, a taxa de recorrência ideal situa-se entre <strong>40% e 60%</strong>.
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">Critério do Radar de Inativos</div>
+      <p class="card-desc">
+        Rastreia automaticamente pacientes cadastrados cuja última consulta ocorreu há mais de <strong>6 meses (180 dias)</strong>.
+        Em especialidades preventivas (Pediatria, Ginecologia, Cardiologia e Clínica Geral), esse intervalo exige reconvocação para rotina.
+      </p>
+    </div>
+  </div>
+
+  <div class="alert alert-green">
+    <strong>💡 Ação de Reativação em 1 Clique:</strong> No painel, cada paciente inativo possui o botão <em>"Reativar no WhatsApp"</em>, que abre instantaneamente uma conversa no WhatsApp do paciente com uma mensagem acolhedora pré-formatada convidando-o para consulta de acompanhamento de rotina.
+  </div>
+
+  <!-- SEÇÃO 6: FECHAMENTO NO WHATSAPP DO MÉDICO -->
+  <h2>6. O Fechamento Executivo no WhatsApp do Médico</h2>
+  <p>
+    No topo da central de relatórios, o botão <strong>"Enviar p/ WhatsApp do Médico"</strong> permite disparar instantaneamente 
+    o resumo consolidado do mês direto para o celular pessoal do médico titular via API Oficial da Meta.
+  </p>
+
+  <div class="whatsapp-preview">
+    <strong>Fechamento Executivo do Consultório 🩺</strong><br>
+    Olá, <strong>Dra. Silvia Helena Lima de Andrade</strong>! Aqui está o resumo consolidado de desempenho da sua agenda médica (deste mês):<br><br>
+    📊 <strong>Desempenho da Agenda:</strong><br>
+    • Total de consultas ativas: 112<br>
+    • Faturamento estimado: R$ 39.200,00<br><br>
+    🤖 <strong>Impacto da Sofia (Inteligência Artificial):</strong><br>
+    • Agendamentos fora do expediente: 38 consultas (noites e finais de semana)<br>
+    • Vagas resgatadas pela Fila de Espera: 9 horários salvos<br>
+    • Receita protegida pela IA: R$ 16.450,00<br><br>
+    Sua secretária virtual cuidou de todos os agendamentos e lembretes com excelência. Tenha um excelente trabalho! ✨
+  </div>
+
+  <!-- SEÇÃO 7: FILTROS DE PERÍODO -->
+  <h2>7. Filtros de Período Disponíveis</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Filtro</th>
+        <th style="width: 45%;">Janela Temporal</th>
+        <th style="width: 30%;">Aplicação Típica</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>7 Dias</strong></td>
+        <td>Últimos 7 dias corridos a partir da data atual.</td>
+        <td>Acompanhamento tático semanal da recepção.</td>
+      </tr>
+      <tr>
+        <td><strong>Este Mês</strong></td>
+        <td>Do 1º dia do mês corrente até a data de hoje (padrão).</td>
+        <td>Monitoramento de metas e projeção de receita.</td>
+      </tr>
+      <tr>
+        <td><strong>Mês Anterior</strong></td>
+        <td>Do primeiro ao último dia do mês fechado.</td>
+        <td>Fechamento financeiro e prestação de contas.</td>
+      </tr>
+      <tr>
+        <td><strong>90 Dias</strong></td>
+        <td>Últimos 3 meses corridos consolidados.</td>
+        <td>Avaliação trimestral de crescimento e no-show.</td>
+      </tr>
+      <tr>
+        <td><strong>Ano</strong></td>
+        <td>Do dia 1º de janeiro do ano corrente até a data presente.</td>
+        <td>Balanço anual de atendimentos e retenção.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SEÇÃO 8: EXPORTAÇÃO E IMPRESSÃO -->
+  <h2>8. Exportação e Impressão em PDF</h2>
+  <p>
+    A tela inclui o botão <strong>"Imprimir"</strong>, preparado com regras específicas de CSS para saída limpa em folhas A4:
+    menus laterais e botões de ação são automaticamente ocultados, gerando um documento executivo formatado para prestação de contas 
+    ou arquivamento digital em PDF.
+  </p>
+
+</body>
+</html>
