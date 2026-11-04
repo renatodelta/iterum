@@ -10,6 +10,7 @@ export interface WaitlistEntry {
   patientPhone: string;
   preferredShift: 'Manhã' | 'Tarde' | 'Qualquer Horário';
   preferredDays?: string;
+  desiredDate?: string; // Ex: "2026-12-21" ou "21/12/2026"
   status: 'AGUARDANDO' | 'NOTIFICADO' | 'AGENDADO' | 'RECUSADO';
   notes?: string;
   createdAt: string;
@@ -102,19 +103,29 @@ export async function loadWaitlist(): Promise<WaitlistEntry[]> {
         orderBy: { createdAt: 'asc' },
       });
       if (Array.isArray(dbList)) {
-        const mapped: WaitlistEntry[] = dbList.map((r: any) => ({
-          id: r.id,
-          patientId: r.patientId || undefined,
-          patientName: r.patientName,
-          patientPhone: r.patientPhone,
-          preferredShift: r.preferredShift || 'Qualquer Horário',
-          preferredDays: r.preferredDays || 'Qualquer dia útil',
-          status: r.status,
-          notes: r.notes || undefined,
-          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-          notifiedAt: r.notifiedAt ? (r.notifiedAt instanceof Date ? r.notifiedAt.toISOString() : r.notifiedAt) : null,
-          offeredSlot: r.offeredSlot ? (typeof r.offeredSlot === 'string' ? JSON.parse(r.offeredSlot) : r.offeredSlot) : null,
-        }));
+        const mapped: WaitlistEntry[] = dbList.map((r: any) => {
+          let desiredDate: string | undefined = undefined;
+          if (r.notes && typeof r.notes === 'string') {
+            const match = r.notes.match(/\[Data desejada:\s*([^\]]+)\]/);
+            if (match) {
+              desiredDate = match[1].trim();
+            }
+          }
+          return {
+            id: r.id,
+            patientId: r.patientId || undefined,
+            patientName: r.patientName,
+            patientPhone: r.patientPhone,
+            preferredShift: r.preferredShift || 'Qualquer Horário',
+            preferredDays: r.preferredDays || 'Qualquer dia útil',
+            desiredDate,
+            status: r.status,
+            notes: r.notes || undefined,
+            createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+            notifiedAt: r.notifiedAt ? (r.notifiedAt instanceof Date ? r.notifiedAt.toISOString() : r.notifiedAt) : null,
+            offeredSlot: r.offeredSlot ? (typeof r.offeredSlot === 'string' ? JSON.parse(r.offeredSlot) : r.offeredSlot) : null,
+          };
+        });
         inMemoryWaitlist = mapped;
         saveWaitlist(mapped);
         return mapped;
@@ -161,11 +172,18 @@ export async function addToWaitlist(data: {
   patientPhone: string;
   preferredShift?: 'Manhã' | 'Tarde' | 'Qualquer Horário';
   preferredDays?: string;
+  desiredDate?: string;
   notes?: string;
 }): Promise<WaitlistEntry> {
   const cleanPhone = data.patientPhone.replace(/\D/g, '');
   const formattedPhone = cleanPhone.startsWith('55') ? `+${cleanPhone}` : `+55${cleanPhone}`;
   const pAny = prisma as any;
+
+  // Montar observação estruturada preservando desiredDate
+  let combinedNotes = data.notes || 'Cadastrado na Fila de Espera';
+  if (data.desiredDate && !combinedNotes.includes('Data desejada:')) {
+    combinedNotes = `[Data desejada: ${data.desiredDate}] ${combinedNotes}`;
+  }
 
   // 1. Tentar salvar no banco de dados Prisma (PostgreSQL / Vercel)
   try {
@@ -200,7 +218,7 @@ export async function addToWaitlist(data: {
             patientName: data.patientName || existingInDb.patientName,
             preferredShift: data.preferredShift || existingInDb.preferredShift,
             preferredDays: data.preferredDays || existingInDb.preferredDays,
-            notes: data.notes || existingInDb.notes,
+            notes: combinedNotes,
           },
         });
         const mappedEntry: WaitlistEntry = {
@@ -210,6 +228,7 @@ export async function addToWaitlist(data: {
           patientPhone: updated.patientPhone,
           preferredShift: updated.preferredShift,
           preferredDays: updated.preferredDays,
+          desiredDate: data.desiredDate,
           status: updated.status,
           notes: updated.notes,
           createdAt: updated.createdAt instanceof Date ? updated.createdAt.toISOString() : updated.createdAt,
@@ -229,7 +248,7 @@ export async function addToWaitlist(data: {
           preferredShift: data.preferredShift || 'Qualquer Horário',
           preferredDays: data.preferredDays || 'Qualquer dia útil',
           status: 'AGUARDANDO',
-          notes: data.notes || 'Cadastrado na Fila de Espera',
+          notes: combinedNotes,
         },
       });
 
@@ -240,6 +259,7 @@ export async function addToWaitlist(data: {
         patientPhone: created.patientPhone,
         preferredShift: created.preferredShift,
         preferredDays: created.preferredDays,
+        desiredDate: data.desiredDate,
         status: created.status,
         notes: created.notes,
         createdAt: created.createdAt instanceof Date ? created.createdAt.toISOString() : created.createdAt,
@@ -265,7 +285,8 @@ export async function addToWaitlist(data: {
       patientName: data.patientName || list[existingIndex].patientName,
       preferredShift: data.preferredShift || list[existingIndex].preferredShift,
       preferredDays: data.preferredDays || list[existingIndex].preferredDays,
-      notes: data.notes || list[existingIndex].notes,
+      desiredDate: data.desiredDate || list[existingIndex].desiredDate,
+      notes: combinedNotes,
     };
     saveWaitlist(list);
     return list[existingIndex];
@@ -278,8 +299,9 @@ export async function addToWaitlist(data: {
     patientPhone: formattedPhone,
     preferredShift: data.preferredShift || 'Qualquer Horário',
     preferredDays: data.preferredDays || 'Qualquer dia útil',
+    desiredDate: data.desiredDate,
     status: 'AGUARDANDO',
-    notes: data.notes || 'Cadastrado na Fila de Espera',
+    notes: combinedNotes,
     createdAt: new Date().toISOString(),
     notifiedAt: null,
     offeredSlot: null,
@@ -616,4 +638,152 @@ export async function declineWaitlistSlot(waitlistId: string): Promise<{ success
   }
 
   return { success: true };
+}
+
+/**
+ * Disparar notificação personalizada para os pacientes da Fila de Espera quando a agenda é estendida/aberta
+ */
+export async function notifyWaitlistOnScheduleExpansion(params: {
+  clinicId?: string;
+  newStartDate: string; // Ex: "2026-11-03"
+  newEndDate: string;   // Ex: "2026-12-30"
+  selectedDays?: string[];
+}): Promise<{ notifiedCount: number; details: any[] }> {
+  const { newStartDate, newEndDate, selectedDays = ['1', '2', '3', '4', '5'] } = params;
+  if (!newStartDate || !newEndDate) {
+    return { notifiedCount: 0, details: [] };
+  }
+
+  const list = await loadWaitlist();
+  const waitingPatients = list.filter((item) => item.status === 'AGUARDANDO');
+
+  if (waitingPatients.length === 0) {
+    console.log('ℹ️ [Fila de Espera] Nenhum paciente com status AGUARDANDO ao estender agenda.');
+    return { notifiedCount: 0, details: [] };
+  }
+
+  const doctorName = await getDoctorName();
+  const [ey, em, ed] = newEndDate.split('-');
+  const endDateDisplay = `${ed}/${em}/${ey}`;
+
+  let notifiedCount = 0;
+  const details: any[] = [];
+
+  for (const patient of waitingPatients) {
+    try {
+      // 1. Verificar se o paciente possui uma data desejada específica
+      let isEligible = false;
+      let patientDateISO = '';
+      let patientDateDisplay = '';
+
+      if (patient.desiredDate) {
+        // Tentar interpretar a data solicitada pelo paciente
+        const raw = patient.desiredDate.trim();
+        let y = '';
+        let m = '';
+        let d = '';
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+          const parts = raw.split('-');
+          y = parts[0];
+          m = parts[1];
+          d = parts[2];
+        } else if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(raw)) {
+          const parts = raw.split('/');
+          d = parts[0].padStart(2, '0');
+          m = parts[1].padStart(2, '0');
+          const currentYear = new Date().getFullYear();
+          y = parts[2] ? (parts[2].length === 2 ? `20${parts[2]}` : parts[2]) : String(currentYear);
+        }
+
+        if (y && m && d) {
+          patientDateISO = `${y}-${m}-${d}`;
+          patientDateDisplay = `${d}/${m}/${y}`;
+
+          // Se a data solicitada pelo paciente está contida no novo período aberto
+          if (patientDateISO >= newStartDate && patientDateISO <= newEndDate) {
+            isEligible = true;
+          } else {
+            console.log(
+              `⏭️ [Fila de Espera] Paciente ${patient.patientName} aguarda data ${patientDateISO}, que ainda não está coberta pela nova agenda (até ${newEndDate}). Mantendo na fila.`
+            );
+            continue;
+          }
+        } else {
+          // Data não identificável, considerar elegível se a nova agenda expandiu
+          isEligible = true;
+        }
+      } else {
+        // Paciente não especificou data (estava esperando abertura geral)
+        isEligible = true;
+      }
+
+      if (!isEligible) continue;
+
+      // 2. Montar mensagem empática e personalizada
+      let messageText = '';
+      const shiftMention = patient.preferredShift && patient.preferredShift !== 'Qualquer Horário'
+        ? ` no período da *${patient.preferredShift.toLowerCase()}*`
+        : '';
+
+      if (patientDateDisplay) {
+        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório de *${doctorName}* acabou de liberar a agenda para o período que você aguardava!\n\nVocê havia manifestado interesse para o dia *${patientDateDisplay}*${shiftMention}.\n\nComo você estava na nossa *Fila de Espera*, gostaríamos de dar prioridade para você agendar. Deseja que eu verifique os horários disponíveis para você?`;
+      } else {
+        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório de *${doctorName}* acabou de abrir a agenda de atendimentos até *${endDateDisplay}*!\n\nComo você estava aguardando na nossa *Fila de Espera*, gostaríamos de priorizar o seu agendamento.\n\nQual dia ou turno${shiftMention} seria melhor para a sua consulta?`;
+      }
+
+      // 3. Enviar via WhatsApp com botões interativos
+      console.log(`🚀 [Fila de Espera] Notificando paciente ${patient.patientName} (${patient.patientPhone}) sobre expansão da agenda`);
+      const buttons = [
+        { id: 'btn_waitlist_agendar', title: 'Sim, quero agendar!' },
+        { id: 'btn_waitlist_nao', title: 'Agora não' },
+      ];
+
+      await sendWhatsAppMessage(patient.patientPhone, messageText, buttons);
+
+      // 4. Atualizar status na fila para NOTIFICADO
+      await updateWaitlistEntry(patient.id, {
+        status: 'NOTIFICADO',
+        notifiedAt: new Date().toISOString(),
+      });
+
+      // 5. Salvar mensagem no histórico do paciente para dar contexto à IA
+      try {
+        const cleanP = patient.patientPhone.replace(/\D/g, '').slice(-8);
+        const clinic = params.clinicId
+          ? await prisma.clinic.findUnique({ where: { id: params.clinicId } })
+          : await prisma.clinic.findFirst();
+
+        if (clinic) {
+          let dbPatient = await prisma.patient.findFirst({
+            where: { clinicId: clinic.id, phone: { contains: cleanP } },
+          });
+          if (dbPatient) {
+            await prisma.message.create({
+              data: {
+                clinicId: clinic.id,
+                patientId: dbPatient.id,
+                role: 'assistant',
+                content: messageText,
+              },
+            });
+          }
+        }
+      } catch (histErr) {
+        console.warn('⚠️ [Fila de Espera] Erro ao registrar histórico:', histErr);
+      }
+
+      notifiedCount++;
+      details.push({
+        patientId: patient.id,
+        patientName: patient.patientName,
+        phone: patient.patientPhone,
+        dateRequested: patientDateDisplay || 'Geral',
+      });
+    } catch (patErr) {
+      console.error(`❌ [Fila de Espera] Erro ao notificar ${patient.patientName}:`, patErr);
+    }
+  }
+
+  return { notifiedCount, details };
 }

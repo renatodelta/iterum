@@ -1259,7 +1259,8 @@ export async function adicionarFilaEspera(
   pacienteNome: string,
   turnoPreferido?: string,
   diasPreferidos?: string,
-  clinicId?: string
+  clinicId?: string,
+  dataDesejada?: string
 ): Promise<ToolResult> {
   try {
     let targetClinicId = clinicId;
@@ -1277,18 +1278,28 @@ export async function adicionarFilaEspera(
     if (turnoPreferido?.toLowerCase().includes('manh')) shift = 'Manhã';
     else if (turnoPreferido?.toLowerCase().includes('tard')) shift = 'Tarde';
 
+    let noteExtra = 'Adicionado pelo Secretário Virtual IA';
+    if (dataDesejada) {
+      noteExtra = `Data desejada: ${dataDesejada.trim()} | Turno: ${shift}`;
+    }
+
     const entry = await addToWaitlist({
       patientId: patient?.id,
       patientName: pacienteNome || patient?.name || 'Paciente',
       patientPhone: telefonePaciente,
       preferredShift: shift,
       preferredDays: diasPreferidos || 'Qualquer dia útil',
-      notes: 'Adicionado pelo Secretário Virtual IA',
+      desiredDate: dataDesejada ? dataDesejada.trim() : undefined,
+      notes: noteExtra,
     });
+
+    const confirmComplemento = dataDesejada
+      ? ` para o período em torno de ${dataDesejada}`
+      : '';
 
     return {
       success: true,
-      message: `Você foi adicionado à nossa lista de espera com sucesso! Assim que houver uma desistência no período informado, você será avisado prioritariamente aqui no WhatsApp.`,
+      message: `Você foi adicionado à nossa lista de espera com sucesso${confirmComplemento}! Assim que o médico abrir novas datas para este período ou surgir uma desistência, avisaremos você com prioridade aqui no WhatsApp.`,
       data: entry,
     };
   } catch (error: any) {

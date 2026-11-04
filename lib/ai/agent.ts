@@ -211,7 +211,7 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
 
 4. **Continuidade de Contexto & Lista de Espera:**
    - Se você perguntou ou ofereceu colocar o paciente na Lista de Espera (ex: "Se você preferir, posso colocar seu nome na lista de espera... O que você acha?") e o paciente responder "Pode ser", "Sim", "Ok", "Quero", "Pode colocar" ou similar:
-     Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
+     Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' passando a data desejada (se o paciente tiver mencionado dia específico, ex: "2026-12-21"), o turno preferido (Manhã, Tarde ou Qualquer) e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
 5. **Governança da Agenda Médica & Horários de Retorno:**
@@ -403,7 +403,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'adicionar_fila_espera',
-      description: 'Insere o paciente na lista de espera para ser notificado caso surja desistência.',
+      description: 'Insere o paciente na lista de espera para ser notificado caso surja desistência ou quando o médico abrir a agenda do período desejado.',
       parameters: {
         type: 'object',
         properties: {
@@ -418,6 +418,10 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           dias_preferidos: {
             type: 'string',
             description: 'Dias da semana de preferência.',
+          },
+          data_desejada: {
+            type: 'string',
+            description: 'Data específica que o paciente solicitou ou tem interesse (ex: AAAA-MM-DD ou DD/MM/AAAA), se houver.',
           },
         },
         required: ['paciente_nome'],
@@ -522,7 +526,8 @@ async function executeToolCall(
         toolArgs.paciente_nome,
         toolArgs.turno_preferido,
         toolArgs.dias_preferidos,
-        clinicId
+        clinicId,
+        toolArgs.data_desejada
       );
     case 'transferir_para_humano':
       return await transferirParaHumano(patientPhone || '', toolArgs.motivo, clinicId);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/apiAuth';
+import { notifyWaitlistOnScheduleExpansion } from '@/lib/waitlist';
 
 export const dynamic = 'force-dynamic';
 
@@ -290,8 +291,29 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Se a agenda foi estendida ou aberta (scheduleEndDate configurada), disparar notificação inteligente para a fila de espera
+      let waitlistNotificationResult: any = null;
+      if (currentScheduleStart && currentScheduleEnd) {
+        try {
+          waitlistNotificationResult = await notifyWaitlistOnScheduleExpansion({
+            clinicId: clinic?.id,
+            newStartDate: currentScheduleStart,
+            newEndDate: currentScheduleEnd,
+            selectedDays: currentSelectedDays,
+          });
+          if (waitlistNotificationResult.notifiedCount > 0) {
+            console.log(
+              `🔔 [Criar Agenda] ${waitlistNotificationResult.notifiedCount} paciente(s) da fila de espera notificado(s) após expansão da agenda.`
+            );
+          }
+        } catch (waitErr) {
+          console.warn('⚠️ [Criar Agenda] Erro ao processar notificações da fila de espera:', waitErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
+        waitlistNotifiedCount: waitlistNotificationResult?.notifiedCount || 0,
         clinic: {
           ...memoryClinic,
           ...clinic,
