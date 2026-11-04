@@ -318,23 +318,29 @@ export async function buscarHorariosDisponiveis(
     // Obter dia da semana em BRT (0 = Domingo, 1 = Segunda... 6 = Sábado)
     const dayOfWeek = targetDateStart.getDay().toString();
 
-    let workingHoursConfig: Record<string, { active: boolean; start: string; end: string; lunchStart: string; lunchEnd: string }> = {};
-
-    try {
-      workingHoursConfig = typeof clinic.workingHours === 'string' ? JSON.parse(clinic.workingHours) : clinic.workingHours;
-    } catch (e) {
-      workingHoursConfig = {};
+    let whRaw: any = clinic.workingHours;
+    if (typeof whRaw === 'string') {
+      try {
+        whRaw = JSON.parse(whRaw);
+      } catch {
+        whRaw = null;
+      }
     }
+    const workingHoursConfig: any = (whRaw && typeof whRaw === 'object') ? whRaw : {};
+    const metaAgenda: any = workingHoursConfig.meta || {};
 
-    // Verificar se a agenda possui configurações de período deliberadas pelo profissional
-    const metaAgenda = (workingHoursConfig as any)?.meta;
-    const selectedDaysList: string[] = Array.isArray(metaAgenda?.selectedDays)
-      ? metaAgenda.selectedDays
-      : (Array.isArray((workingHoursConfig as any)?.selectedDays) ? (workingHoursConfig as any).selectedDays : []);
+    const selectedDaysList: string[] = (Array.isArray(metaAgenda.selectedDays) && metaAgenda.selectedDays.length > 0)
+      ? metaAgenda.selectedDays.map(String)
+      : ((Array.isArray(workingHoursConfig.selectedDays) && workingHoursConfig.selectedDays.length > 0)
+        ? workingHoursConfig.selectedDays.map(String)
+        : []);
+
+    const scheduleStartDate: string = metaAgenda.scheduleStartDate || workingHoursConfig.scheduleStartDate || '';
+    const scheduleEndDate: string = metaAgenda.scheduleEndDate || workingHoursConfig.scheduleEndDate || '';
 
     // GOVERNANÇA DA AGENDA MÉDICA: Apenas o médico/equipe humana define o período de abertura
     // Se o médico não cadastrou período ou dias de atendimento, a agenda está FECHADA para novos agendamentos
-    if (!metaAgenda?.scheduleStartDate || !metaAgenda?.scheduleEndDate || selectedDaysList.length === 0) {
+    if (!scheduleStartDate || !scheduleEndDate || selectedDaysList.length === 0) {
       return {
         success: true,
         message: 'A agenda de consultas deste consultório ainda não foi aberta pelo profissional para este período. Gostaria de entrar na lista de espera para ser avisado(a) assim que o médico liberar novas datas e horários?',
@@ -342,8 +348,8 @@ export async function buscarHorariosDisponiveis(
       };
     }
 
-    if (metaAgenda?.scheduleStartDate && cleanDateStr < metaAgenda.scheduleStartDate) {
-      const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
+    if (scheduleStartDate && cleanDateStr < scheduleStartDate) {
+      const [sy, sm, sd] = scheduleStartDate.split('-');
       return {
         success: true,
         message: `A agenda de atendimentos do profissional para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade.`,
@@ -351,10 +357,10 @@ export async function buscarHorariosDisponiveis(
       };
     }
 
-    if (metaAgenda?.scheduleEndDate) {
+    if (scheduleEndDate) {
       // Se a data final configurada pelo médico já passou, o período encerrou e o médico precisa abrir o próximo
-      if (metaAgenda.scheduleEndDate < todayISO) {
-        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+      if (scheduleEndDate < todayISO) {
+        const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
           message: `O período de agendamentos aberto pelo profissional foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pelo médico no sistema. Gostaria de entrar na lista de espera para ser avisado(a) assim que o profissional liberar novas vagas?`,
@@ -363,8 +369,8 @@ export async function buscarHorariosDisponiveis(
       }
 
       // Se a data solicitada for além da data final deliberada pelo profissional
-      if (cleanDateStr > metaAgenda.scheduleEndDate) {
-        const [ey, em, ed] = metaAgenda.scheduleEndDate.split('-');
+      if (cleanDateStr > scheduleEndDate) {
+        const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
           message: `A agenda deliberada pelo profissional para este período está aberta para atendimentos até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas pelo médico. Se desejar, posso adicionar você à nossa lista de espera prioritária para ser notificado(a) assim que novas datas forem abertas!`,
@@ -382,8 +388,8 @@ export async function buscarHorariosDisponiveis(
       activeDays = ['1', '2', '3', '4', '5']; // Segunda a sexta por padrão
     }
 
+    const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     if (!activeDays.includes(dayOfWeek)) {
-      const diasNomes = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
       return {
         success: true,
         message: `O consultório não atende aos ${diasNomes[parseInt(dayOfWeek)]}s. Atendemos nos dias úteis (segunda a sexta).`,
@@ -391,102 +397,139 @@ export async function buscarHorariosDisponiveis(
       };
     }
 
-    let dayConfig = workingHoursConfig[dayOfWeek];
-    if (!dayConfig || !dayConfig.active) {
-      dayConfig = { active: true, start: '08:00', end: '18:00', lunchStart: '12:00', lunchEnd: '13:00' };
+    let hasBreak = true;
+    let startH = 8;
+    let startM = 0;
+    let endH = 17;
+    let endM = 0;
+    let bStart = metaAgenda.breakStartTime || '12:00';
+    let bEnd = metaAgenda.breakEndTime || '13:00';
+
+    if (workingHoursConfig && workingHoursConfig[dayOfWeek]) {
+      const cfg = workingHoursConfig[dayOfWeek];
+      if (cfg.active === false) {
+        return {
+          success: true,
+          message: `O consultório não atende aos ${diasNomes[parseInt(dayOfWeek)]}s.`,
+          data: { slots: [] },
+        };
+      }
+      if (cfg.start) {
+        const [sh, sm] = cfg.start.split(':').map(Number);
+        startH = sh;
+        startM = sm || 0;
+      }
+      if (cfg.end) {
+        const [eh, em] = cfg.end.split(':').map(Number);
+        endH = eh;
+        endM = em || 0;
+      }
+      if (cfg.lunchStart && cfg.lunchEnd) {
+        bStart = cfg.lunchStart;
+        bEnd = cfg.lunchEnd;
+      }
+    } else {
+      const wStart = metaAgenda.workStartTime || '08:00';
+      const wEnd = metaAgenda.workEndTime || '17:00';
+      bStart = metaAgenda.breakStartTime || '12:00';
+      bEnd = metaAgenda.breakEndTime || '13:00';
+
+      const [sh, sm] = wStart.split(':').map(Number);
+      startH = sh;
+      startM = sm || 0;
+      const [eh, em] = wEnd.split(':').map(Number);
+      endH = eh;
+      endM = em || 0;
     }
 
-    // Gerar grade de horários considerando Retornos dinâmicos e intervalo de almoço
-    const normDur = Number(metaAgenda?.slotDurationMinutes || clinic.slotDurationMinutes) || 30;
-    const retDur = Number(metaAgenda?.returnSlotDurationMinutes) || 20;
-    const returnSlotTimesList: string[] = Array.isArray(metaAgenda?.returnSlotTimes) ? metaAgenda.returnSlotTimes : [];
+    if (metaAgenda.breakEnabled !== undefined) {
+      hasBreak = Boolean(metaAgenda.breakEnabled);
+    }
+
+    const [bsh, bsm] = bStart.split(':').map(Number);
+    const [beh, bem] = bEnd.split(':').map(Number);
+    const lunchStartMinutes = (bsh || 12) * 60 + (bsm || 0);
+    const lunchEndMinutes = (beh || 13) * 60 + (bem || 0);
+
+    const normDur = Number(metaAgenda.slotDurationMinutes || clinic.slotDurationMinutes) || 45;
+    const retDur = Number(metaAgenda.returnSlotDurationMinutes) || 25;
+    const returnSlotTimesList: string[] = Array.isArray(metaAgenda.returnSlotTimes)
+      ? metaAgenda.returnSlotTimes
+      : (Array.isArray(workingHoursConfig.returnSlotTimes) ? workingHoursConfig.returnSlotTimes : []);
     const returnSet = new Set(returnSlotTimesList);
-    const slots: string[] = [];
 
-    const [startH, startM] = (dayConfig.start || '08:00').split(':').map(Number);
-    const [endH, endM] = (dayConfig.end || '18:00').split(':').map(Number);
-
-    const startTimeBRT = parseBRT(`${cleanDateStr}T${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}:00`);
-    const endTimeBRT = parseBRT(`${cleanDateStr}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`);
-
-    let lunchStartTime: Date | null = null;
-    let lunchEndTime: Date | null = null;
-
-    if (dayConfig.lunchStart && dayConfig.lunchEnd) {
-      lunchStartTime = parseBRT(`${cleanDateStr}T${dayConfig.lunchStart}:00`);
-      lunchEndTime = parseBRT(`${cleanDateStr}T${dayConfig.lunchEnd}:00`);
-    }
-
-    // Buscar agendamentos existentes no dia (usa pré-carregados se fornecido para velocidade extrema)
+    // Buscar agendamentos existentes no dia que NÃO estejam cancelados
     const startOfDay = parseBRT(`${cleanDateStr}T00:00:00`);
     const endOfDay = parseBRT(`${cleanDateStr}T23:59:59`);
 
     let existingAppointments = preloadedAppointments
       ? preloadedAppointments.filter((a) => {
           const st = new Date(a.startTime);
-          return st >= startOfDay && st <= endOfDay;
+          const et = new Date(a.endTime);
+          return st < endOfDay && et > startOfDay;
         })
       : await prisma.appointment.findMany({
           where: {
             clinicId: clinic.id,
-            startTime: { gte: startOfDay, lte: endOfDay },
-            status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
+            startTime: { lt: endOfDay },
+            endTime: { gt: startOfDay },
+            status: { notIn: ['CANCELADO', 'CANCELED'] },
           },
         });
 
     const now = new Date();
-    let currentTime = new Date(startTimeBRT);
+    let curMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    const slots: string[] = [];
 
-    while (isBefore(currentTime, endTimeBRT)) {
+    while (curMinutes < endMinutes) {
       // Pular intervalo se dentro do almoço
-      if (
-        lunchStartTime &&
-        lunchEndTime &&
-        (isAfter(currentTime, lunchStartTime) || currentTime.getTime() === lunchStartTime.getTime()) &&
-        isBefore(currentTime, lunchEndTime)
-      ) {
-        currentTime = new Date(lunchEndTime);
+      if (hasBreak && curMinutes >= lunchStartMinutes && curMinutes < lunchEndMinutes) {
+        curMinutes = lunchEndMinutes;
         continue;
       }
 
-      const timeStr = new Intl.DateTimeFormat('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(currentTime);
+      const h = Math.floor(curMinutes / 60);
+      const m = curMinutes % 60;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
       const isReturn = returnSet.has(timeStr);
-      const currentDur = isReturn ? retDur : normDur;
-      const slotEnd = addMinutes(currentTime, currentDur);
+      const dur = isReturn ? retDur : normDur;
 
-      // Se ultrapassar início do almoço
-      if (lunchStartTime && isBefore(currentTime, lunchStartTime) && isAfter(slotEnd, lunchStartTime)) {
-        if (lunchEndTime) {
-          currentTime = new Date(lunchEndTime);
-          continue;
-        }
+      // Se a consulta cruzaria com o início do intervalo
+      if (hasBreak && curMinutes < lunchStartMinutes && curMinutes + dur > lunchStartMinutes) {
+        curMinutes = lunchEndMinutes;
+        continue;
       }
 
-      if (isAfter(slotEnd, endTimeBRT)) break;
+      // Se ultrapassar o encerramento do expediente
+      if (curMinutes + dur > endMinutes) {
+        break;
+      }
 
-      const isFutureSlot = isAfter(currentTime, now);
+      const slotStart = parseBRT(`${cleanDateStr}T${timeStr}:00`);
+      const slotEnd = addMinutes(slotStart, dur);
+      const isFutureSlot = isAfter(slotStart, now);
 
       // Verificar se não colide com agendamento existente
       const isOccupied = existingAppointments.some((appt) => {
         const apptStart = new Date(appt.startTime);
         const apptEnd = new Date(appt.endTime);
-        return (
-          (currentTime >= apptStart && currentTime < apptEnd) ||
-          (slotEnd > apptStart && slotEnd <= apptEnd)
-        );
+        const apptTimeStr = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).format(apptStart);
+
+        // Ocupado se o horário coincide exatamente com o início de uma consulta ou se há sobreposição de horário
+        return apptTimeStr === timeStr || (slotStart < apptEnd && slotEnd > apptStart);
       });
 
       // REGRA DE OURO: Horários de Retorno (isReturn) NÃO são oferecidos no WhatsApp.
       // São de uso exclusivo e restrito para acompanhamento interno pelo médico ou recepcionista.
       if (isFutureSlot && !isOccupied && !isReturn) {
-        const hourInt = parseInt(timeStr.split(':')[0], 10);
-
+        const hourInt = h;
         let matchesPeriod = true;
         if (periodo === 'manha' && hourInt >= 12) matchesPeriod = false;
         if (periodo === 'tarde' && (hourInt < 12 || hourInt >= 18)) matchesPeriod = false;
@@ -497,7 +540,7 @@ export async function buscarHorariosDisponiveis(
         }
       }
 
-      currentTime = slotEnd;
+      curMinutes += dur;
     }
 
     const dataExtenso = formatBRT(targetDateStart, true);
@@ -649,17 +692,9 @@ export async function confirmarRemarcacao(
       where: {
         clinicId: clinic.id,
         patientId: { not: patient.id },
-        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
-        OR: [
-          {
-            startTime: { lte: newStart },
-            endTime: { gt: newStart },
-          },
-          {
-            startTime: { lt: newEnd },
-            endTime: { gte: newEnd },
-          },
-        ],
+        status: { notIn: ['CANCELADO', 'CANCELED', 'REMARCADO'] },
+        startTime: { lt: newEnd },
+        endTime: { gt: newStart },
       },
     });
 
@@ -795,7 +830,7 @@ export async function buscarProximosHorariosDisponiveis(
       where: {
         clinicId: clinic.id,
         startTime: { gte: now, lte: futureLimit },
-        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
+        status: { notIn: ['CANCELADO', 'CANCELED'] },
       },
     });
 
@@ -1061,17 +1096,9 @@ export async function criarNovoAgendamento(
     const conflict = await prisma.appointment.findFirst({
       where: {
         clinicId: clinic.id,
-        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
-        OR: [
-          {
-            startTime: { lte: newStart },
-            endTime: { gt: newStart },
-          },
-          {
-            startTime: { lt: newEnd },
-            endTime: { gte: newEnd },
-          },
-        ],
+        status: { notIn: ['CANCELADO', 'CANCELED'] },
+        startTime: { lt: newEnd },
+        endTime: { gt: newStart },
       },
     });
 
@@ -1147,18 +1174,16 @@ export async function criarNovoAgendamento(
       }
     }
 
-    // REGRA DE OURO: Nenhuma pessoa pode marcar consulta sem estar cadastrada (Nome, Nascimento e CEP)
-    if (!targetPatient.birthDate || !targetPatient.cep) {
+    // REGRA DE CADASTRO OBRIGATÓRIO: Apenas Nome completo e (CPF ou Telefone)
+    // CEP e Data de Nascimento NÃO são mais exigidos no atendimento via WhatsApp!
+    if (!targetPatient.name || targetPatient.name === 'Paciente' || targetPatient.name === 'Titular WhatsApp') {
       return {
         success: false,
-        message: `Para registrar a consulta de ${targetPatient.name}, precisamos concluir o cadastro obrigatório no sistema com: Nome completo, Data de nascimento e CEP de onde mora. Por favor, solicite esses dados ao paciente antes de finalizar o agendamento.`,
+        message: `Para registrar a consulta, precisamos do Nome completo e CPF do paciente que será atendido. Por favor, confirme esses dados antes de finalizar o agendamento.`,
         data: {
           needsRegistration: true,
           patientName: targetPatient.name,
-          missingFields: [
-            ...(!targetPatient.birthDate ? ['data_nascimento'] : []),
-            ...(!targetPatient.cep ? ['cep'] : []),
-          ],
+          missingFields: ['nome', 'cpf'],
         },
       };
     }
