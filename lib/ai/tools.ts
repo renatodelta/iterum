@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { addMinutes, isAfter, isBefore } from 'date-fns';
-import { notifyFirstInWaitlistForVacatedSlot, addToWaitlist } from '@/lib/waitlist';
+import { notifyFirstInWaitlistForVacatedSlot, addToWaitlist, updateWaitlistEntry } from '@/lib/waitlist';
 
 export interface ToolResult {
   success: boolean;
@@ -1198,6 +1198,37 @@ export async function criarNovoAgendamento(
         notes,
       },
     });
+
+    // Se o paciente estava na Fila de Espera (AGUARDANDO ou NOTIFICADO), atualizar para AGENDADO
+    try {
+      const pAny = prisma as any;
+      const cleanTargetPhone = (targetPatient.phone || patient.phone || '').replace(/\D/g, '').slice(-8);
+      if (cleanTargetPhone && pAny.waitlist) {
+        const waitlistEntry = await pAny.waitlist.findFirst({
+          where: {
+            clinicId: clinic.id,
+            patientPhone: { contains: cleanTargetPhone },
+            status: { in: ['AGUARDANDO', 'NOTIFICADO'] },
+          },
+        });
+        if (waitlistEntry) {
+          const dateDisp = formatBRTShort(newStart);
+          await updateWaitlistEntry(waitlistEntry.id, {
+            status: 'AGENDADO',
+            offeredSlot: {
+              startTime: newStart.toISOString(),
+              endTime: newEnd.toISOString(),
+              dateDisplay: dateDisp.split(' às')[0],
+              timeDisplay: dateDisp.split(' às')[1]?.trim() || '',
+            },
+            notes: `${waitlistEntry.notes || ''} [Consulta Agendada: ${dateDisp}]`.trim(),
+          });
+          console.log(`✅ [Fila de Espera] Card do paciente ${targetPatient.name} evoluído para AGENDADO na fila de espera.`);
+        }
+      }
+    } catch (waitlistSyncErr) {
+      console.warn('⚠️ [Fila de Espera] Aviso ao evoluir status na fila de espera:', waitlistSyncErr);
+    }
 
     const dataFormatada = formatBRT(newStart, true);
     return {

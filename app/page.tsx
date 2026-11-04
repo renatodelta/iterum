@@ -79,6 +79,7 @@ import {
   LogOut,
   Camera,
   Upload,
+  HelpCircle,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -245,6 +246,7 @@ export default function Dashboard() {
   const [waitlistSearch, setWaitlistSearch] = useState('');
   const [waitlistStatusFilter, setWaitlistStatusFilter] = useState<string>('ALL');
   const [showModalAddWaitlist, setShowModalAddWaitlist] = useState(false);
+  const [showHelpWaitlistModal, setShowHelpWaitlistModal] = useState(false);
   const [waitlistNotice, setWaitlistNotice] = useState<string | null>(null);
   const [newWaitName, setNewWaitName] = useState('');
   const [newWaitPhone, setNewWaitPhone] = useState('');
@@ -2686,6 +2688,15 @@ export default function Dashboard() {
                   </button>
 
                   <button
+                    onClick={() => setShowHelpWaitlistModal(true)}
+                    className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                    title="Entenda o fluxo da Fila de Espera"
+                  >
+                    <HelpCircle className="w-4 h-4 text-slate-500" />
+                    <span>Como Funciona</span>
+                  </button>
+
+                  <button
                     onClick={() => setShowModalAddWaitlist(true)}
                     className="px-4 py-2 bg-[#005a43] hover:bg-[#004735] text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
                   >
@@ -2854,7 +2865,7 @@ export default function Dashboard() {
                               >
                                 {entry.status === 'AGUARDANDO' && 'Aguardando Vaga'}
                                 {entry.status === 'NOTIFICADO' && 'Vaga Oferecida via WhatsApp'}
-                                {entry.status === 'AGENDADO' && 'Encaixe Confirmado (Vaga Preenchida)'}
+                                {entry.status === 'AGENDADO' && 'Consulta Confirmada (Vaga Preenchida)'}
                                 {entry.status === 'RECUSADO' && 'Recusou Horário'}
                               </span>
                             </div>
@@ -2891,13 +2902,6 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                           {entry.status === 'NOTIFICADO' && (
                             <>
-                              <button
-                                onClick={() => handleConfirmWaitlistBooking(entry.id)}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
-                              >
-                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                                <span>Confirmar Encaixe</span>
-                              </button>
                               <button
                                 onClick={() => handleDeclineWaitlist(entry.id)}
                                 className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-bold transition cursor-pointer"
@@ -2956,70 +2960,7 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* CARD INFORMATIVO: FLUXO DE MENSAGENS NO WHATSAPP */}
-              <div className="mt-8 p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
-                  <Sparkles className="w-5 h-5 text-[#005a43]" />
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">
-                      Fluxo Automatizado de Mensagens da Fila de Espera no WhatsApp
-                    </h3>
-                    <p className="text-[11px] text-slate-400 font-medium">
-                      Como o sistema interage com os pacientes sem intervenção manual
-                    </p>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
-                    <span className="font-extrabold text-[#005a43] block text-[11px]">
-                      1. Paciente Não Consegue Vaga
-                    </span>
-                    <p className="text-slate-600 leading-relaxed text-[11px]">
-                      Se a agenda estiver cheia ou o paciente pedir data lotada, o bot pergunta:
-                    </p>
-                    <div className="p-2 rounded-lg bg-slate-50 font-mono text-[10px] text-slate-700">
-                      "Gostaria de entrar na nossa Fila de Espera? [1] SIM [2] NÃO"
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
-                    <span className="font-extrabold text-sky-700 block text-[11px]">
-                      2. Remarcação ou Cancelamento
-                    </span>
-                    <p className="text-slate-600 leading-relaxed text-[11px]">
-                      Assim que um horário for liberado, o 1º paciente da fila recebe imediatamente:
-                    </p>
-                    <div className="p-2 rounded-lg bg-sky-50 font-mono text-[10px] text-sky-900">
-                      "Um horário acaba de ser liberado (Data/Hora). Tem interesse? [1] SIM [2] NÃO"
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
-                    <span className="font-extrabold text-amber-700 block text-[11px]">
-                      3. Resumo & Confirmação
-                    </span>
-                    <p className="text-slate-600 leading-relaxed text-[11px]">
-                      Ao responder [1] SIM, o WhatsApp resume a consulta e solicita a confirmação final:
-                    </p>
-                    <div className="p-2 rounded-lg bg-amber-50 font-mono text-[10px] text-amber-900">
-                      "Excelente! Resumo: Paciente, Data e Horário. Confirmar agendamento? [1] SIM [2] NÃO"
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 space-y-1.5 shadow-2xs">
-                    <span className="font-extrabold text-emerald-700 block text-[11px]">
-                      4. Lacuna Preenchida
-                    </span>
-                    <p className="text-slate-600 leading-relaxed text-[11px]">
-                      A vaga na agenda é ocupada instantaneamente e o paciente recebe a confirmação com sucesso:
-                    </p>
-                    <div className="p-2 rounded-lg bg-emerald-50 font-mono text-[10px] text-emerald-900">
-                      "Agendamento confirmado! A lacuna da agenda foi preenchida. Esperamos você!"
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
@@ -5168,6 +5109,78 @@ export default function Dashboard() {
       {/* =========================================================================
           MODAL: INSERIR PACIENTE NA FILA DE ESPERA
       ========================================================================= */}
+      {/* MODAL DE AJUDA: COMO FUNCIONA A FILA DE ESPERA */}
+      {showHelpWaitlistModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200/80 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#005a43] flex items-center justify-center border border-emerald-200">
+                  <Sparkles className="w-5 h-5 text-[#005a43]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">Como Funciona a Fila de Espera</h3>
+                  <p className="text-xs text-slate-500 font-medium">Fluxo 100% automatizado pelo WhatsApp através da Sofia</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHelpWaitlistModal(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                <span className="font-extrabold text-[#005a43] text-xs flex items-center gap-1.5">
+                  1. Entrada na Fila
+                </span>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  Quando um paciente solicita uma data ainda não aberta ou com horários lotados, a Sofia o convida a entrar na lista de espera registrando a data e turno de interesse.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                <span className="font-extrabold text-sky-700 text-xs flex items-center gap-1.5">
+                  2. Desistência ou Abertura de Agenda
+                </span>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  Ao cancelar/remarcar uma consulta ou quando o médico expande o período em <strong>"Criar Agenda"</strong>, o sistema detecta os pacientes compatíveis.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                <span className="font-extrabold text-amber-700 text-xs flex items-center gap-1.5">
+                  3. Notificação Prioritária no WhatsApp
+                </span>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  A Sofia envia uma mensagem personalizada no WhatsApp do paciente ofertando a vaga ou avisando sobre a abertura do período desejado.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                <span className="font-extrabold text-emerald-700 text-xs flex items-center gap-1.5">
+                  4. Confirmação e Evolução do Card
+                </span>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  Assim que o paciente confirma o horário com a Sofia, a consulta é gravada na agenda e o card dele na fila evolui para <strong>Consulta Confirmada</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowHelpWaitlistModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModalAddWaitlist && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
