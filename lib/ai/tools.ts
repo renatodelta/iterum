@@ -333,6 +333,15 @@ export async function buscarHorariosDisponiveis(
       : (Array.isArray((workingHoursConfig as any)?.selectedDays) ? (workingHoursConfig as any).selectedDays : []);
 
     // GOVERNANÇA DA AGENDA MÉDICA: Apenas o médico/equipe humana define o período de abertura
+    // Se o médico não cadastrou período ou dias de atendimento, a agenda está FECHADA para novos agendamentos
+    if (!metaAgenda?.scheduleStartDate || !metaAgenda?.scheduleEndDate || selectedDaysList.length === 0) {
+      return {
+        success: true,
+        message: 'A agenda de consultas deste consultório ainda não foi aberta pelo profissional para este período. Gostaria de entrar na lista de espera para ser avisado(a) assim que o médico liberar novas datas e horários?',
+        data: { slots: [] },
+      };
+    }
+
     if (metaAgenda?.scheduleStartDate && cleanDateStr < metaAgenda.scheduleStartDate) {
       const [sy, sm, sd] = metaAgenda.scheduleStartDate.split('-');
       return {
