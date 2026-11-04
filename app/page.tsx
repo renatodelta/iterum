@@ -80,6 +80,7 @@ import {
   Camera,
   Upload,
   HelpCircle,
+  FlaskConical,
 } from 'lucide-react';
 
 function formatPhoneBR(phone: string | null | undefined): string {
@@ -211,7 +212,7 @@ const WEEKDAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábad
 const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:00', '13:45', '14:30', '15:15', '16:00', '16:45', '17:30'];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'relatorios' | 'users' | 'settings' | 'profissionais'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'relatorios' | 'users' | 'settings' | 'profissionais' | 'testes'>('agenda');
   const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
@@ -239,6 +240,10 @@ export default function Dashboard() {
   // Estados de "Dados Profissionais"
   const [savingProfissionais, setSavingProfissionais] = useState(false);
   const [saveProfissionaisMsg, setSaveProfissionaisMsg] = useState<string | null>(null);
+
+  // Estados de "Área de Testes Provisória"
+  const [testActionLoading, setTestActionLoading] = useState(false);
+  const [testActionResult, setTestActionResult] = useState<{ success?: boolean; message?: string } | null>(null);
 
   // Estados de "Fila de Espera"
   const [waitlist, setWaitlist] = useState<any[]>([]);
@@ -1476,6 +1481,39 @@ export default function Dashboard() {
     }
   }
 
+  async function handleExecuteTestingAction(action: 'clear_appointments' | 'populate_schedule') {
+    const isClear = action === 'clear_appointments';
+    const confirmMsg = isClear
+      ? '⚠️ TEM CERTEZA que deseja APAGAR TODAS as consultas agendadas? Esta ação esvaziará a agenda por completo!'
+      : '🚀 Deseja povoar toda a agenda aberta com pacientes e horários gerados automaticamente para testes?';
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setTestActionLoading(true);
+      setTestActionResult(null);
+
+      const res = await fetch('/api/admin/testing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao executar ação de teste');
+      }
+
+      setTestActionResult({ success: true, message: data.message });
+      await fetchData();
+      await fetchPatients();
+    } catch (err: any) {
+      setTestActionResult({ success: false, message: err.message || 'Erro inesperado ao executar teste' });
+    } finally {
+      setTestActionLoading(false);
+    }
+  }
+
   async function handleClearAllWaitlist() {
     if (!window.confirm('Deseja realmente apagar e zerar todos os pacientes da Fila de Espera para iniciar novos testes?')) {
       return;
@@ -1901,6 +1939,28 @@ export default function Dashboard() {
               <Stethoscope className={`w-5 h-5 ${activeTab === 'profissionais' ? 'text-[#059669]' : 'text-slate-400'}`} />
               <span>Dados Profissionais</span>
             </button>
+
+            {/* SEÇÃO ÁREA DE TESTES (PROVISÓRIA PARA ADMIN) */}
+            <div className="pt-4 pb-1 px-4 flex items-center justify-between">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Laboratório
+              </span>
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                Admin
+              </span>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('testes')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'testes'
+                ? 'bg-amber-50 text-amber-900 font-bold border border-amber-200/80 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-amber-50/50'
+                }`}
+            >
+              <FlaskConical className={`w-5 h-5 ${activeTab === 'testes' ? 'text-amber-600' : 'text-slate-400'}`} />
+              <span>Área de Testes</span>
+            </button>
           </nav>
         </div>
 
@@ -2075,6 +2135,24 @@ export default function Dashboard() {
                 >
                   <Stethoscope className="w-5 h-5 text-teal-400" />
                   <span>Dados Profissionais</span>
+                </button>
+
+                <div className="pt-3 pb-1 px-4 flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-500">Laboratório Admin</span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('testes');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition ${activeTab === 'testes'
+                    ? 'bg-amber-500 text-white shadow-md font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                >
+                  <FlaskConical className="w-5 h-5" />
+                  <span>Área de Testes</span>
                 </button>
               </nav>
             </div>
