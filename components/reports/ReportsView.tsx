@@ -187,14 +187,6 @@ export function ReportsView({ clinicId, defaultTicketMedio = 350 }: ReportsViewP
               <Printer className="w-4 h-4 text-slate-500" />
               <span>Imprimir</span>
             </button>
-
-            <button
-              onClick={() => setShowWhatsAppModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#005a43] to-[#00875a] hover:from-[#004735] hover:to-[#00744e] text-white font-bold text-xs shadow-sm transition"
-            >
-              <Send className="w-4 h-4" />
-              <span>Enviar p/ WhatsApp do Médico</span>
-            </button>
           </div>
         </div>
       </div>
