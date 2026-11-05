@@ -4562,6 +4562,142 @@ export default function Dashboard() {
           {activeTab === 'relatorios' && (
             <ReportsView clinicId={clinic?.id} defaultTicketMedio={350} />
           )}
+
+          {/* ---------------------------------------------------------------------
+              ABA: ÁREA DE TESTES PROVISÓRIA (ADMIN)
+          --------------------------------------------------------------------- */}
+          {activeTab === 'testes' && (
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-6 flex flex-col overflow-y-auto space-y-6">
+              {/* CABEÇALHO DA ÁREA DE TESTES */}
+              <div className="pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
+                    <FlaskConical className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                        Área de Testes & Simulações
+                      </h2>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 uppercase">
+                        Provisório / Admin
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                      Ferramentas exclusivas para acelerar seus testes de consultas, encaixes, aniversários e comportamento da Sofia.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('agenda')}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CalendarIcon className="w-4 h-4 text-slate-500" />
+                    <span>Ver Calendário</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* FEEDBACK DE SUCESSO OU ERRO */}
+              {testActionResult && (
+                <div className={`p-4 rounded-2xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${
+                  testActionResult.success
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs text-white ${
+                    testActionResult.success ? 'bg-emerald-600' : 'bg-rose-600'
+                  }`}>
+                    {testActionResult.success ? <Check className="w-5 h-5 stroke-[2.5]" /> : <X className="w-5 h-5 stroke-[2.5]" />}
+                  </div>
+                  <div className="flex-1 text-xs sm:text-sm font-bold">
+                    {testActionResult.message}
+                  </div>
+                  <button
+                    onClick={() => setTestActionResult(null)}
+                    className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* PAINEL DE CARDS DAS AÇÕES DE TESTE */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* CARD 1: POVOAR TODA A AGENDA ABERTA */}
+                <div className="p-5 rounded-3xl border border-slate-200/90 bg-gradient-to-br from-emerald-50/40 via-white to-white shadow-2xs space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-100/70 text-[#005a43] flex items-center justify-center border border-emerald-200/60">
+                      <CalendarPlus className="w-5 h-5 text-[#005a43]" />
+                    </div>
+                    <h3 className="font-black text-slate-900 text-base">Povoar Toda a Agenda Aberta</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Gera automaticamente pacientes fictícios (com nomes, CPFs, datas de aniversário e telefones) e preenche todas as vagas livres da grade aberta configurada em <strong>"Criar Agenda"</strong>.
+                    </p>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-600 space-y-1">
+                      <div className="font-bold text-slate-800">Período que será considerado:</div>
+                      <div>Início: <strong>{scheduleStartDate || 'Não configurado'}</strong> | Término: <strong>{scheduleEndDate || 'Não configurado'}</strong></div>
+                      <div>Dias de atendimento: <strong>{selectedDays.length > 0 ? selectedDays.join(', ') : 'Nenhum dia selecionado'}</strong></div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleExecuteTestingAction('populate_schedule')}
+                    disabled={testActionLoading || !scheduleStartDate || !scheduleEndDate}
+                    className="w-full py-3 rounded-2xl bg-[#005a43] hover:bg-[#004735] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-98"
+                  >
+                    {testActionLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Processando grade de consultas...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Users className="w-4 h-4" />
+                        <span>Povoar Agenda com Pacientes Aleatórios</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* CARD 2: LIMPAR TODAS AS CONSULTAS */}
+                <div className="p-5 rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50/30 via-white to-white shadow-2xs space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center border border-rose-200">
+                      <Trash2 className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <h3 className="font-black text-slate-900 text-base">Limpar Todas as Consultas</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Apaga em 1 clique todas as consultas agendadas do consultório, zerando o calendário para que você possa iniciar novos testes do zero com total tranquilidade.
+                    </p>
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-[11px] text-amber-900">
+                      💡 <strong>Dica de teste:</strong> Use para limpar os agendamentos anteriores e testar a abertura de vagas e encaixes da Sofia com a agenda limpa.
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleExecuteTestingAction('clear_appointments')}
+                    disabled={testActionLoading || appointments.length === 0}
+                    className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-98"
+                  >
+                    {testActionLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Limpando consultas...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>Apagar Todas as Consultas ({appointments.length})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
