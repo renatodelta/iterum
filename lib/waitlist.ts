@@ -146,14 +146,17 @@ export async function loadWaitlist(): Promise<WaitlistEntry[]> {
           if (item.status === 'NOTIFICADO' && item.offeredSlot?.startTime) {
             try {
               const slotTime = new Date(item.offeredSlot.startTime);
+              const windowStart = new Date(slotTime.getTime() - 2 * 60 * 1000);
+              const windowEnd = new Date(slotTime.getTime() + 2 * 60 * 1000);
               const cleanP = item.patientPhone.split('-')[0].replace(/\D/g, '').slice(-8);
               const existingAppt = await prisma.appointment.findFirst({
                 where: {
                   status: { notIn: ['CANCELADO', 'CANCELED'] },
-                  startTime: slotTime,
+                  startTime: { gte: windowStart, lte: windowEnd },
                   OR: [
                     ...(item.patientId ? [{ patientId: item.patientId }] : []),
                     { patient: { name: { equals: item.patientName.trim(), mode: 'insensitive' } } },
+                    { patient: { name: { contains: item.patientName.trim(), mode: 'insensitive' } } },
                     ...(cleanP ? [{ patient: { phone: { contains: cleanP } } }] : []),
                   ],
                 },

@@ -10,6 +10,7 @@ import {
 } from '@/lib/whatsapp/client';
 import { findPatientByPhone } from '@/lib/ai/tools';
 import { WhatsAppMessageJob } from '@/lib/queue';
+import { confirmWaitlistBooking, declineWaitlistSlot } from '@/lib/waitlist';
 
 /**
  * Processador central de mensagens de WhatsApp.
@@ -170,6 +171,100 @@ export async function executeWhatsAppMessageJob(
         content: audioId ? `🎤 ${text}` : text,
       },
     });
+
+    // 5.1 Interceptação inteligente de resposta à vaga ofertada da Fila de Espera
+    const pAny = prisma as any;
+    if (pAny.waitlist) {
+      const cleanPhoneDigits = cleanSender.slice(-8);
+      const pendingWaitlist = await pAny.waitlist.findFirst({
+        where: {
+          clinicId: clinic.id,
+          status: 'NOTIFICADO',
+          patientPhone: { contains: cleanPhoneDigits },
+        },
+        orderBy: { notifiedAt: 'desc' },
+      });
+
+      if (pendingWaitlist) {
+        const isConfirmReply =
+          lowerText === 'btn_waitlist_sim' ||
+          lowerText === '1' ||
+          lowerText === 'sim' ||
+          lowerText === 'sim, tenho interesse' ||
+          lowerText === 'tenho interesse' ||
+          lowerText === 'sim tenho interesse' ||
+          lowerText === 'sim, confirmar' ||
+          lowerText === 'confirmar' ||
+          lowerText === 'quero' ||
+          lowerText === 'sim, quero' ||
+          lowerText === 'sim quero' ||
+          lowerText === 'pode agendar' ||
+          lowerText === 'pode marcar' ||
+          lowerText === 'sim, pode agendar';
+
+        const isDeclineReply =
+          lowerText === 'btn_waitlist_nao' ||
+          lowerText === '2' ||
+          lowerText === 'não' ||
+          lowerText === 'nao' ||
+          lowerText === 'não tenho interesse' ||
+          lowerText === 'nao tenho interesse' ||
+          lowerText === 'recusar' ||
+          lowerText === 'recuso' ||
+          lowerText === 'não quero' ||
+          lowerText === 'nao quero';
+
+        if (isConfirmReply) {
+          console.log(`⚡ [Fila de Espera] Confirmação direta de vaga detectada para ${pendingWaitlist.patientName}`);
+          const bookingResult = await confirmWaitlistBooking(pendingWaitlist.id, clinic.id);
+          if (bookingResult.success) {
+            const slot = pendingWaitlist.offeredSlot
+              ? (typeof pendingWaitlist.offeredSlot === 'string'
+                  ? JSON.parse(pendingWaitlist.offeredSlot)
+                  : pendingWaitlist.offeredSlot)
+              : null;
+            const dateStr = slot?.dateDisplay || 'Data confirmada';
+            const timeStr = slot?.timeDisplay || '';
+            const doctorName = clinic.doctorName || 'Dra. Silvia Helena Lima de Andrade';
+            const address = clinic.address || 'SHIS QI 15, Bloco O, Torre I, Consultório 14, Térreo (Ed. Victoria Medical Center - Lote O), Lago Sul, Brasília - DF';
+
+            const confirmReply = `O agendamento de ${pendingWaitlist.patientName} foi confirmado com sucesso! 🎉\n\n🗓️ Data: ${dateStr}\n🕗 Horário: ${timeStr}\n👩‍⚕️ Profissional: ${doctorName}\n👤 Paciente: ${pendingWaitlist.patientName}\n\nO consultório está localizado em:\n${address}\n\nSe precisar de mais alguma coisa ou tiver outras consultas para agendar, estou à disposição! 😊`;
+
+            await Promise.all([
+              sendWhatsAppMessage(formattedPhone, confirmReply, undefined, customCreds),
+              prisma.message.create({
+                data: {
+                  clinicId: clinic.id,
+                  patientId: patient.id,
+                  role: 'assistant',
+                  content: confirmReply,
+                },
+              }),
+            ]);
+
+            return { success: true, reply: confirmReply };
+          }
+        } else if (isDeclineReply) {
+          console.log(`⚡ [Fila de Espera] Recusa direta de vaga detectada para ${pendingWaitlist.patientName}`);
+          await declineWaitlistSlot(pendingWaitlist.id);
+          const declineReply = `Entendido! Registramos sua recusa e liberamos este horário para o próximo paciente da lista. Você continua registrado em nossa lista de espera caso surja outra data de seu interesse! 😊`;
+
+          await Promise.all([
+            sendWhatsAppMessage(formattedPhone, declineReply, undefined, customCreds),
+            prisma.message.create({
+              data: {
+                clinicId: clinic.id,
+                patientId: patient.id,
+                role: 'assistant',
+                content: declineReply,
+              },
+            }),
+          ]);
+
+          return { success: true, reply: declineReply };
+        }
+      }
+    }
 
     // 6. Carregar histórico recente para a IA (últimas 20 mensagens)
     const rawMessages = await prisma.message.findMany({
