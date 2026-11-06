@@ -1204,15 +1204,47 @@ export async function criarNovoAgendamento(
     // Se o paciente estava na Fila de Espera (AGUARDANDO ou NOTIFICADO), atualizar para AGENDADO
     try {
       const pAny = prisma as any;
-      const cleanTargetPhone = (targetPatient.phone || patient.phone || '').replace(/\D/g, '').slice(-8);
-      if (cleanTargetPhone && pAny.waitlist) {
-        const waitlistEntry = await pAny.waitlist.findFirst({
+      if (pAny.waitlist) {
+        const rawTargetPhone = (targetPatient.phone || '').split('-')[0].replace(/\D/g, '');
+        const rawTitularPhone = (patient.phone || '').split('-')[0].replace(/\D/g, '');
+        const cleanTargetPhone = rawTargetPhone.slice(-8);
+        const cleanTitularPhone = rawTitularPhone.slice(-8);
+
+        // 1. Prioridade máxima: buscar pelo nome do paciente ou ID do paciente que passará pela consulta
+        let waitlistEntry = await pAny.waitlist.findFirst({
           where: {
             clinicId: clinic.id,
-            patientPhone: { contains: cleanTargetPhone },
-            status: { in: ['AGUARDANDO', 'NOTIFICADO'] },
+            status: { in: ['NOTIFICADO', 'AGUARDANDO'] },
+            OR: [
+              ...(targetPatient.id ? [{ patientId: targetPatient.id }] : []),
+              { patientName: { equals: targetPatient.name.trim(), mode: 'insensitive' } },
+              { patientName: { contains: targetPatient.name.trim(), mode: 'insensitive' } },
+            ],
           },
+          orderBy: [
+            { status: 'desc' }, // NOTIFICADO vem antes de AGUARDANDO
+            { createdAt: 'desc' },
+          ],
         });
+
+        // 2. Se não encontrou por nome/ID, busca pelos telefones limpos (sem sufixos -2, -3)
+        if (!waitlistEntry && (cleanTargetPhone || cleanTitularPhone)) {
+          waitlistEntry = await pAny.waitlist.findFirst({
+            where: {
+              clinicId: clinic.id,
+              status: { in: ['NOTIFICADO', 'AGUARDANDO'] },
+              OR: [
+                ...(cleanTargetPhone ? [{ patientPhone: { contains: cleanTargetPhone } }] : []),
+                ...(cleanTitularPhone ? [{ patientPhone: { contains: cleanTitularPhone } }] : []),
+              ],
+            },
+            orderBy: [
+              { status: 'desc' },
+              { createdAt: 'desc' },
+            ],
+          });
+        }
+
         if (waitlistEntry) {
           const dateDisp = formatBRTShort(newStart);
           await updateWaitlistEntry(waitlistEntry.id, {
@@ -1225,7 +1257,7 @@ export async function criarNovoAgendamento(
             },
             notes: `${waitlistEntry.notes || ''} [Consulta Agendada: ${dateDisp}]`.trim(),
           });
-          console.log(`✅ [Fila de Espera] Card do paciente ${targetPatient.name} evoluído para AGENDADO na fila de espera.`);
+          console.log(`✅ [Fila de Espera] Card do paciente ${targetPatient.name} (ID: ${waitlistEntry.id}) evoluído para AGENDADO na fila de espera.`);
         }
       }
     } catch (waitlistSyncErr) {
