@@ -1305,6 +1305,16 @@ export async function adicionarFilaEspera(
 
     const patient = await findPatientByPhone(telefonePaciente, targetClinicId);
 
+    // REGRA DE SEGURANÇA: Só pode adicionar na fila de espera pacientes com cadastro prévio e CPF
+    const hasCpf = patient?.cpf && patient.cpf.replace(/\D/g, '').length >= 11;
+    if (!patient || !hasCpf) {
+      return {
+        success: false,
+        message: `Para incluir você na nossa Lista de Espera prioritária, precisamos primeiro cadastrar seu Nome completo e CPF no consultório. Por favor, confirme seu Nome completo e o número do seu CPF.`,
+        data: { needsRegistration: true },
+      };
+    }
+
     let shift: 'Manhã' | 'Tarde' | 'Qualquer Horário' = 'Qualquer Horário';
     if (turnoPreferido?.toLowerCase().includes('manh')) shift = 'Manhã';
     else if (turnoPreferido?.toLowerCase().includes('tard')) shift = 'Tarde';

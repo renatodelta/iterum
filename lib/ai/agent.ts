@@ -209,8 +209,11 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
    - Apresente de 2 a 4 opções de horários de forma limpa.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
-4. **Continuidade de Contexto & Lista de Espera:**
-   - Se você perguntou ou ofereceu colocar o paciente na Lista de Espera (ex: "Se você preferir, posso colocar seu nome na lista de espera... O que você acha?") e o paciente responder "Pode ser", "Sim", "Ok", "Quero", "Pode colocar" ou similar:
+4. **Continuidade de Contexto & Lista de Espera (EXIGE CADASTRO PRÉVIO COM CPF):**
+   - **REGRA OBRIGATÓRIA:** A Lista de Espera só pode conter pacientes devidamente cadastrados com CPF no sistema!
+   - Se o paciente não possuir cadastro completo com CPF (consulte o "Status Cadastral do Titular" e a lista de cadastrados no seu contexto):
+     Solicite cordialmente o **Nome completo** e o **CPF** antes de colocá-lo na lista de espera (*"Com certeza, posso colocar você na nossa lista de espera! Para isso, só preciso que você me confirme seu Nome completo e CPF para registrar seu cadastro com prioridade."*). Assim que o paciente informar, execute 'cadastrar_paciente' e logo em seguida 'adicionar_fila_espera'.
+   - Se o paciente já tiver cadastro com CPF:
      Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' passando a data desejada (se o paciente tiver mencionado dia específico, ex: "2026-12-21"), o turno preferido (Manhã, Tarde ou Qualquer) e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
@@ -645,6 +648,7 @@ export async function processAgentMessage({
       const last8 = cleanPhone.slice(-8);
       let relatedPatientsSummary = '';
       let titularCpf = '';
+      let titularDisplayName = patientName;
       try {
         const related = await prisma.patient.findMany({
           where: {
@@ -654,6 +658,13 @@ export async function processAgentMessage({
           select: { id: true, name: true, cpf: true, birthDate: true, phone: true },
         });
         if (related.length > 0) {
+          // Prioriza o paciente que tem nome cadastrado real e CPF
+          const registeredWithCpf = related.find((p) => p.cpf && p.cpf.replace(/\D/g, '').length >= 11 && p.name && p.name !== 'Paciente' && p.name !== 'Titular WhatsApp');
+          if (registeredWithCpf) {
+            titularDisplayName = registeredWithCpf.name;
+            titularCpf = registeredWithCpf.cpf || '';
+          }
+
           relatedPatientsSummary = related
             .map((p) => {
               const hasCpf = p.cpf && p.cpf.replace(/\D/g, '').length >= 11;
@@ -667,11 +678,13 @@ export async function processAgentMessage({
       } catch (e) {}
 
       const interlocutorName =
-        pushName && pushName !== 'Paciente'
-          ? pushName
-          : patientName !== 'Paciente' && patientName !== 'Titular WhatsApp'
-            ? patientName
-            : 'Titular do WhatsApp';
+        titularDisplayName && titularDisplayName !== 'Paciente' && titularDisplayName !== 'Titular WhatsApp'
+          ? titularDisplayName
+          : pushName && pushName !== 'Paciente'
+            ? pushName
+            : patientName !== 'Paciente' && patientName !== 'Titular WhatsApp'
+              ? patientName
+              : 'Titular do WhatsApp';
 
       const insuranceContext = doctorInfo.acceptsInsurance
         ? `Atende convênios médicos: SIM. Convênios aceitos: ${doctorInfo.insurancePlans || 'Convênios cadastrados no consultório'}.${doctorInfo.insuranceNotes ? ` Observações adicionais: ${doctorInfo.insuranceNotes}` : ''}`

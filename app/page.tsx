@@ -1700,6 +1700,21 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [appointments, selectedDate, filterConfirmed, filterWaiting, filterEncaixe, filterCanceled, searchQuery]);
 
+  // Pacientes filtrados pela barra de busca do topo (searchQuery)
+  const filteredPatients = useMemo(() => {
+    if (!searchQuery.trim()) return patients;
+    const q = searchQuery.toLowerCase().trim();
+    const cleanQ = q.replace(/\D/g, '');
+    return patients.filter((p) => {
+      const nameMatch = p.name?.toLowerCase().includes(q);
+      const cpfMatch = p.cpf && (p.cpf.includes(q) || (cleanQ && p.cpf.replace(/\D/g, '').includes(cleanQ)));
+      const phoneMatch = p.phone && (p.phone.includes(q) || (cleanQ && p.phone.replace(/\D/g, '').includes(cleanQ)));
+      const notesMatch = p.notes?.toLowerCase().includes(q);
+      const addressMatch = (p.street?.toLowerCase().includes(q) || p.city?.toLowerCase().includes(q) || p.cep?.includes(q));
+      return Boolean(nameMatch || cpfMatch || phoneMatch || notesMatch || addressMatch);
+    });
+  }, [patients, searchQuery]);
+
   // Contadores do Dia Selecionado
   const confirmedCount = useMemo(() => {
     return appointments.filter((a) => {
@@ -2526,10 +2541,12 @@ export default function Dashboard() {
 
               {/* LISTAGEM DE CARDS EM MOBILE (< md) */}
               <div className="md:hidden flex-1 overflow-y-auto space-y-3 mt-3.5">
-                {patients.length === 0 ? (
-                  <div className="py-16 text-center text-slate-400 font-medium text-sm">Nenhum paciente cadastrado</div>
+                {filteredPatients.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 font-medium text-sm">
+                    {searchQuery ? `Nenhum paciente encontrado para "${searchQuery}"` : 'Nenhum paciente cadastrado'}
+                  </div>
                 ) : (
-                  patients.map((p) => (
+                  filteredPatients.map((p) => (
                     <div key={p.id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -2626,7 +2643,14 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {patients.map((p) => (
+                    {filteredPatients.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-16 text-center text-slate-400 font-medium text-sm">
+                          {searchQuery ? `Nenhum paciente encontrado para "${searchQuery}"` : 'Nenhum paciente cadastrado'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPatients.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/80 transition">
                         <td className="p-3.5">
                           <div className="flex items-center space-x-3.5">
@@ -2705,7 +2729,8 @@ export default function Dashboard() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )))
+                    }
                   </tbody>
                 </table>
               </div>
