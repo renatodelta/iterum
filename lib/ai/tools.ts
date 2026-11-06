@@ -841,8 +841,10 @@ export async function buscarProximosHorariosDisponiveis(
     }> = [];
 
     const checkDate = new Date(now);
+    // Verificar até 60 dias à frente para cobrir com precisão todo o período aberto na agenda do médico
+    const maxLookaheadDays = 60;
 
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < maxLookaheadDays; i++) {
       if (daysWithSlots.length >= diasDesejados) break;
 
       const year = checkDate.getFullYear();

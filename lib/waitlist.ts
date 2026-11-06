@@ -109,6 +109,11 @@ export async function loadWaitlist(): Promise<WaitlistEntry[]> {
             const match = r.notes.match(/\[Data desejada:\s*([^\]]+)\]/);
             if (match) {
               desiredDate = match[1].trim();
+            } else {
+              const matchFallback = r.notes.match(/Data desejada:\s*([0-9\-\/]+)/i);
+              if (matchFallback) {
+                desiredDate = matchFallback[1].trim();
+              }
             }
           }
           return {
@@ -707,14 +712,18 @@ export async function notifyWaitlistOnScheduleExpansion(params: {
             console.log(
               `⏭️ [Fila de Espera] Paciente ${patient.patientName} aguarda data ${patientDateISO}, que ainda não está coberta pela nova agenda (até ${newEndDate}). Mantendo na fila.`
             );
+            isEligible = false;
             continue;
           }
         } else {
-          // Data não identificável, considerar elegível se a nova agenda expandiu
-          isEligible = true;
+          // Se o paciente informou um texto de data mas não conseguimos parsear com segurança,
+          // NÃO notificar às cegas para evitar chamá-lo fora do período
+          console.log(`⚠️ [Fila de Espera] Data desejada '${patient.desiredDate}' não compreendida numericamente para ${patient.patientName}. Mantendo na fila.`);
+          isEligible = false;
+          continue;
         }
       } else {
-        // Paciente não especificou data (estava esperando abertura geral)
+        // Paciente não especificou data alguma (aguarda qualquer dia geral aberto)
         isEligible = true;
       }
 
