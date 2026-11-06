@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { addMinutes, isAfter, isBefore } from 'date-fns';
 import { notifyFirstInWaitlistForVacatedSlot, addToWaitlist, updateWaitlistEntry } from '@/lib/waitlist';
+import { sendWhatsAppMessage } from '@/lib/whatsapp/client';
 
 export interface ToolResult {
   success: boolean;
@@ -196,7 +197,10 @@ export async function buscarConsultaAtual(
 ): Promise<ToolResult> {
   try {
     const now = new Date();
-    let targetPatients: { id: string; name: string; phone: string; cpf?: string | null }[] = [];
+    const cleanPhone = (telefonePaciente || '').replace(/\D/g, '');
+    const last8 = cleanPhone.slice(-8);
+
+    let targetPatients: { id: string; name: string; phone: string; cpf?: string | null; notes?: string | null }[] = [];
 
     // 1. Se foi informado nomePaciente ou cpfPaciente (busca para terceiros/dependentes/outros pacientes)
     if (nomePaciente || cpfPaciente) {
@@ -219,13 +223,51 @@ export async function buscarConsultaAtual(
         },
       });
 
-      if (found.length > 0) {
-        targetPatients = found;
-      } else {
+      if (found.length === 0) {
         return {
           success: false,
           message: `Nenhum cadastro de paciente encontrado com o nome "${nomePaciente || ''}"${cpfPaciente ? ` ou CPF ${cpfPaciente}` : ''}. Por favor, confirme o nome completo ou CPF para localizarmos.`,
         };
+      }
+
+      // SEGURANÇA E PRIVACIDADE (LGPD):
+      // Verificar se o paciente pertence à mesma linha telefônica (titular ou dependente cadastrado)
+      const unlinkedPatients = found.filter((p) => {
+        const pClean = p.phone.replace(/\D/g, '');
+        const isSameLine = Boolean(last8 && pClean.includes(last8));
+        const isNotedByTitular = Boolean(last8 && (p.notes?.includes(last8) || p.notes?.includes(cleanPhone)));
+        return !isSameLine && !isNotedByTitular;
+      });
+
+      // Se for um terceiro não vinculado à linha do interlocutor, EXIGIR validação estrita por CPF
+      if (unlinkedPatients.length > 0) {
+        const targetToVerify = unlinkedPatients[0];
+
+        if (!cleanCpf) {
+          return {
+            success: false,
+            message: `Por questões de segurança e privacidade do paciente (LGPD), para consultar ou desmarcar agendamentos de terceiros, é necessário confirmar o CPF de ${targetToVerify.name}. Por favor, me informe o CPF do paciente para prosseguir.`,
+            data: { needsCpf: true, patientName: targetToVerify.name },
+          };
+        }
+
+        // Se informou CPF, validar correspondência
+        const matched = unlinkedPatients.find((p) => {
+          const dbCpf = (p.cpf || '').replace(/\D/g, '');
+          return dbCpf && (dbCpf === cleanCpf || dbCpf.endsWith(cleanCpf));
+        });
+
+        if (!matched) {
+          return {
+            success: false,
+            message: `O CPF informado não confere com o cadastro de ${targetToVerify.name}. Por favor, confira os dados ou entre em contato diretamente com a nossa recepção.`,
+            data: { cpfMismatch: true },
+          };
+        }
+
+        targetPatients = [matched];
+      } else {
+        targetPatients = found;
       }
     } else {
       // 2. Busca padrão pelo telefone do interlocutor (titular e seus dependentes vinculados)
@@ -238,15 +280,12 @@ export async function buscarConsultaAtual(
         };
       }
 
-      const cleanPhone = telefonePaciente.replace(/\D/g, '');
-      const last8 = cleanPhone.slice(-8);
-
       const relatedPatients = await prisma.patient.findMany({
         where: {
           ...(clinicId ? { clinicId } : {}),
           phone: { contains: last8 },
         },
-        select: { id: true, name: true, phone: true, cpf: true },
+        select: { id: true, name: true, phone: true, cpf: true, notes: true },
       });
 
       targetPatients = relatedPatients.length > 0 ? relatedPatients : [patient];
@@ -277,18 +316,18 @@ export async function buscarConsultaAtual(
       };
     }
 
-    // Se houver múltiplas consultas futuras (como na área de testes ou acompanhamentos frequentes)
+    // Se houver múltiplas consultas futuras: listar opções limpas sem expor IDs técnicos
     if (appointments.length > 1) {
       const itemsList = appointments
         .map((a, idx) => {
           const dt = formatBRT(new Date(a.startTime));
-          return `${idx + 1}. Paciente: ${a.patient.name} | Data: ${dt} | Status: ${a.status} | ID: ${a.id}`;
+          return `• Opção ${idx + 1}: ${dt} (${a.status})`;
         })
         .join('\n');
 
       return {
         success: true,
-        message: `Foram encontradas ${appointments.length} consultas futuras para ${appointments[0].patient.name}:\n\n${itemsList}\n\nPor favor, informe as datas e horários encontrados e pergunte qual delas o paciente gostaria de desmarcar ou remarcar.`,
+        message: `Encontrei as seguintes consultas agendadas para ${appointments[0].patient.name}:\n\n${itemsList}\n\nPor favor, informe qual dessas consultas você gostaria de desmarcar (ou se deseja desmarcar todas).`,
         data: {
           multiple: true,
           count: appointments.length,
@@ -306,13 +345,13 @@ export async function buscarConsultaAtual(
       };
     }
 
-    // Apenas 1 consulta futura encontrada
+    // Apenas 1 consulta futura encontrada (sem expor ID técnico na mensagem)
     const appointment = appointments[0];
     const dataFormatada = formatBRT(new Date(appointment.startTime));
 
     return {
       success: true,
-      message: `Consulta encontrada para ${appointment.patient.name}:\n- Paciente: ${appointment.patient.name}\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Profissional: ${appointment.clinic.doctorName || appointment.clinic.name}\n- ID Agendamento: ${appointment.id}`,
+      message: `Consulta encontrada para ${appointment.patient.name}:\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Profissional: ${appointment.clinic.doctorName || appointment.clinic.name}`,
       data: {
         appointmentId: appointment.id,
         patientName: appointment.patient.name,
@@ -682,6 +721,20 @@ export async function cancelarConsulta(agendamentoId: string, motivo?: string): 
     }
 
     const dataFormatada = formatBRTShort(new Date(appointment.startTime));
+
+    // Notificação de segurança para o WhatsApp original do paciente (se diferente do solicitante)
+    try {
+      if (appointment.patient?.phone) {
+        const destPhone = appointment.patient.phone.split('-')[0].replace(/\D/g, '');
+        if (destPhone.length >= 10 && destPhone.length <= 13) {
+          const doctorName = appointment.clinic.doctorName || appointment.clinic.name;
+          const noticeText = `Olá ${appointment.patient.name}! Informamos que a sua consulta do dia ${dataFormatada} com ${doctorName} foi desmarcada. Caso não tenha sido você ou um familiar responsável que solicitou esta desmarcação, por favor entre em contato imediatamente com o consultório.`;
+          sendWhatsAppMessage(appointment.patient.phone, noticeText).catch(() => {});
+        }
+      }
+    } catch (noticeErr) {
+      // Ignora erro no disparo de segurança secundário
+    }
 
     return {
       success: true,
