@@ -122,72 +122,54 @@ function applyCepMask(value: string): string {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
+function parseBirthDate(val?: string | null): { year: number; month: number; day: number } | null {
+  if (!val) return null;
+  const s = val.trim();
+  let match = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (match) {
+    return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+  }
+  match = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (match) {
+    return { year: parseInt(match[3], 10), month: parseInt(match[2], 10), day: parseInt(match[1], 10) };
+  }
+  return null;
+}
+
 function isPatientBirthdayToday(birthDateStr?: string | null): boolean {
-  if (!birthDateStr) return false;
+  const parsed = parseBirthDate(birthDateStr);
+  if (!parsed) return false;
   const now = new Date();
-  const tm = String(now.getMonth() + 1).padStart(2, '0');
-  const td = String(now.getDate()).padStart(2, '0');
-  if (birthDateStr.includes('-')) {
-    const parts = birthDateStr.split('-');
-    if (parts.length >= 3) {
-      return parts[1] === tm && parts[2]?.slice(0, 2) === td;
-    }
-  }
-  if (birthDateStr.includes('/')) {
-    const parts = birthDateStr.split('/');
-    if (parts.length >= 2) {
-      return parts[1] === tm && parts[0] === td;
-    }
-  }
-  return false;
+  return (now.getMonth() + 1) === parsed.month && now.getDate() === parsed.day;
 }
 
 function formatBirthDateForInput(val?: string | null): string {
-  if (!val) return '';
-  const s = val.trim();
-  if (s.includes('-')) {
-    const parts = s.split('-');
-    if (parts.length === 3 && parts[0].length === 4) return s; // YYYY-MM-DD
-    if (parts.length === 3 && parts[2].length === 4) {
-      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
-    }
-  }
-  if (s.includes('/')) {
-    const parts = s.split('/');
-    if (parts.length === 3 && parts[2].length === 4) {
-      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
-    }
-    if (parts.length === 3 && parts[0].length === 4) {
-      return parts[0] + '-' + parts[1].padStart(2, '0') + '-' + parts[2].padStart(2, '0');
-    }
-  }
-  return s;
+  const parsed = parseBirthDate(val);
+  if (!parsed) return '';
+  return parsed.year + '-' + String(parsed.month).padStart(2, '0') + '-' + String(parsed.day).padStart(2, '0');
 }
 
 function formatBirthDateDisplay(val?: string | null): string {
-  if (!val) return '';
-  const s = val.trim();
-  if (s.includes('/')) return s;
-  if (s.includes('-')) {
-    const parts = s.split('-');
-    if (parts.length === 3 && parts[0].length === 4) {
-      return parts[2].padStart(2, '0') + '/' + parts[1].padStart(2, '0') + '/' + parts[0];
-    }
-  }
-  return s;
+  const parsed = parseBirthDate(val);
+  if (!parsed) return val ? val.trim() : '';
+  const d = String(parsed.day).padStart(2, '0');
+  const m = String(parsed.month).padStart(2, '0');
+  return d + '/' + m + '/' + parsed.year;
 }
 
 function calculateAge(birthDateStr?: string | null): string {
-  if (!birthDateStr) return '';
-  const birth = new Date(birthDateStr);
-  if (isNaN(birth.getTime())) return '';
+  const parsed = parseBirthDate(birthDateStr);
+  if (!parsed) return '';
   const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+  let age = today.getFullYear() - parsed.year;
+  const m = (today.getMonth() + 1) - parsed.month;
+  if (m < 0 || (m === 0 && today.getDate() < parsed.day)) {
     age--;
   }
-  return `${age} anos`;
+  if (age < 0 || isNaN(age)) return '';
+  if (age === 0) return 'Menos de 1 ano';
+  if (age === 1) return '1 ano';
+  return age + ' anos';
 }
 
 function getInitials(name: string): string {
@@ -2635,7 +2617,8 @@ export default function Dashboard() {
                     <tr>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Paciente / CPF</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Contato</th>
-                      <th className="p-3.5 uppercase tracking-wider text-xs">Nascimento / Idade</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs">Nascimento</th>
+                      <th className="p-3.5 uppercase tracking-wider text-xs">Idade</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Endereço</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Consultas</th>
                       <th className="p-3.5 uppercase tracking-wider text-xs">Observações</th>
@@ -2645,7 +2628,7 @@ export default function Dashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredPatients.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-16 text-center text-slate-400 font-medium text-sm">
+                        <td colSpan={8} className="py-16 text-center text-slate-400 font-medium text-sm">
                           {searchQuery ? `Nenhum paciente encontrado para "${searchQuery}"` : 'Nenhum paciente cadastrado'}
                         </td>
                       </tr>
@@ -2677,16 +2660,18 @@ export default function Dashboard() {
                           <div className="font-mono font-bold text-slate-800 text-sm">{formatPhoneBR(p.phone)}</div>
                           {p.email && <div className="text-xs text-slate-400 mt-0.5">{p.email}</div>}
                         </td>
-                        <td className="p-3.5 font-medium text-slate-700 text-sm">
+                        <td className="p-3.5 font-bold text-slate-800 text-sm">
                           {p.birthDate ? (
-                            <div>
-                              <div className="font-bold text-slate-800 text-sm">
-                                {formatBirthDateDisplay(p.birthDate)}
-                              </div>
-                              <div className="text-xs text-slate-400 font-medium">
-                                {calculateAge(p.birthDate)}
-                              </div>
-                            </div>
+                            formatBirthDateDisplay(p.birthDate)
+                          ) : (
+                            <span className="text-xs text-slate-300 font-normal">—</span>
+                          )}
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-700 text-sm">
+                          {p.birthDate && calculateAge(p.birthDate) ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                              {calculateAge(p.birthDate)}
+                            </span>
                           ) : (
                             <span className="text-xs text-slate-300">—</span>
                           )}
