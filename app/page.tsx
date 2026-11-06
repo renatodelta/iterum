@@ -259,7 +259,7 @@ const WEEKDAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábad
 const DAILY_HOURS = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45', '13:00', '13:45', '14:30', '15:15', '16:00', '16:45', '17:30'];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'relatorios' | 'users' | 'settings' | 'profissionais' | 'testes'>('agenda');
+  const [activeTab, setActiveTab] = useState<'agenda' | 'patients' | 'fila' | 'whatsapp' | 'relatorios' | 'users' | 'settings' | 'profissionais' | 'testes' | 'automacao'>('agenda');
   const [agendaViewMode, setAgendaViewMode] = useState<AgendaViewMode>('mes');
 
   const [loading, setLoading] = useState(true);
@@ -291,6 +291,12 @@ export default function Dashboard() {
   // Estados de "Área de Testes Provisória"
   const [testActionLoading, setTestActionLoading] = useState(false);
   const [testActionResult, setTestActionResult] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  // Estados de "Ações da Automação"
+  const [automationLogs, setAutomationLogs] = useState<any[]>([]);
+  const [loadingAutomationLogs, setLoadingAutomationLogs] = useState(false);
+  const [logsFilterType, setLogsFilterType] = useState('TODOS');
+  const [logsSearch, setLogsSearch] = useState('');
 
   // Estados de "Fila de Espera"
   const [waitlist, setWaitlist] = useState<any[]>([]);
@@ -495,6 +501,53 @@ export default function Dashboard() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [activeTab]);
+
+  async function fetchAutomationLogs(silent = false) {
+    try {
+      if (!silent) setLoadingAutomationLogs(true);
+      const res = await fetch('/api/automation-logs', { cache: 'no-store' });
+      const data = await res.json();
+      if (data.logs) {
+        setAutomationLogs(data.logs);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar ações da automação:', e);
+    } finally {
+      if (!silent) setLoadingAutomationLogs(false);
+    }
+  }
+
+  async function handleClearAutomationLogs() {
+    if (!confirm('Deseja realmente limpar o histórico de Ações da Automação?')) return;
+    try {
+      setLoadingAutomationLogs(true);
+      const res = await fetch('/api/automation-logs', { method: 'DELETE' });
+      if (res.ok) {
+        setAutomationLogs([]);
+      }
+    } catch (e) {
+      console.error('Erro ao limpar histórico:', e);
+    } finally {
+      setLoadingAutomationLogs(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchAutomationLogs(true);
+    const intervalMs = activeTab === 'automacao' ? 3000 : 12000;
+    const interval = setInterval(() => {
+      fetchAutomationLogs(true);
+    }, intervalMs);
+    const handleFocus = () => {
+      fetchAutomationLogs(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeTab]);
+
 
   // Polling automático da Agenda e Consultas em tempo real (atualiza instantaneamente sem precisar dar F5)
   useEffect(() => {
@@ -2012,6 +2065,21 @@ export default function Dashboard() {
               </div>
               <span className="text-[11px] text-[#00875a] font-bold bg-[#e8f7f0] px-2 py-0.5 rounded-full border border-[#d1fae5]">
                 Online
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('automacao')}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-150 ${activeTab === 'automacao'
+                ? 'bg-[#e8f7f0] text-[#00875a] font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-[#f3f9f5]'
+                }`}
+            >
+              <div className="flex items-center gap-3">
+                <Activity className={`w-5 h-5 ${activeTab === 'automacao' ? 'text-[#059669]' : 'text-slate-400'}`} />
+                <span>Ações da Automação</span>
+              </div>
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-emerald-100 text-[#005a43] border border-emerald-200">
+                Ao Vivo
               </span>
             </button>
 

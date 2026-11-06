@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from './prisma';
 import { sendWhatsAppMessage } from './whatsapp/client';
+import { logAutomationAction } from './automation-log';
 
 export interface WaitlistEntry {
   id: string;
@@ -528,6 +529,18 @@ export async function notifyFirstInWaitlistForVacatedSlot(vacatedSlot: {
     offeredSlot,
   });
 
+  // Registrar no feed de Ações da Automação
+  logAutomationAction({
+    type: 'FILA_NOTIFICACAO',
+    title: 'Vaga Ofertada para Fila de Espera',
+    description: `Horário das ${timeDisplay} do dia ${dateDisplay} ofertado para ${patient.patientName} via WhatsApp.`,
+    patientName: patient.patientName,
+    patientPhone: patient.patientPhone,
+    appointmentDate: dateDisplay,
+    slotTime: timeDisplay,
+    origin: 'FILA_ESPERA',
+  }).catch(() => {});
+
   // Registrar a mensagem no histórico do WhatsApp para garantir continuidade no bot
   try {
     const cleanP = patient.patientPhone.replace(/\D/g, '').slice(-8);
@@ -673,6 +686,19 @@ export async function confirmWaitlistBooking(
     const dateDisp = slot.dateDisplay || start.toLocaleDateString('pt-BR');
     const timeDisp = slot.timeDisplay || start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+    // Registrar no feed de Ações da Automação
+    logAutomationAction({
+      type: 'FILA_RECUPERADA',
+      title: 'Vaga Recuperada pela Fila de Espera',
+      description: `Paciente ${patient.name} aceitou a vaga e preencheu a lacuna da agenda para ${dateDisp} às ${timeDisp}.`,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      patientCpf: patient.cpf,
+      appointmentDate: dateDisp,
+      slotTime: timeDisp,
+      origin: 'FILA_ESPERA',
+    }).catch(() => {});
+
     return {
       success: true,
       appointment: newAppointment,
@@ -694,6 +720,16 @@ export async function declineWaitlistSlot(waitlistId: string): Promise<{ success
 
   const offeredSlot = entry.offeredSlot;
   await updateWaitlistEntry(waitlistId, { status: 'RECUSADO' });
+
+  // Registrar no feed de Ações da Automação
+  logAutomationAction({
+    type: 'FILA_RECUSA',
+    title: 'Vaga Recusada pelo Paciente da Fila',
+    description: `${entry.patientName} recusou o horário ofertado. A vaga foi redirecionada para o próximo da fila.`,
+    patientName: entry.patientName,
+    patientPhone: entry.patientPhone,
+    origin: 'FILA_ESPERA',
+  }).catch(() => {});
 
   // Notificar o próximo da fila se havia um horário oferecido
   if (offeredSlot) {

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { addMinutes, isAfter, isBefore } from 'date-fns';
 import { notifyFirstInWaitlistForVacatedSlot, addToWaitlist, updateWaitlistEntry } from '@/lib/waitlist';
 import { sendWhatsAppMessage } from '@/lib/whatsapp/client';
+import { logAutomationAction } from '@/lib/automation-log';
 
 export interface ToolResult {
   success: boolean;
@@ -722,6 +723,19 @@ export async function cancelarConsulta(agendamentoId: string, motivo?: string): 
 
     const dataFormatada = formatBRTShort(new Date(appointment.startTime));
 
+    // Registrar no feed de Ações da Automação
+    logAutomationAction({
+      type: 'CANCELAMENTO',
+      title: 'Consulta Desmarcada',
+      description: `Consulta de ${appointment.patient.name} marcada para ${dataFormatada} foi desmarcada via WhatsApp. Motivo: ${motivo || 'Aviso prévio do paciente'}.`,
+      patientName: appointment.patient.name,
+      patientPhone: appointment.patient.phone,
+      patientCpf: appointment.patient.cpf,
+      appointmentDate: dataFormatada.split(' às')[0]?.trim(),
+      slotTime: dataFormatada.split(' às')[1]?.trim(),
+      origin: 'WHATSAPP_SOFIA',
+    }).catch(() => {});
+
     // Notificação de segurança para o WhatsApp original do paciente (se diferente do solicitante)
     try {
       if (appointment.patient?.phone) {
@@ -859,6 +873,19 @@ export async function confirmarRemarcacao(
         console.warn('⚠️ [Waitlist] Erro ao notificar fila na remarcação:', waitErr);
       }
     }
+
+    // Registrar no feed de Ações da Automação
+    logAutomationAction({
+      type: 'REMARCACAO',
+      title: 'Consulta Remarcada',
+      description: `Consulta de ${patient.name} remarcada para ${dataFormatada}.`,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      patientCpf: patient.cpf,
+      appointmentDate: dataShortFormatada.split(' às')[0]?.trim(),
+      slotTime: dataShortFormatada.split(' às')[1]?.trim(),
+      origin: 'WHATSAPP_SOFIA',
+    }).catch(() => {});
 
     return {
       success: true,
@@ -1379,6 +1406,21 @@ export async function criarNovoAgendamento(
     }
 
     const dataFormatada = formatBRT(newStart, true);
+    const dataShortFormatada = formatBRTShort(newStart);
+
+    // Registrar no feed de Ações da Automação
+    logAutomationAction({
+      type: 'AGENDAMENTO',
+      title: 'Agendamento Realizado',
+      description: `Consulta agendada para ${targetPatient.name} em ${dataFormatada}.`,
+      patientName: targetPatient.name,
+      patientPhone: targetPatient.phone || patient.phone || '',
+      patientCpf: targetPatient.cpf || null,
+      appointmentDate: dataShortFormatada.split(' às')[0]?.trim(),
+      slotTime: dataShortFormatada.split(' às')[1]?.trim(),
+      origin: 'WHATSAPP_SOFIA',
+    }).catch(() => {});
+
     return {
       success: true,
       message: `Agendamento confirmado para ${dataFormatada}! Paciente: ${targetPatient.name}.`,
@@ -1608,6 +1650,19 @@ export async function confirmarPresencaConsulta(
     });
 
     const dataFormatada = formatBRT(new Date(updated.startTime), true);
+
+    // Registrar no feed de Ações da Automação
+    logAutomationAction({
+      type: 'CONFIRMACAO_PRESENCA',
+      title: 'Presença Confirmada (Lembrete D-1)',
+      description: `Paciente ${updated.patient.name} confirmou presença na consulta de ${dataFormatada} via WhatsApp.`,
+      patientName: updated.patient.name,
+      patientPhone: updated.patient.phone,
+      patientCpf: updated.patient.cpf,
+      appointmentDate: dataFormatada.split(' às')[0]?.replace('Data: ', '').trim(),
+      slotTime: dataFormatada.split(' às')[1]?.trim(),
+      origin: 'WHATSAPP_SOFIA',
+    }).catch(() => {});
 
     return {
       success: true,
