@@ -1571,7 +1571,7 @@ export async function cadastrarPaciente({
 
       return {
         success: true,
-        message: `✅ Cadastro do paciente ${existingByCpf.name} LOCALIZADO no sistema (CPF: ${formattedCpf})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO chame criar_novo_agendamento agora! Você DEVE responder ao paciente apresentando o resumo do agendamento e perguntando: "Posso confirmar para você?". Aguarde a resposta de confirmação do paciente.`,
+        message: `✅ Cadastro do paciente ${existingByCpf.name} LOCALIZADO no sistema (CPF: ${formattedCpf})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO liste outros dias e horários novamente se o paciente já havia escolhido um dia e horário na mensagem anterior! Mantenha a data e o horário que ele escolheu e responda com o resumo de confirmação (Paciente, CPF, Data e Horário) perguntando: "Posso confirmar para você?".`,
         data: {
           patientId: existingByCpf.id,
           patientName: existingByCpf.name,
@@ -1609,7 +1609,7 @@ export async function cadastrarPaciente({
 
       return {
         success: true,
-        message: `✅ Cadastro de ${updatedTitular.name} salvo com sucesso no sistema (CPF: ${formattedCpf || 'Registrado'})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO chame criar_novo_agendamento agora! Você DEVE responder ao paciente apresentando o resumo do agendamento e perguntando: "Posso confirmar para você?". Aguarde a resposta de confirmação do paciente.`,
+        message: `✅ Cadastro de ${updatedTitular.name} salvo com sucesso no sistema (CPF: ${formattedCpf || 'Registrado'})!\n⚠️ ATENÇÃO OBRIGATÓRIA PARA A SOFIA: NÃO liste outros dias e horários novamente se o paciente já havia escolhido um dia e horário na mensagem anterior! Mantenha a data e o horário que ele escolheu e responda com o resumo de confirmação (Paciente, CPF, Data e Horário) perguntando: "Posso confirmar para você?".`,
         data: {
           patientId: updatedTitular.id,
           patientName: updatedTitular.name,
