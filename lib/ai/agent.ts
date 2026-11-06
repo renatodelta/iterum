@@ -234,11 +234,15 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
 
 7. **Desmarcação, Remarcação e Cancelamento (CONDUTA ACOLHEDORA):**
    - Sempre prefira usar os termos *"desmarcar"* ou *"liberar o horário"* em vez de termos frios como "cancelamento".
-   - **Se o paciente solicitar desmarcar:**
+   - **Se o paciente solicitar desmarcar para si mesmo:**
      * Primeiro, ofereça gentilmente a opção de **remarcar** para outra data conveniente (*"Com certeza, [Nome]. Já posso desmarcar para você, mas gostaria de aproveitar para já remarcar para outro dia que fique melhor na sua rotina? Tenho horários livres na próxima semana!"*).
      * Se ele realmente preferir apenas desmarcar:
        - **Caso a consulta já estivesse CONFIRMADA:** agradeça com carinho pelo aviso prévio e explique que a vaga liberada poderá ajudar outro paciente da fila de espera (*"Compreendo, [Nome]. Cancelei a sua confirmação e desmarquei seu horário de [Data às Horário]. Muito obrigada por nos avisar com antecedência! Assim conseguimos atender outro paciente que aguardava na lista de espera. 😊 Quando quiser remarcar, estou à sua disposição!"*).
        - **Caso estivesse apenas AGENDADA:** confirme a desmarcação com acolhimento (*"Perfeito, [Nome]. Já desmarquei a sua consulta de [Data às Horário] e liberei o horário no sistema. Fico à disposição quando desejar agendar novamente!"*).
+   - **Se o usuário solicitar consultar ou desmarcar para OUTRA pessoa (filho, cônjuge, dependente ou terceiro como "Eduardo Cesar Machado"):**
+     * Use 'buscar_consulta_atual' passando o 'nome_paciente' informado (e 'cpf_paciente' caso informado).
+     * Se forem encontradas múltiplas consultas futuras para esse paciente, liste as opções encontradas (data e horário) e pergunte gentilmente qual delas ele deseja desmarcar.
+     * Quando o usuário indicar a data/horário ou consulta escolhida, execute 'cancelar_consulta' passando o 'agendamento_id' correspondente.
    - Use 'buscar_consulta_atual' para localizar o agendamento futuro e valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
 8. **Dúvidas Institucionais, Valores e Convênios (REGRA MANDATÓRIA):**
@@ -262,7 +266,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'buscar_consulta_atual',
-      description: 'Localiza a consulta futura mais próxima agendada para o paciente pelo seu número de telefone.',
+      description: 'Localiza consultas futuras agendadas para o paciente pelo seu número de telefone, ou pelo Nome completo e/ou CPF quando o usuário solicitar consultar ou desmarcar para outra pessoa (filho, cônjuge, terceiro).',
       parameters: {
         type: 'object',
         properties: {
@@ -270,8 +274,15 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: 'Telefone do paciente com DDD (ex: 11999991111).',
           },
+          nome_paciente: {
+            type: 'string',
+            description: 'Nome completo do paciente a ser buscado (obrigatório se estiver consultando/desmarcando para outra pessoa).',
+          },
+          cpf_paciente: {
+            type: 'string',
+            description: 'CPF do paciente (se informado pelo usuário).',
+          },
         },
-        required: ['telefone_paciente'],
       },
     },
   },
@@ -495,7 +506,12 @@ async function executeToolCall(
   console.log(`🤖 Executando ferramenta IA [${toolName}] com argumentos:`, toolArgs);
   switch (toolName) {
     case 'buscar_consulta_atual':
-      return await buscarConsultaAtual(toolArgs.telefone_paciente || patientPhone || '', clinicId);
+      return await buscarConsultaAtual(
+        toolArgs.telefone_paciente || patientPhone || '',
+        clinicId,
+        toolArgs.nome_paciente,
+        toolArgs.cpf_paciente
+      );
     case 'buscar_proximos_horarios_disponiveis':
       return await buscarProximosHorariosDisponiveis(clinicId, 3);
     case 'buscar_horarios_disponiveis':
@@ -750,7 +766,7 @@ ${relatedPatientsSummary || `• ${interlocutorName}`}
           const toolName = toolCall.function.name;
           const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
 
-          if (toolName === 'buscar_consulta_atual' && !toolArgs.telefone_paciente) {
+          if (toolName === 'buscar_consulta_atual' && !toolArgs.telefone_paciente && !toolArgs.nome_paciente && !toolArgs.cpf_paciente) {
             toolArgs.telefone_paciente = patientPhone;
           }
 

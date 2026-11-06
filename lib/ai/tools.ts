@@ -188,75 +188,136 @@ export async function findPatientByPhone(telefone: string, clinicId?: string) {
 /**
  * 1. BUSCAR CONSULTA ATUAL DO PACIENTE
  */
-export async function buscarConsultaAtual(telefonePaciente: string, clinicId?: string): Promise<ToolResult> {
+export async function buscarConsultaAtual(
+  telefonePaciente: string,
+  clinicId?: string,
+  nomePaciente?: string,
+  cpfPaciente?: string
+): Promise<ToolResult> {
   try {
-    // Buscar paciente pelo telefone de forma resiliente
-    const patient = await findPatientByPhone(telefonePaciente, clinicId);
+    const now = new Date();
+    let targetPatients: { id: string; name: string; phone: string; cpf?: string | null }[] = [];
 
-    if (!patient) {
-      return {
-        success: false,
-        message: `Nenhum paciente cadastrado encontrado para o telefone ${telefonePaciente}.`,
-      };
+    // 1. Se foi informado nomePaciente ou cpfPaciente (busca para terceiros/dependentes/outros pacientes)
+    if (nomePaciente || cpfPaciente) {
+      const cleanNome = (nomePaciente || '').trim();
+      const cleanCpf = (cpfPaciente || '').replace(/\D/g, '');
+
+      const found = await prisma.patient.findMany({
+        where: {
+          ...(clinicId ? { clinicId } : {}),
+          OR: [
+            ...(cleanCpf ? [
+              { cpf: cleanCpf },
+              { cpf: { contains: cleanCpf } },
+            ] : []),
+            ...(cleanNome ? [
+              { name: { equals: cleanNome, mode: 'insensitive' as const } },
+              { name: { contains: cleanNome, mode: 'insensitive' as const } },
+            ] : []),
+          ],
+        },
+      });
+
+      if (found.length > 0) {
+        targetPatients = found;
+      } else {
+        return {
+          success: false,
+          message: `Nenhum cadastro de paciente encontrado com o nome "${nomePaciente || ''}"${cpfPaciente ? ` ou CPF ${cpfPaciente}` : ''}. Por favor, confirme o nome completo ou CPF para localizarmos.`,
+        };
+      }
+    } else {
+      // 2. Busca padrão pelo telefone do interlocutor (titular e seus dependentes vinculados)
+      const patient = await findPatientByPhone(telefonePaciente, clinicId);
+
+      if (!patient) {
+        return {
+          success: false,
+          message: `Nenhum paciente cadastrado encontrado para o telefone ${telefonePaciente}.`,
+        };
+      }
+
+      const cleanPhone = telefonePaciente.replace(/\D/g, '');
+      const last8 = cleanPhone.slice(-8);
+
+      const relatedPatients = await prisma.patient.findMany({
+        where: {
+          ...(clinicId ? { clinicId } : {}),
+          phone: { contains: last8 },
+        },
+        select: { id: true, name: true, phone: true, cpf: true },
+      });
+
+      targetPatients = relatedPatients.length > 0 ? relatedPatients : [patient];
     }
 
-    const now = new Date();
-    const cleanPhone = telefonePaciente.replace(/\D/g, '');
-    const last8 = cleanPhone.slice(-8);
+    const patientIds = targetPatients.map((p) => p.id);
 
-    // Buscar todos os pacientes relacionados a esta linha (titular e dependentes/filhos cadastrados)
-    const relatedPatients = await prisma.patient.findMany({
-      where: {
-        ...(clinicId ? { clinicId } : {}),
-        phone: { contains: last8 },
-      },
-      select: { id: true, name: true, phone: true },
-    });
-    const patientIds = relatedPatients.length > 0 ? relatedPatients.map((p) => p.id) : [patient.id];
-
-    // Buscar agendamento futuro mais próximo
-    const appointment = await prisma.appointment.findFirst({
+    // Buscar todos os agendamentos futuros para os pacientes localizados
+    const appointments = await prisma.appointment.findMany({
       where: {
         patientId: { in: patientIds },
-        startTime: {
-          gte: now,
-        },
-        status: {
-          in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'],
-        },
+        startTime: { gte: now },
+        status: { in: ['AGENDADO', 'CONFIRMADO', 'SCHEDULED', 'CONFIRMED'] },
       },
-      orderBy: {
-        startTime: 'asc',
-      },
+      orderBy: { startTime: 'asc' },
       include: {
         clinic: true,
         patient: true,
       },
     });
 
-    if (!appointment) {
+    if (appointments.length === 0) {
+      const pNames = targetPatients.map((p) => p.name).join(', ');
       return {
         success: true,
-        message: `Olá ${patient.name}, você não possui nenhuma consulta futura agendada no momento.`,
-        data: { patientName: patient.name, hasAppointment: false },
+        message: `Não foi encontrada nenhuma consulta futura agendada para ${pNames}.`,
+        data: { patientName: pNames, hasAppointment: false },
       };
     }
 
+    // Se houver múltiplas consultas futuras (como na área de testes ou acompanhamentos frequentes)
+    if (appointments.length > 1) {
+      const itemsList = appointments
+        .map((a, idx) => {
+          const dt = formatBRT(new Date(a.startTime));
+          return `${idx + 1}. Paciente: ${a.patient.name} | Data: ${dt} | Status: ${a.status} | ID: ${a.id}`;
+        })
+        .join('\n');
+
+      return {
+        success: true,
+        message: `Foram encontradas ${appointments.length} consultas futuras para ${appointments[0].patient.name}:\n\n${itemsList}\n\nPor favor, informe as datas e horários encontrados e pergunte qual delas o paciente gostaria de desmarcar ou remarcar.`,
+        data: {
+          multiple: true,
+          count: appointments.length,
+          patientName: appointments[0].patient.name,
+          dataFormatada: formatBRT(new Date(appointments[0].startTime)),
+          status: appointments[0].status,
+          appointments: appointments.map((a) => ({
+            appointmentId: a.id,
+            patientName: a.patient.name,
+            startTime: a.startTime.toISOString(),
+            dataFormatada: formatBRT(new Date(a.startTime)),
+            status: a.status,
+          })),
+        },
+      };
+    }
+
+    // Apenas 1 consulta futura encontrada
+    const appointment = appointments[0];
     const dataFormatada = formatBRT(new Date(appointment.startTime));
-    const isBeneficiary = appointment.patientId !== patient.id;
-    const targetDesc = isBeneficiary
-      ? `${appointment.patient.name} (vinculado(a) ao responsável/titular ${patient.name})`
-      : patient.name;
 
     return {
       success: true,
-      message: `Consulta encontrada para ${targetDesc}:\n- Paciente: ${appointment.patient.name}\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Especialidade: ${appointment.clinic.specialty}\n- ID Agendamento: ${appointment.id}`,
+      message: `Consulta encontrada para ${appointment.patient.name}:\n- Paciente: ${appointment.patient.name}\n- Data: ${dataFormatada}\n- Status: ${appointment.status}\n- Profissional: ${appointment.clinic.doctorName || appointment.clinic.name}\n- ID Agendamento: ${appointment.id}`,
       data: {
         appointmentId: appointment.id,
         patientName: appointment.patient.name,
         patientPhone: appointment.patient.phone,
-        titularName: patient.name,
-        isBeneficiary,
+        dataFormatada,
         startTime: appointment.startTime.toISOString(),
         endTime: appointment.endTime.toISOString(),
         status: appointment.status,
