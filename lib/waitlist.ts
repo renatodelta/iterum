@@ -116,13 +116,22 @@ export async function loadWaitlist(): Promise<WaitlistEntry[]> {
               }
             }
           }
+          if (desiredDate) {
+            const iso = desiredDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (iso) {
+              desiredDate = `${iso[3].padStart(2, '0')}/${iso[2].padStart(2, '0')}/${iso[1]}`;
+            }
+          }
+          const prefDays = (r.preferredDays && r.preferredDays !== 'Qualquer dia útil')
+            ? r.preferredDays
+            : (desiredDate ? `Data desejada: ${desiredDate}` : 'Qualquer dia útil');
           return {
             id: r.id,
             patientId: r.patientId || undefined,
             patientName: r.patientName,
             patientPhone: r.patientPhone,
             preferredShift: r.preferredShift || 'Qualquer Horário',
-            preferredDays: r.preferredDays || 'Qualquer dia útil',
+            preferredDays: prefDays,
             desiredDate,
             status: r.status,
             notes: r.notes || undefined,

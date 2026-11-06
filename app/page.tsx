@@ -179,6 +179,71 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function formatDateBR(val?: string | null): string {
+  if (!val) return '';
+  const s = val.trim();
+  const matchIso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (matchIso) {
+    return `${matchIso[3].padStart(2, '0')}/${matchIso[2].padStart(2, '0')}/${matchIso[1]}`;
+  }
+  const matchBr = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (matchBr) {
+    return `${matchBr[1].padStart(2, '0')}/${matchBr[2].padStart(2, '0')}/${matchBr[3]}`;
+  }
+  return s;
+}
+
+function formatDateTimeBR(val?: string | null): string {
+  if (!val) return '';
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return formatDateBR(val);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    }).format(d);
+  } catch {
+    return formatDateBR(val);
+  }
+}
+
+function getCleanWaitlistNotes(notes?: string | null, desiredDate?: string | null): string | null {
+  if (!notes) return null;
+  let text = notes;
+  text = text.replace(/\[Data desejada:\s*[^\]]+\]/gi, '');
+  text = text.replace(/Data desejada:\s*[0-9\-\/]+/gi, '');
+  text = text.replace(/\|\s*Turno:\s*[^|\n]+/gi, '');
+  text = text.replace(/Turno:\s*[^|\n]+/gi, '');
+  text = text.replace(/Adicionado pelo Secretário Virtual IA/gi, '');
+  text = text.replace(/^[|\-\s]+|[|\-\s]+$/g, '').trim();
+  text = text.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1');
+  return text.length > 0 ? text : null;
+}
+
+function getWaitlistPreferenceDisplay(entry: any): { label: string; value: string } {
+  let date = entry.desiredDate;
+  if (!date && entry.notes) {
+    const m = entry.notes.match(/Data desejada:\s*([0-9\-\/]+)/i) || entry.notes.match(/\[Data desejada:\s*([^\]]+)\]/i);
+    if (m) date = m[1].trim();
+  }
+
+  if (date) {
+    return {
+      label: 'Data desejada',
+      value: formatDateBR(date),
+    };
+  }
+
+  return {
+    label: 'Preferência',
+    value: entry.preferredDays && entry.preferredDays !== 'Qualquer dia útil' ? entry.preferredDays : 'Qualquer dia útil',
+  };
+}
+
 function getStatusLabel(status: string | undefined | null): string {
   if (!status) return 'Agendado';
   const s = status.toUpperCase();
@@ -240,6 +305,7 @@ export default function Dashboard() {
   const [newWaitShift, setNewWaitShift] = useState<'Manhã' | 'Tarde' | 'Qualquer Horário'>('Qualquer Horário');
   const [newWaitDays, setNewWaitDays] = useState('Qualquer dia útil');
   const [newWaitNotes, setNewWaitNotes] = useState('');
+  const [waitlistEntryToSchedule, setWaitlistEntryToSchedule] = useState<any | null>(null);
 
   // Estados de Remarcação Manual pela Agenda
   const [showModalReschedule, setShowModalReschedule] = useState(false);
@@ -594,6 +660,19 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.success) {
+        if (waitlistEntryToSchedule) {
+          try {
+            await fetch('/api/waitlist', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: waitlistEntryToSchedule.id, status: 'AGENDADO' }),
+            });
+            fetchWaitlist();
+          } catch (wErr) {
+            console.error('Erro ao marcar fila como agendada:', wErr);
+          }
+          setWaitlistEntryToSchedule(null);
+        }
         setShowModalNewAppt(false);
         setSelectedPatientId('');
         setNewApptName('');
@@ -1393,6 +1472,54 @@ export default function Dashboard() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function handleScheduleFromWaitlist(entry: any) {
+    setWaitlistEntryToSchedule(entry);
+
+    const cleanPhone = (entry.patientPhone || '').replace(/\D/g, '');
+    const foundPat = patients.find(
+      (p) =>
+        (entry.patientId && p.id === entry.patientId) ||
+        (cleanPhone && p.phone && p.phone.replace(/\D/g, '').slice(-8) === cleanPhone.slice(-8)) ||
+        (p.name.trim().toLowerCase() === entry.patientName.trim().toLowerCase())
+    );
+
+    if (foundPat) {
+      setSelectedPatientId(foundPat.id);
+      setNewApptName(foundPat.name);
+      setNewApptPhone(foundPat.phone);
+    } else {
+      setSelectedPatientId('');
+      setNewApptName(entry.patientName);
+      setNewApptPhone(entry.patientPhone);
+    }
+
+    if (entry.offeredSlot?.startTime) {
+      setNewApptTime(entry.offeredSlot.startTime.slice(0, 16));
+    } else {
+      let targetDate = entry.desiredDate;
+      if (!targetDate && entry.notes) {
+        const m = entry.notes.match(/Data desejada:\s*([0-9\-\/]+)/i) || entry.notes.match(/\[Data desejada:\s*([^\]]+)\]/i);
+        if (m) targetDate = m[1].trim();
+      }
+      if (targetDate) {
+        const parsed = parseBirthDate(targetDate);
+        if (parsed) {
+          const dStr = `${parsed.year}-${String(parsed.month).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+          const defaultHour = entry.preferredShift === 'Tarde' ? '14:00' : '09:00';
+          setNewApptTime(`${dStr}T${defaultHour}`);
+        } else {
+          setNewApptTime('');
+        }
+      } else {
+        setNewApptTime('');
+      }
+    }
+
+    const cleanNotes = getCleanWaitlistNotes(entry.notes, entry.desiredDate);
+    setNewApptNotes(cleanNotes ? `[Fila de Espera] ${cleanNotes}` : '[Fila de Espera]');
+    setShowModalNewAppt(true);
   }
 
   async function handleConfirmWaitlistBooking(id: string) {
@@ -2932,7 +3059,7 @@ export default function Dashboard() {
                             #{index + 1}
                           </div>
 
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-extrabold text-slate-900 text-sm">{entry.patientName}</span>
                               {isFirst && (
@@ -2945,7 +3072,7 @@ export default function Dashboard() {
                                   entry.status === 'AGUARDANDO'
                                     ? 'bg-sky-50 text-sky-800 border-sky-200'
                                     : entry.status === 'NOTIFICADO'
-                                    ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
                                     : entry.status === 'AGENDADO'
                                     ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                                     : 'bg-rose-50 text-rose-800 border-rose-200'
@@ -2958,41 +3085,89 @@ export default function Dashboard() {
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap font-medium">
+                            {/* Informações de contato e preferências organizadas sem conflitos */}
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap font-medium">
                               <span className="flex items-center gap-1 font-mono text-slate-700">
                                 <Phone className="w-3.5 h-3.5 text-slate-400" />
                                 {formatPhoneBR(entry.patientPhone)}
                               </span>
                               <span>•</span>
-                              <span>Turno: <strong>{entry.preferredShift}</strong></span>
+                              <span>Turno: <strong className="text-slate-700">{entry.preferredShift || 'Qualquer horário'}</strong></span>
                               <span>•</span>
-                              <span>Preferência: <strong>{entry.preferredDays || 'Qualquer dia'}</strong></span>
+                              {(() => {
+                                const pref = getWaitlistPreferenceDisplay(entry);
+                                return (
+                                  <span>
+                                    {pref.label}: <strong className="text-slate-800 font-bold">{pref.value}</strong>
+                                  </span>
+                                );
+                              })()}
                             </div>
 
-                            {entry.offeredSlot && (
-                              <div className="mt-2 p-2 rounded-xl bg-amber-100/70 border border-amber-300/80 text-xs text-amber-950 flex items-center gap-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                            {/* Painel de Horário Ofertado / Notificação WhatsApp */}
+                            {entry.offeredSlot ? (
+                              <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="w-4 h-4 text-amber-600 shrink-0" />
+                                  <span>
+                                    Horário Ofertado: <strong className="text-amber-900">{entry.offeredSlot.dateDisplay} às {entry.offeredSlot.timeDisplay}</strong>
+                                    {entry.notifiedAt && (
+                                      <span className="text-amber-700/80 ml-1.5 text-[11px]">
+                                        (enviado via WhatsApp em {formatDateTimeBR(entry.notifiedAt)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : entry.status === 'NOTIFICADO' ? (
+                              <div className="mt-2.5 p-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                                <MessageSquare className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                                 <span>
-                                  Horário Ofertado: <strong>{entry.offeredSlot.dateDisplay} às {entry.offeredSlot.timeDisplay}</strong>
+                                  Vaga oferecida via WhatsApp {entry.notifiedAt ? `em ${formatDateTimeBR(entry.notifiedAt)}` : ''} • Aguardando resposta do paciente
                                 </span>
                               </div>
-                            )}
+                            ) : null}
 
-                            {entry.notes && (
-                              <p className="text-[11px] text-slate-400 mt-1 italic">
-                                Obs: {entry.notes}
-                              </p>
-                            )}
+                            {/* Observações adicionais (sem duplicação redundante de data desejada) */}
+                            {(() => {
+                              const cleanNotes = getCleanWaitlistNotes(entry.notes, entry.desiredDate);
+                              return cleanNotes ? (
+                                <p className="text-[11px] text-slate-500 mt-2 italic bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                                  Obs: {cleanNotes}
+                                </p>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
 
                         {/* AÇÕES PARA CADA PACIENTE NA FILA */}
-                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap">
                           {entry.status === 'NOTIFICADO' && (
                             <>
+                              {entry.offeredSlot && (
+                                <button
+                                  onClick={() => handleConfirmWaitlistBooking(entry.id)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                  title="Confirmar o agendamento no horário ofertado"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Confirmar Vaga</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleScheduleFromWaitlist(entry)}
+                                className="px-3.5 py-1.5 rounded-xl bg-[#005a43] hover:bg-[#004735] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                title="Abrir agendamento de consulta para este paciente"
+                              >
+                                <CalendarPlus className="w-3.5 h-3.5" />
+                                <span>{entry.offeredSlot ? 'Outro Horário' : 'Agendar Consulta'}</span>
+                              </button>
+
                               <button
                                 onClick={() => handleDeclineWaitlist(entry.id)}
                                 className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-bold transition cursor-pointer"
+                                title="Registrar que o paciente recusou a vaga"
                               >
                                 Recusar
                               </button>
@@ -3000,29 +3175,40 @@ export default function Dashboard() {
                           )}
 
                           {entry.status === 'AGUARDANDO' && (
-                            <button
-                              onClick={() => {
-                                const nextSlot = prompt('Informe a data e horário para oferecer ao paciente (ex: 30/10/2026 14:00):');
-                                if (nextSlot) {
-                                  const parts = nextSlot.split(' ');
-                                  fetch('/api/waitlist', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      action: 'notify_vacated',
-                                      startTime: parts[0] && parts[1] ? `${parts[0]}T${parts[1]}:00` : new Date().toISOString(),
-                                    }),
-                                  }).then(() => {
-                                    fetchWaitlist();
-                                    setWaitlistNotice(`Vaga oferecida via WhatsApp para ${entry.patientName}!`);
-                                  });
-                                }
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
-                              <span>Oferecer Vaga WhatsApp</span>
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleScheduleFromWaitlist(entry)}
+                                className="px-3.5 py-1.5 rounded-xl bg-[#005a43] hover:bg-[#004735] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                title="Agendar consulta direta para o paciente"
+                              >
+                                <CalendarPlus className="w-3.5 h-3.5" />
+                                <span>Agendar</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  const nextSlot = prompt('Informe a data e horário para oferecer ao paciente (ex: 30/10/2026 14:00):');
+                                  if (nextSlot) {
+                                    const parts = nextSlot.split(' ');
+                                    fetch('/api/waitlist', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        action: 'notify_vacated',
+                                        startTime: parts[0] && parts[1] ? `${parts[0]}T${parts[1]}:00` : new Date().toISOString(),
+                                      }),
+                                    }).then(() => {
+                                      fetchWaitlist();
+                                      setWaitlistNotice(`Vaga oferecida via WhatsApp para ${entry.patientName}!`);
+                                    });
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                                <span>Oferecer Vaga WhatsApp</span>
+                              </button>
+                            </>
                           )}
 
                           <button

@@ -1321,9 +1321,15 @@ export async function adicionarFilaEspera(
     if (turnoPreferido?.toLowerCase().includes('manh')) shift = 'Manhã';
     else if (turnoPreferido?.toLowerCase().includes('tard')) shift = 'Tarde';
 
+    let dataDesejadaFormatada = dataDesejada ? dataDesejada.trim() : '';
+    const isoMatch = dataDesejadaFormatada.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      dataDesejadaFormatada = `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
+    }
+
     let noteExtra = 'Adicionado pelo Secretário Virtual IA';
-    if (dataDesejada) {
-      noteExtra = `Data desejada: ${dataDesejada.trim()} | Turno: ${shift}`;
+    if (dataDesejadaFormatada) {
+      noteExtra = `Data desejada: ${dataDesejadaFormatada} | Turno: ${shift}`;
     }
 
     const entry = await addToWaitlist({
@@ -1331,13 +1337,13 @@ export async function adicionarFilaEspera(
       patientName: pacienteNome || patient?.name || 'Paciente',
       patientPhone: telefonePaciente,
       preferredShift: shift,
-      preferredDays: diasPreferidos || 'Qualquer dia útil',
-      desiredDate: dataDesejada ? dataDesejada.trim() : undefined,
+      preferredDays: diasPreferidos || (dataDesejadaFormatada ? `Data desejada: ${dataDesejadaFormatada}` : 'Qualquer dia útil'),
+      desiredDate: dataDesejadaFormatada || undefined,
       notes: noteExtra,
     });
 
-    const confirmComplemento = dataDesejada
-      ? ` para o período em torno de ${dataDesejada}`
+    const confirmComplemento = dataDesejadaFormatada
+      ? ` para o período em torno de ${dataDesejadaFormatada}`
       : '';
 
     return {
