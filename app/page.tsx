@@ -2894,15 +2894,6 @@ export default function Dashboard() {
                   </button>
 
                   <button
-                    onClick={handleTriggerWaitlistTest}
-                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                    title="Simula a liberação de um horário e dispara mensagem automática via WhatsApp para o 1º da fila"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Testar Disparo para o 1º da Fila</span>
-                  </button>
-
-                  <button
                     onClick={() => setShowHelpWaitlistModal(true)}
                     className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
                     title="Entenda o fluxo da Fila de Espera"

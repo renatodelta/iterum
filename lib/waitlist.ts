@@ -140,6 +140,38 @@ export async function loadWaitlist(): Promise<WaitlistEntry[]> {
             offeredSlot: r.offeredSlot ? (typeof r.offeredSlot === 'string' ? JSON.parse(r.offeredSlot) : r.offeredSlot) : null,
           };
         });
+
+        // Auto-recuperação: se houver entrada NOTIFICADO que já possua consulta confirmada no horário ofertado, evoluir para AGENDADO
+        for (const item of mapped) {
+          if (item.status === 'NOTIFICADO' && item.offeredSlot?.startTime) {
+            try {
+              const slotTime = new Date(item.offeredSlot.startTime);
+              const cleanP = item.patientPhone.split('-')[0].replace(/\D/g, '').slice(-8);
+              const existingAppt = await prisma.appointment.findFirst({
+                where: {
+                  status: { notIn: ['CANCELADO', 'CANCELED'] },
+                  startTime: slotTime,
+                  OR: [
+                    ...(item.patientId ? [{ patientId: item.patientId }] : []),
+                    { patient: { name: { equals: item.patientName.trim(), mode: 'insensitive' } } },
+                    ...(cleanP ? [{ patient: { phone: { contains: cleanP } } }] : []),
+                  ],
+                },
+              });
+              if (existingAppt) {
+                await pAny.waitlist.update({
+                  where: { id: item.id },
+                  data: { status: 'AGENDADO' },
+                });
+                item.status = 'AGENDADO';
+                console.log(`✨ [Waitlist Auto-Heal] Card de ${item.patientName} evoluído para AGENDADO devido a consulta confirmada.`);
+              }
+            } catch (autoErr) {
+              // Silencioso
+            }
+          }
+        }
+
         inMemoryWaitlist = mapped;
         saveWaitlist(mapped);
         return mapped;
@@ -476,8 +508,8 @@ export async function notifyFirstInWaitlistForVacatedSlot(vacatedSlot: {
     timeDisplay,
   };
 
-  // Mensagem WhatsApp para o paciente da fila
-  const messageText = `Olá ${patient.patientName}! Um horário acaba de ser liberado com ${doctorName}:\n\n📅 Data: *${dateDisplay}* (${weekDayDisplay})\n⏰ Horário: *${timeDisplay}*\n\nComo você está na nossa *Fila de Espera*, este horário foi reservado com prioridade para você!\n\nVocê tem interesse em agendar neste horário?\n\n[1] SIM, tenho interesse\n[2] NÃO tenho interesse`;
+  // Mensagem WhatsApp para o paciente da fila (elegante, humanizada, com botões nativos)
+  const messageText = `Olá ${patient.patientName}! Um horário acaba de ser liberado com ${doctorName}:\n\n📅 Data: *${dateDisplay}* (${weekDayDisplay})\n⏰ Horário: *${timeDisplay}*\n\nComo você está na nossa *Fila de Espera*, este horário foi reservado com prioridade para você!\n\nVocê tem interesse em agendar neste horário?`;
 
   console.log(`🚀 [Fila de Espera] Contactando 1º da fila (${patient.patientName} - ${patient.patientPhone}) para o horário vago de ${dateDisplay} às ${timeDisplay}`);
 
@@ -573,16 +605,34 @@ export async function confirmWaitlistBooking(
       return { success: false, message: 'Clínica não encontrada no sistema.' };
     }
 
-    // Buscar ou criar o paciente no banco
-    const phoneToSearch = entry?.patientPhone || waitlistId;
-    let patient = await prisma.patient.findFirst({
-      where: {
-        clinicId: clinic.id,
-        phone: { contains: phoneToSearch.replace(/\D/g, '').slice(-8) },
-      },
-    });
+    // Buscar ou criar o paciente no banco priorizando o paciente real da fila
+    let patient = null;
+    if (entry?.patientId) {
+      patient = await prisma.patient.findUnique({ where: { id: entry.patientId } });
+    }
+    if (!patient && entry?.patientName) {
+      patient = await prisma.patient.findFirst({
+        where: {
+          clinicId: clinic.id,
+          name: { equals: entry.patientName.trim(), mode: 'insensitive' },
+        },
+      });
+    }
+    if (!patient) {
+      const phoneToSearch = entry?.patientPhone || waitlistId;
+      const cleanP = phoneToSearch.split('-')[0].replace(/\D/g, '').slice(-8);
+      if (cleanP) {
+        patient = await prisma.patient.findFirst({
+          where: {
+            clinicId: clinic.id,
+            phone: { contains: cleanP },
+          },
+        });
+      }
+    }
 
     if (!patient) {
+      const phoneToSearch = entry?.patientPhone || waitlistId;
       patient = await prisma.patient.create({
         data: {
           clinicId: clinic.id,
