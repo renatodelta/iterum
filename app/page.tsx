@@ -3364,6 +3364,270 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
+              ABA: AÇÕES DA AUTOMAÇÃO
+          --------------------------------------------------------------------- */}
+          {activeTab === 'automacao' && (
+            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
+              {/* CABEÇALHO */}
+              <div className="pb-3.5 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-emerald-600" />
+                      Ações da Automação
+                    </h2>
+                    <span className="flex items-center gap-1.5 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Ao Vivo
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Histórico de agendamentos, desmarcações, confirmações de presença e acionamentos da Fila de Espera executados pela Sofia.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchAutomationLogs()}
+                    disabled={loadingAutomationLogs}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+                    title="Atualizar histórico"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAutomationLogs ? 'animate-spin' : ''}`} />
+                    <span>Atualizar</span>
+                  </button>
+
+                  <button
+                    onClick={handleClearAutomationLogs}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+                    title="Limpar todos os registros de histórico"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Limpar Histórico</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CARDS DE ESTATÍSTICAS / MÉTRICAS RÁPIDAS */}
+              <div className="my-4 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total de Ações</div>
+                  <div className="text-2xl font-black text-slate-900">{automationLogs.length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Eventos registrados</div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80">
+                  <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider mb-1">Agendamentos & Encaixes</div>
+                  <div className="text-2xl font-black text-emerald-700">
+                    {automationLogs.filter((l) => l.type === 'AGENDAMENTO' || l.type === 'FILA_RECUPERADA').length}
+                  </div>
+                  <div className="text-[11px] text-emerald-600/80 mt-0.5">Horários preenchidos</div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200/80">
+                  <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider mb-1">Desmarcações</div>
+                  <div className="text-2xl font-black text-rose-700">
+                    {automationLogs.filter((l) => l.type === 'CANCELAMENTO').length}
+                  </div>
+                  <div className="text-[11px] text-rose-600/80 mt-0.5">Vagas liberadas para a fila</div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80">
+                  <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Fila de Espera</div>
+                  <div className="text-2xl font-black text-amber-700">
+                    {automationLogs.filter((l) => l.type.startsWith('FILA_')).length}
+                  </div>
+                  <div className="text-[11px] text-amber-600/80 mt-0.5">Acionamentos e recuperações</div>
+                </div>
+              </div>
+
+              {/* BARRA DE PESQUISA E FILTROS RÁPIDOS */}
+              <div className="mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={logsSearch}
+                    onChange={(e) => setLogsSearch(e.target.value)}
+                    placeholder="Buscar por paciente, telefone, CPF ou detalhe..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43]"
+                  />
+                  {logsSearch && (
+                    <button
+                      onClick={() => setLogsSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+                  {[
+                    { id: 'TODOS', label: 'Todos' },
+                    { id: 'AGENDAMENTO', label: 'Agendamentos' },
+                    { id: 'CANCELAMENTO', label: 'Desmarcações' },
+                    { id: 'FILA', label: 'Fila de Espera' },
+                    { id: 'CONFIRMACAO_PRESENCA', label: 'Confirmações D-1' },
+                    { id: 'REMARCACAO', label: 'Remarcações' },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setLogsFilterType(f.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                        logsFilterType === f.id
+                          ? 'bg-[#005a43] text-white shadow-2xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* FEED DE EVENTOS DA AUTOMAÇÃO */}
+              <div className="space-y-3">
+                {automationLogs
+                  .filter((log) => {
+                    if (logsFilterType === 'AGENDAMENTO' && log.type !== 'AGENDAMENTO') return false;
+                    if (logsFilterType === 'CANCELAMENTO' && log.type !== 'CANCELAMENTO') return false;
+                    if (logsFilterType === 'FILA' && !log.type.startsWith('FILA_')) return false;
+                    if (logsFilterType === 'CONFIRMACAO_PRESENCA' && log.type !== 'CONFIRMACAO_PRESENCA') return false;
+                    if (logsFilterType === 'REMARCACAO' && log.type !== 'REMARCACAO') return false;
+                    if (logsSearch) {
+                      const q = logsSearch.toLowerCase();
+                      return (
+                        log.patientName?.toLowerCase().includes(q) ||
+                        log.patientPhone?.includes(q) ||
+                        log.patientCpf?.includes(q) ||
+                        log.description?.toLowerCase().includes(q) ||
+                        log.title?.toLowerCase().includes(q)
+                      );
+                    }
+                    return true;
+                  })
+                  .map((log) => {
+                    const isAgendamento = log.type === 'AGENDAMENTO' || log.type === 'FILA_RECUPERADA';
+                    const isCancelamento = log.type === 'CANCELAMENTO';
+                    const isFila = log.type.startsWith('FILA_');
+                    const isPresenca = log.type === 'CONFIRMACAO_PRESENCA';
+                    const isRemarcacao = log.type === 'REMARCACAO';
+
+                    return (
+                      <div
+                        key={log.id}
+                        className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-150 flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                          isCancelamento
+                            ? 'bg-rose-50/30 border-rose-200/80 hover:border-rose-300'
+                            : isAgendamento
+                            ? 'bg-emerald-50/30 border-emerald-200/80 hover:border-emerald-300'
+                            : isFila
+                            ? 'bg-amber-50/30 border-amber-200/80 hover:border-amber-300'
+                            : isPresenca
+                            ? 'bg-sky-50/30 border-sky-200/80 hover:border-sky-300'
+                            : 'bg-purple-50/30 border-purple-200/80 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {/* ÍCONE DE TIPO */}
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                              isCancelamento
+                                ? 'bg-rose-500 text-white'
+                                : isAgendamento
+                                ? 'bg-emerald-600 text-white'
+                                : isFila
+                                ? 'bg-amber-500 text-white'
+                                : isPresenca
+                                ? 'bg-sky-600 text-white'
+                                : 'bg-purple-600 text-white'
+                            }`}
+                          >
+                            {isCancelamento && <CalendarX className="w-4 h-4" />}
+                            {isAgendamento && <CalendarPlus className="w-4 h-4" />}
+                            {isFila && <Bell className="w-4 h-4" />}
+                            {isPresenca && <CheckCircle2 className="w-4 h-4" />}
+                            {isRemarcacao && <RefreshCw className="w-4 h-4" />}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="font-extrabold text-slate-900 text-sm">{log.patientName}</span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  isCancelamento
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                    : isAgendamento
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : isFila
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                    : isPresenca
+                                    ? 'bg-sky-100 text-sky-800 border-sky-300'
+                                    : 'bg-purple-100 text-purple-800 border-purple-300'
+                                }`}
+                              >
+                                {log.title}
+                              </span>
+
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                {log.origin === 'WHATSAPP_SOFIA' ? 'WhatsApp Sofia' : log.origin === 'FILA_ESPERA' ? 'Fila de Espera' : 'Sistema'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-700 font-medium leading-relaxed mb-1.5">
+                              {log.description}
+                            </p>
+
+                            <div className="flex items-center gap-3 text-xs text-slate-500 font-medium flex-wrap">
+                              {log.patientPhone && (
+                                <span className="flex items-center gap-1 font-mono text-slate-600">
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  {formatPhoneBR(log.patientPhone)}
+                                </span>
+                              )}
+                              {log.patientCpf && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono text-slate-600">CPF: {log.patientCpf}</span>
+                                </>
+                              )}
+                              {log.appointmentDate && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-800 font-semibold">
+                                    {log.appointmentDate} {log.slotTime ? `às ${log.slotTime}` : ''}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* DATA E HORA DO REGISTRO */}
+                        <div className="text-right shrink-0 self-end md:self-center">
+                          <span className="text-[11px] font-bold text-slate-400 block">
+                            {formatDateTimeBR(log.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {automationLogs.length === 0 && !loadingAutomationLogs && (
+                  <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <Activity className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-slate-700">Nenhuma ação registrada até o momento</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      Assim que a Sofia realizar agendamentos, desmarcações ou acionar a Fila de Espera no WhatsApp, todas as atividades aparecerão aqui em tempo real.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------------------
               ABA: USUÁRIOS & PERMISSÕES DE ACESSO (PERFIL ÚNICO DO MÉDICO)
           --------------------------------------------------------------------- */}
           {activeTab === 'users' && (
