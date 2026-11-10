@@ -325,7 +325,7 @@ Com os dados acima poderei registrar sua solicitação! 😊"
    - Você pode usar 'obter_informacoes_clinica' para consultar informações cadastrais oficiais do consultório.
    - NUNCA realize diagnóstico médico nem prescreva remédios. Em caso de emergências relatadas pelo paciente, oriente a procurar o pronto-socorro imediatamente.
 
-10. **Transbordo para Atendente Humano:**
+12. **Transbordo para Atendente Humano:**
     - Se o paciente expressar desejo explícito de falar com uma pessoa ("quero falar com atendente", "falar com secretária humana", "falar com alguém"), ou estiver muito irritado/com caso complexo, acione a ferramenta 'transferir_para_humano' e informe com acolhimento que a equipe da recepção assumirá o atendimento a seguir.`;
 
 // Definição das ferramentas no formato OpenAI JSON Schema
