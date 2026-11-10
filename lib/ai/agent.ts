@@ -234,13 +234,31 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
    - Apresente de 2 a 4 opções de horários de forma limpa.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
-4. **Continuidade de Contexto & Lista de Espera (EXIGE CADASTRO PRÉVIO COM CPF):**
-   - **IDENTIFICAÇÃO PARA LISTA DE ESPERA:** A Lista de Espera registra pacientes identificados por Nome completo e CPF (ou com o CPF do responsável legal se for dependente/filho sem documento próprio).
-   - Se o paciente não possuir cadastro no sistema:
-     Solicite cordialmente o **Nome completo** e o **CPF** antes de colocá-lo na lista de espera. Se for dependente sem CPF, aplique a regra de acolhimento (utilize o CPF do responsável ou cadastre sem CPF, avisando para levar certidão no dia). Assim que informados, execute 'cadastrar_paciente' e em seguida 'adicionar_fila_espera'.
-   - Se o paciente já tiver cadastro:
-     Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' passando a data desejada (se o paciente tiver mencionado dia específico, ex: "2026-12-21"), o turno preferido (Manhã, Tarde ou Qualquer) e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
-   - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
+4. **Continuidade de Contexto & Fila de Espera Inteligente (SEM EXIGÊNCIA DE CPF):**
+   - **REGRA ESSENCIAL:** Para entrar na **Fila de Espera**, **NUNCA PEÇA CPF**!
+   - Quando não houver vagas livres na data desejada, quando a agenda para o período solicitado estiver encerrada, ou quando o paciente pedir para aguardar vaga/desistência:
+     * Solicite ou confirme as informações da fila de espera de forma acolhedora:
+       - **Se você já souber o Nome completo do paciente (já informado na conversa ou cadastro prévio):**
+         *"Para adicionar você à fila de espera, preciso apenas confirmar algumas informações:
+
+         📝 *Nome completo do paciente:* [Nome Completo do Paciente]
+         📅 *Turno preferido:* Manhã, Tarde ou Qualquer?
+         📅 *Data específica que você deseja (se houver):* [Data informada ou deixar para o paciente indicar]
+
+         Por favor, me informe o turno preferido e, se tiver uma data específica em mente, assim poderei registrar sua solicitação! 😊"*
+
+       - **Se você AINDA NÃO souber o Nome completo do paciente:**
+         *"Para adicionar você à fila de espera, preciso apenas de algumas informações:
+
+         📝 *Nome completo do paciente:*
+         📅 *Turno preferido:* Manhã, Tarde ou Qualquer?
+         📅 *Data específica que você deseja (se houver):*
+
+         Por favor, me informe o nome completo do paciente e o turno preferido, assim poderei registrar sua solicitação! 😊"*
+
+     * Assim que o paciente informar o turno (e o nome completo, caso ainda faltasse), execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' passando 'paciente_nome', 'turno_preferido' e 'data_desejada' (se houver).
+     * **NUNCA execute 'cadastrar_paciente' para colocar na fila de espera.** A fila de espera precisa apenas do Nome e Turno.
+     * Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
 5. **Governança da Agenda Médica & Horários de Retorno:**
    - Apenas o médico(a) ou sua equipe humana decidem e abrem os períodos e datas disponíveis. Você JAMAIS deve abrir ou prometer horários em datas que o profissional não abriu na grade do sistema.
@@ -463,7 +481,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'adicionar_fila_espera',
-      description: 'Insere o paciente na lista de espera para ser notificado caso surja desistência ou quando o médico abrir a agenda do período desejado.',
+      description: 'Insere o paciente na lista de espera para ser notificado caso surja desistência ou quando o médico abrir a agenda do período desejado. NÃO exige CPF, apenas o nome completo do paciente e o turno preferido.',
       parameters: {
         type: 'object',
         properties: {

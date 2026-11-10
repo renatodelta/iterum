@@ -188,6 +188,30 @@ export async function findPatientByPhone(telefone: string, clinicId?: string) {
 }
 
 /**
+ * Formata o honorífico médico (Dr. ou Dra.) de forma natural e elegante, eliminando a forma genérica 'Dr(a).'
+ */
+export function formatDoctorHonorific(name?: string | null): string {
+  if (!name || name === 'médico' || name === 'médico(a)') return 'médico(a)';
+  const trimmed = name.trim();
+  if (/^dr\b/i.test(trimmed) || /^dra\b/i.test(trimmed)) {
+    return trimmed;
+  }
+  const firstName = trimmed.split(' ')[0].toLowerCase();
+  const commonFemaleNames = [
+    'silvia', 'mariana', 'helena', 'carolina', 'patricia', 'juliana', 'aline', 'camila',
+    'beatriz', 'fernanda', 'amanda', 'larissa', 'marina', 'leticia', 'gabriela', 'paula',
+    'luisa', 'luiza', 'claudia', 'ana', 'maria', 'renata', 'monica', 'daniela', 'debora',
+    'vanessa', 'tatiana', 'elizabeth', 'adriana', 'cristina', 'bianca', 'roberta'
+  ];
+  const femaleEndings = ['a', 'ia', 'is', 'ne', 'le', 'te', 'ce'];
+  const maleExceptions = ['lucas', 'matias', 'alexandre', 'jorge', 'andre', 'felipe', 'guilherme', 'vicente'];
+  const isFemale = commonFemaleNames.includes(firstName) ||
+    (femaleEndings.some((end) => firstName.endsWith(end)) && !maleExceptions.includes(firstName));
+
+  return isFemale ? `Dra. ${trimmed}` : `Dr. ${trimmed}`;
+}
+
+/**
  * SEGURANÇA E PRIVACIDADE (LGPD):
  * Verifica se o paciente alvo é o próprio solicitante OU um dependente diretamente vinculado a ele.
  * Garante que apenas o paciente ou o responsável de seus dependentes possam consultar ou desmarcar consultas.
@@ -526,7 +550,7 @@ export async function buscarHorariosDisponiveis(
 
     // Dados profissionais para comunicação humanizada e acolhedora
     const rawDocName = clinic.doctorName || clinic.name || '';
-    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const formattedDocName = formatDoctorHonorific(rawDocName);
     const docSpecialty = clinic.specialty ? ` (${clinic.specialty})` : '';
     const docDisplayName = `${formattedDocName}${docSpecialty}`;
 
@@ -535,7 +559,7 @@ export async function buscarHorariosDisponiveis(
     if (!scheduleStartDate || !scheduleEndDate || selectedDaysList.length === 0) {
       return {
         success: true,
-        message: `A agenda de consultas do(a) ${docDisplayName} ainda não foi aberta para este período. Gostaria de entrar na lista de espera para ser avisado(a) assim que o(a) ${formattedDocName} liberar novas datas e horários?`,
+        message: `A agenda de consultas da ${docDisplayName} ainda não foi aberta para este período. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir novas vagas na grade?`,
         data: { slots: [] },
       };
     }
@@ -544,7 +568,7 @@ export async function buscarHorariosDisponiveis(
       const [sy, sm, sd] = scheduleStartDate.split('-');
       return {
         success: true,
-        message: `A agenda de atendimentos do(a) ${docDisplayName} para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade.`,
+        message: `A agenda de atendimentos da ${docDisplayName} para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade. Posso colocar você na nossa lista de espera prioritária para avisarmos assim que novas vagas forem liberadas?`,
         data: { slots: [] },
       };
     }
@@ -555,7 +579,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `O período de agendamentos aberto pelo(a) ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pelo(a) ${formattedDocName} no sistema. Gostaria de entrar na lista de espera para ser avisado(a) assim que novas vagas forem liberadas?`,
+          message: `O período de agendamentos aberto pela ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pela ${formattedDocName} no sistema. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que novas vagas forem abertas pelo consultório?`,
           data: { slots: [] },
         };
       }
@@ -565,7 +589,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `A agenda de atendimentos do(a) ${docDisplayName} para este período está aberta até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas na grade pelo(a) ${formattedDocName}. Se desejar, posso adicionar você à nossa lista de espera prioritária para ser notificado(a) assim que novas datas forem abertas!`,
+          message: `A agenda de atendimentos da ${docDisplayName} para este período está aberta até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas na grade pela ${formattedDocName}. Posso adicionar você à nossa lista de espera prioritária para avisarmos assim que novas datas forem abertas pelo consultório?`,
           data: { slots: [] },
         };
       }
@@ -1647,13 +1671,19 @@ export async function adicionarFilaEspera(
 
     const patient = await findPatientByPhone(telefonePaciente, targetClinicId);
 
-    // REGRA DE SEGURANÇA: Só pode adicionar na fila de espera pacientes com cadastro prévio e CPF
-    const hasCpf = patient?.cpf && patient.cpf.replace(/\D/g, '').length >= 11;
-    if (!patient || !hasCpf) {
+    const cleanPacienteNome = (pacienteNome || '').trim();
+    const finalPatientName =
+      cleanPacienteNome && cleanPacienteNome !== 'Paciente' && cleanPacienteNome !== 'Titular WhatsApp'
+        ? cleanPacienteNome
+        : patient?.name && patient.name !== 'Paciente' && patient.name !== 'Titular WhatsApp'
+          ? patient.name
+          : '';
+
+    if (!finalPatientName) {
       return {
         success: false,
-        message: `Para incluir você na nossa Lista de Espera prioritária, precisamos primeiro cadastrar seu Nome completo e CPF no consultório. Por favor, confirme seu Nome completo e o número do seu CPF.`,
-        data: { needsRegistration: true },
+        message: `Para incluir na lista de espera, precisamos do nome completo do paciente e do turno preferido (Manhã, Tarde ou Qualquer).`,
+        data: { needsName: true },
       };
     }
 
@@ -1674,7 +1704,7 @@ export async function adicionarFilaEspera(
 
     const entry = await addToWaitlist({
       patientId: patient?.id,
-      patientName: pacienteNome || patient?.name || 'Paciente',
+      patientName: finalPatientName,
       patientPhone: telefonePaciente,
       preferredShift: shift,
       preferredDays: diasPreferidos || (dataDesejadaFormatada ? `Data desejada: ${dataDesejadaFormatada}` : 'Qualquer dia útil'),
