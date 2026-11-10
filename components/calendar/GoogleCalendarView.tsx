@@ -29,6 +29,10 @@ import {
   Sparkles,
   Activity,
   Stethoscope,
+  CalendarX,
+  Trash2,
+  AlertTriangle,
+  Ban,
 } from 'lucide-react';
 
 export type AgendaViewMode = 'dia' | '3dias' | 'semana' | 'mes';
@@ -139,6 +143,87 @@ export default function GoogleCalendarView({
   const [menuMoreOpen, setMenuMoreOpen] = useState(false);
   const [filterVagosOnly, setFilterVagosOnly] = useState(false);
   const [filterBookedOnly, setFilterBookedOnly] = useState(false);
+
+  // Estados de Bloqueio Rápido de Horários / Folgas / Feriados
+  const [blockedDates, setBlockedDates] = useState<Array<{ date: string; shift?: 'ALL' | 'MANHA' | 'TARDE'; reason?: string }>>([]);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockDateInput, setBlockDateInput] = useState('');
+  const [blockShiftInput, setBlockShiftInput] = useState<'ALL' | 'MANHA' | 'TARDE'>('ALL');
+  const [blockReasonInput, setBlockReasonInput] = useState('');
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [deletingBlockDate, setDeletingBlockDate] = useState<string | null>(null);
+
+  // Sincronizar bloqueios da clínica e carregar via API
+  const fetchBlockedDates = async () => {
+    try {
+      const res = await fetch('/api/clinic/blocked-dates', { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.blockedDates)) {
+        setBlockedDates(data.blockedDates);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    fetchBlockedDates();
+  }, []);
+
+  const handleOpenBlockModal = (targetDate?: Date) => {
+    const d = targetDate || selectedDate;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setBlockDateInput(`${y}-${m}-${day}`);
+    setBlockShiftInput('ALL');
+    setBlockReasonInput('');
+    setShowBlockModal(true);
+  };
+
+  const handleSaveBlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blockDateInput) return;
+    try {
+      setSavingBlock(true);
+      const res = await fetch('/api/clinic/blocked-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: blockDateInput,
+          shift: blockShiftInput,
+          reason: blockReasonInput || 'Compromisso / Folga',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.blockedDates)) {
+        setBlockedDates(data.blockedDates);
+        setShowBlockModal(false);
+      } else {
+        alert(data.error || 'Erro ao salvar bloqueio.');
+      }
+    } catch (err: any) {
+      alert(`Erro ao bloquear: ${err.message}`);
+    } finally {
+      setSavingBlock(false);
+    }
+  };
+
+  const handleDeleteBlock = async (date: string, shift?: string) => {
+    if (!confirm(`Deseja remover o bloqueio para a data ${date}?`)) return;
+    try {
+      setDeletingBlockDate(date);
+      const res = await fetch(`/api/clinic/blocked-dates?date=${date}&shift=${shift || ''}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.blockedDates)) {
+        setBlockedDates(data.blockedDates);
+      }
+    } catch (err: any) {
+      alert(`Erro ao remover bloqueio: ${err.message}`);
+    } finally {
+      setDeletingBlockDate(null);
+    }
+  };
 
   // Mês de navegação do calendário
   const [viewMonthDate, setViewMonthDate] = useState<Date>(() => new Date(selectedDate));
@@ -766,6 +851,16 @@ export default function GoogleCalendarView({
             <Settings className="w-5 h-5 text-[#5f6368]" />
           </button>
 
+          {/* BOTÃO BLOQUEAR DIA / TURNO */}
+          <button
+            onClick={() => handleOpenBlockModal(selectedDate)}
+            className="px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100/80 text-rose-700 font-semibold text-xs transition tracking-normal shadow-2xs flex items-center gap-1.5 active:scale-95"
+            title="Bloquear dia avulso ou turno (folga, feriado, congresso) - Dê 2 cliques em qualquer dia para bloquear"
+          >
+            <CalendarX className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+            <span className="hidden sm:inline">Bloquear Dia</span>
+          </button>
+
           {/* SELETOR DE VISUALIZAÇÃO ESTILO GOOGLE AGENDA (Mês v, Semana, Dia) */}
           <div className="relative">
             <button
@@ -1010,6 +1105,8 @@ export default function GoogleCalendarView({
               {monthGridDays.map((cell, idx) => {
                 const isCurToday = isToday(cell.date);
                 const { bookedCount, vacantCount, encaixeCount } = cell.slotsInfo;
+                const cellIso = `${cell.date.getFullYear()}-${String(cell.date.getMonth() + 1).padStart(2, '0')}-${String(cell.date.getDate()).padStart(2, '0')}`;
+                const dateBlock = blockedDates.find((b) => b.date === cellIso);
 
                 return (
                   <button
@@ -1018,8 +1115,17 @@ export default function GoogleCalendarView({
                       setSelectedDate(cell.date);
                       setAgendaViewMode('dia'); // Ao clicar no dia do mês, abre o dia!
                     }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenBlockModal(cell.date);
+                    }}
+                    title={dateBlock ? `Bloqueado: ${dateBlock.reason || 'Compromisso'} (Clique duplo para gerenciar)` : 'Clique duplo para bloquear este dia'}
                     className={`min-h-[70px] sm:min-h-[95px] p-1 pt-1.5 flex flex-col items-center text-center transition-colors relative hover:bg-slate-50/60 active:bg-blue-50/30 ${
-                      !cell.inCurrentMonth ? 'bg-slate-50/30' : 'bg-white'
+                      dateBlock
+                        ? 'bg-rose-50/40 border border-rose-200/50'
+                        : !cell.inCurrentMonth
+                        ? 'bg-slate-50/30'
+                        : 'bg-white'
                     }`}
                   >
                     {/* NÚMERO DO DIA */}
@@ -1036,6 +1142,17 @@ export default function GoogleCalendarView({
                         {cell.dayNumber}
                       </span>
                     </div>
+
+                    {/* SINALIZAÇÃO DE BLOQUEIO */}
+                    {dateBlock && (
+                      <span
+                        className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-extrabold mb-1 truncate max-w-[92%] flex items-center gap-0.5 border border-rose-200"
+                        title={`Bloqueado: ${dateBlock.reason || 'Folga / Feriado'} (${dateBlock.shift === 'MANHA' ? 'Manhã' : dateBlock.shift === 'TARDE' ? 'Tarde' : 'Dia todo'})`}
+                      >
+                        <Ban className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                        <span className="truncate">{dateBlock.shift === 'MANHA' ? 'Manhã Bloq.' : dateBlock.shift === 'TARDE' ? 'Tarde Bloq.' : (dateBlock.reason || 'Bloqueado')}</span>
+                      </span>
+                    )}
 
                     {/* SINALIZAÇÃO POR CORES EM BOLINHA COM O NÚMERO (SEM TEXTO) */}
                     <div className="flex items-center justify-center gap-1 mt-0.5 flex-wrap">
@@ -1703,6 +1820,152 @@ export default function GoogleCalendarView({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE BLOQUEIO RÁPIDO DE HORÁRIOS / FOLGAS / FERIADOS */}
+      {showBlockModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 backdrop-blur-2xs animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 to-amber-50/50 border-b border-rose-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                  <CalendarX className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
+                    Bloqueio Rápido de Agenda
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Folgas avulsas, congressos, feriados e procedimentos
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBlockModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-white/80 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBlock} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-left">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Data a ser bloqueada
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={blockDateInput}
+                  onChange={(e) => setBlockDateInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Período do Bloqueio
+                </label>
+                <div className="grid grid-cols-3 gap-2 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setBlockShiftInput('ALL')}
+                    className={`py-2 px-2 rounded-xl border transition ${
+                      blockShiftInput === 'ALL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Dia Inteiro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlockShiftInput('MANHA')}
+                    className={`py-2 px-2 rounded-xl border transition ${
+                      blockShiftInput === 'MANHA'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Apenas Manhã
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBlockShiftInput('TARDE')}
+                    className={`py-2 px-2 rounded-xl border transition ${
+                      blockShiftInput === 'TARDE'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Apenas Tarde
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Motivo / Justificativa (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Congresso Médico, Feriado Municipal, Procedimento cirúrgico..."
+                  value={blockReasonInput}
+                  onChange={(e) => setBlockReasonInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  A Sofia informará gentilmente o motivo do bloqueio aos pacientes no WhatsApp.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingBlock}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <CalendarX className="w-4 h-4" />
+                <span>{savingBlock ? 'Salvando bloqueio...' : 'Confirmar Bloqueio'}</span>
+              </button>
+
+              {/* LISTA DE BLOQUEIOS ATIVOS */}
+              {blockedDates.length > 0 && (
+                <div className="pt-3 border-t border-slate-100">
+                  <span className="text-xs font-bold text-slate-700 block mb-2">
+                    Bloqueios Cadastrados ({blockedDates.length}):
+                  </span>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {blockedDates.map((b, bIdx) => (
+                      <div
+                        key={bIdx}
+                        className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800">
+                            {b.date.split('-').reverse().join('/')} •{' '}
+                            <span className="text-rose-700">
+                              {b.shift === 'MANHA' ? 'Manhã' : b.shift === 'TARDE' ? 'Tarde' : 'Dia todo'}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate">{b.reason || 'Compromisso / Folga'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={deletingBlockDate === b.date}
+                          onClick={() => handleDeleteBlock(b.date, b.shift)}
+                          className="p-1 text-slate-400 hover:text-rose-600 transition"
+                          title="Remover este bloqueio"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </form>
           </div>
         </div>
       )}

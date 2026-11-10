@@ -598,6 +598,18 @@ export async function buscarHorariosDisponiveis(
       }
     }
 
+    // BLOQUEIO RÁPIDO DE HORÁRIOS / FOLGAS / FERIADOS / CONGRESSOS
+    const blockedDates: any[] = Array.isArray(metaAgenda.blockedDates) ? metaAgenda.blockedDates : [];
+    const dateBlock = blockedDates.find((b: any) => b.date === cleanDateStr);
+    if (dateBlock && (dateBlock.shift === 'ALL' || !dateBlock.shift)) {
+      const [by, bm, bd] = cleanDateStr.split('-');
+      return {
+        success: true,
+        message: `Nesta data (${bd}/${bm}/${by}), o(a) ${formattedDocName} não realizará atendimentos devido a: ${dateBlock.reason || 'bloqueio na agenda / compromisso profissional'}. Gostaria de verificar outro dia ou entrar na nossa lista de espera prioritária?`,
+        data: { slots: [], isBlocked: true, blockReason: dateBlock.reason },
+      };
+    }
+
     // Determinar dias da semana atendidos: prioriza metaAgenda.selectedDays se houver, ou os dias com active: true em workingHoursConfig
     let activeDays: string[] = Array.isArray(selectedDaysList) ? selectedDaysList.map(String) : [];
     if (!activeDays || activeDays.length === 0) {
@@ -702,6 +714,15 @@ export async function buscarHorariosDisponiveis(
     const slots: string[] = [];
 
     while (curMinutes < endMinutes) {
+      // Bloqueio por turno específico cadastrado pelo médico
+      if (dateBlock && dateBlock.shift === 'MANHA' && curMinutes < 12 * 60) {
+        curMinutes += 15;
+        continue;
+      }
+      if (dateBlock && dateBlock.shift === 'TARDE' && curMinutes >= 12 * 60) {
+        break;
+      }
+
       // Pular intervalo se dentro do almoço
       if (hasBreak && curMinutes >= lunchStartMinutes && curMinutes < lunchEndMinutes) {
         curMinutes = lunchEndMinutes;
@@ -1400,6 +1421,31 @@ export async function criarNovoAgendamento(
           };
         }
 
+        // REGRA DE BLOQUEIO DE DATAS / FOLGAS / FERIADOS
+        const blockedDatesList: any[] = Array.isArray(meta?.blockedDates) ? meta.blockedDates : [];
+        const activeBlock = blockedDatesList.find((b: any) => b.date === dateISO);
+        if (activeBlock) {
+          const reqHour = newStart.getHours();
+          if (activeBlock.shift === 'ALL' || !activeBlock.shift) {
+            return {
+              success: false,
+              message: `A agenda do profissional está bloqueada nesta data (${dateISO}) para: ${activeBlock.reason || 'Compromisso / Folga'}.`,
+            };
+          }
+          if (activeBlock.shift === 'MANHA' && reqHour < 12) {
+            return {
+              success: false,
+              message: `O turno da manhã está bloqueado nesta data para: ${activeBlock.reason || 'Compromisso'}.`,
+            };
+          }
+          if (activeBlock.shift === 'TARDE' && reqHour >= 12) {
+            return {
+              success: false,
+              message: `O turno da tarde está bloqueado nesta data para: ${activeBlock.reason || 'Compromisso'}.`,
+            };
+          }
+        }
+
         // REGRA DE RETORNO: Bloquear agendamento de horários de retorno via WhatsApp
         const returnSlotTimesList: string[] = Array.isArray(meta?.returnSlotTimes) ? meta.returnSlotTimes : [];
         const requestedTimeStr = new Intl.DateTimeFormat('pt-BR', {
@@ -1778,6 +1824,9 @@ export async function obterInformacoesClinica(clinicId?: string): Promise<ToolRe
         telefone: clinic.phone,
         email: clinic.email,
         endereco: clinic.address || 'Consultório Iterum - Atendimento presencial e telemedicina',
+        googleMapsUrl: meta.googleMapsUrl || (clinic.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinic.address)}` : ''),
+        wazeUrl: meta.wazeUrl || (clinic.address ? `https://waze.com/ul?q=${encodeURIComponent(clinic.address)}&navigate=yes` : ''),
+        estacionamento: meta.parkingTips || 'Vagas rotativas e estacionamento conveniado nas proximidades do consultório.',
         tempoConsultaMinutos: clinic.slotDurationMinutes,
         prazoMinimoCancelamentoHoras: clinic.minCancelHours,
         valorConsulta: meta.consultationFee || 'Não informado / sob consulta',
@@ -1875,9 +1924,23 @@ export async function confirmarPresencaConsulta(
       origin: 'WHATSAPP_SOFIA',
     }).catch(() => {});
 
+    let meta: any = {};
+    try {
+      if (updated.clinic.workingHours) {
+        const wh = typeof updated.clinic.workingHours === 'string' ? JSON.parse(updated.clinic.workingHours) : updated.clinic.workingHours;
+        meta = wh?.meta || {};
+      }
+    } catch (e) {}
+
+    const clinicAddr = updated.clinic.address || 'Consultório Médico';
+    const mapsUrl = meta.googleMapsUrl || (clinicAddr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinicAddr)}` : '');
+    const wazeUrl = meta.wazeUrl || (clinicAddr ? `https://waze.com/ul?q=${encodeURIComponent(clinicAddr)}&navigate=yes` : '');
+    const parkingTips = meta.parkingTips || 'Vagas rotativas e estacionamento conveniado nas proximidades do consultório.';
+    const locationCard = `\n\n📍 *Como Chegar & Localização:*\n🏢 *Endereço:* ${clinicAddr}\n🗺️ *Google Maps:* ${mapsUrl}\n🚗 *Waze:* ${wazeUrl}\n🅿️ *Estacionamento:* ${parkingTips}`;
+
     return {
       success: true,
-      message: `Presença confirmada com sucesso para a consulta de ${updated.patient.name} em ${dataFormatada}!`,
+      message: `Presença confirmada com sucesso para a consulta de ${updated.patient.name} em ${dataFormatada}! Agradeça com carinho e apresente o Card de Localização e Estacionamento:${locationCard}`,
       data: {
         appointmentId: updated.id,
         patientName: updated.patient.name,

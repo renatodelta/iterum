@@ -39,7 +39,20 @@ export async function POST(req: NextRequest) {
     for (const appt of upcomingAppointments) {
       const dataFormatada = format(new Date(appt.startTime), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
 
-      const reminderText = `Olá *${appt.patient.name}*! Tudo bem?\n\nLembramos que você possui uma consulta agendada para *${dataFormatada}* no consultório de *${appt.clinic.doctorName || appt.clinic.name}*.\n\nPor favor, responda a esta mensagem:\n- Digite *1* ou *Sim* para *CONFIRMAR*\n- Digite *2* ou *Reagendar* para ver outros horários vagos\n- Digite *3* ou *Cancelar* para cancelar sua consulta.`;
+      let meta: any = {};
+      try {
+        if (appt.clinic.workingHours) {
+          const wh = typeof appt.clinic.workingHours === 'string' ? JSON.parse(appt.clinic.workingHours) : appt.clinic.workingHours;
+          meta = wh?.meta || {};
+        }
+      } catch (e) {}
+
+      const clinicAddr = appt.clinic.address || 'Consultório Médico';
+      const mapsUrl = meta.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinicAddr)}`;
+      const wazeUrl = meta.wazeUrl || `https://waze.com/ul?q=${encodeURIComponent(clinicAddr)}&navigate=yes`;
+      const parkingTips = meta.parkingTips || 'Vagas rotativas e estacionamento conveniado nas proximidades do consultório.';
+
+      const reminderText = `Olá *${appt.patient.name}*! Tudo bem? 😊\n\nLembramos que sua consulta está agendada para amanhã, *${dataFormatada}*, no consultório de *${appt.clinic.doctorName || appt.clinic.name}*.\n\n📍 *Como Chegar & Localização:*\n🏢 *Endereço:* ${clinicAddr}\n🗺️ *Google Maps:* ${mapsUrl}\n🚗 *Waze:* ${wazeUrl}\n🅿️ *Estacionamento:* ${parkingTips}\n\nPor favor, confirme sua presença:\n- Digite *1* ou *Sim* para *CONFIRMAR*\n- Digite *2* ou *Reagendar* para ver outros horários vagos\n- Digite *3* ou *Desmarcar* para liberar o horário.`;
 
       // Registrar mensagem no histórico da conversa
       await prisma.message.create({

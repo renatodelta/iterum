@@ -11,7 +11,8 @@ export interface AutomationLog {
     | 'CONFIRMACAO_PRESENCA'
     | 'FILA_NOTIFICACAO'
     | 'FILA_RECUPERADA'
-    | 'FILA_RECUSA';
+    | 'FILA_RECUSA'
+    | 'ATENDIMENTO_HUMANO';
   title: string;
   description: string;
   patientName: string;
@@ -20,7 +21,7 @@ export interface AutomationLog {
   appointmentDate?: string;
   slotTime?: string;
   details?: Record<string, any>;
-  origin: 'WHATSAPP_SOFIA' | 'SISTEMA_AUTO' | 'FILA_ESPERA' | 'PAINEL';
+  origin: 'WHATSAPP_SOFIA' | 'SISTEMA_AUTO' | 'FILA_ESPERA' | 'PAINEL' | 'PAINEL_SECRETARIA';
   createdAt: string;
 }
 

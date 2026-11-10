@@ -35,6 +35,10 @@ export interface DoctorInfo {
   acceptsInsurance?: boolean;
   insurancePlans?: string;
   insuranceNotes?: string;
+  googleMapsUrl?: string;
+  wazeUrl?: string;
+  parkingTips?: string;
+  blockedDates?: Array<{ date: string; shift?: 'ALL' | 'MANHA' | 'TARDE'; reason?: string }>;
 }
 
 let cachedDoctorInfo: Map<string, {
@@ -115,6 +119,10 @@ export async function getDoctorInfo(clinicId?: string): Promise<DoctorInfo> {
       acceptsInsurance: Boolean(meta.acceptsInsurance),
       insurancePlans: meta.insurancePlans || '',
       insuranceNotes: meta.insuranceNotes || '',
+      googleMapsUrl: meta.googleMapsUrl || (docAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(docAddress)}` : ''),
+      wazeUrl: meta.wazeUrl || (docAddress ? `https://waze.com/ul?q=${encodeURIComponent(docAddress)}&navigate=yes` : ''),
+      parkingTips: meta.parkingTips || 'Vagas rotativas e estacionamento conveniado nas proximidades do consultório.',
+      blockedDates: Array.isArray(meta.blockedDates) ? meta.blockedDates : [],
     };
   } catch (e) {}
 
@@ -317,8 +325,13 @@ Com os dados acima poderei registrar sua solicitação! 😊"
    - **CONVÊNIOS, PLANOS DE SAÚDE E REEMBOLSO:**
      * Se o consultório aceitar convênios: informe com precisão os planos de saúde cadastrados.
      * Se o consultório atende estritamente particular: explique com acolhimento que as consultas são particulares e que o consultório emite recibo e nota fiscal detalhados com o CRM do(a) médico(a) para que o paciente solicite o reembolso integral ou parcial junto ao seu convênio.
-   - **ENDEREÇO E SALA DE ATENDIMENTO:**
-     * Ao confirmar qualquer consulta ou quando perguntarem o local de atendimento, forneça o endereço oficial completo (incluindo sala/conjunto) informado em Dados Profissionais.
+   - **ENDEREÇO, LOCALIZAÇÃO, COMO CHEGAR E ESTACIONAMENTO (CARD COMPLETO):**
+     * Ao confirmar qualquer consulta ou quando o paciente perguntar o local de atendimento ou como chegar, forneça com carinho o endereço completo e o Card de Navegação e Estacionamento:
+       📍 *Como Chegar & Localização:*
+       🏢 *Endereço:* [Endereço oficial informado no contexto]
+       🗺️ *Google Maps:* [Link do Maps informado no contexto]
+       🚗 *Waze:* [Link do Waze informado no contexto]
+       🅿️ *Estacionamento:* [Dica de estacionamento informada no contexto]
    - **REGISTRO PROFISSIONAL (CRM):**
      * Utilize o CRM do médico quando solicitado pelo paciente ou ao orientar sobre a emissão de recibo para reembolso.
 
@@ -804,6 +817,9 @@ CONHECIMENTO E CONTEXTO DO ATENDIMENTO (DADOS PROFISSIONAIS DA CLÍNICA):
 - Registro de Conselho (CRM): ${doctorInfo.crm || 'Disponível no consultório'}
 - Especialidade Médica Principal do Consultório: ${doctorInfo.specialty}
 - Endereço Oficial e Sala de Atendimento: ${doctorInfo.address}
+- Link Direto de Navegação no Google Maps: ${doctorInfo.googleMapsUrl || 'Disponível com o endereço'}
+- Link Direto de Navegação no Waze: ${doctorInfo.wazeUrl || 'Disponível com o endereço'}
+- Dicas de Onde Estacionar: ${doctorInfo.parkingTips || 'Vagas rotativas e estacionamento conveniado próximos ao consultório'}
 - Celular / WhatsApp da Clínica: ${doctorInfo.phone || 'Este canal'}
 - E-mail Profissional: ${doctorInfo.email || 'Não informado'}
 - Antecedência Mínima para Cancelamento / Remarcação: ${doctorInfo.minCancelHours || 2} horas

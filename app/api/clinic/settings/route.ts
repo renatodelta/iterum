@@ -104,6 +104,10 @@ export async function GET(req: NextRequest) {
             insurancePlans: meta.insurancePlans !== undefined ? meta.insurancePlans : memoryClinic.insurancePlans,
             insuranceNotes: meta.insuranceNotes !== undefined ? meta.insuranceNotes : memoryClinic.insuranceNotes,
             doctorPhoto: meta.doctorPhoto !== undefined ? meta.doctorPhoto : (memoryClinic.doctorPhoto || ''),
+            googleMapsUrl: meta.googleMapsUrl || '',
+            wazeUrl: meta.wazeUrl || '',
+            parkingTips: meta.parkingTips || '',
+            blockedDates: Array.isArray(meta.blockedDates) ? meta.blockedDates : [],
             workingHours: parsedWorkingHours,
           },
         });
@@ -218,6 +222,10 @@ export async function POST(req: NextRequest) {
       insurancePlans: currentInsurancePlans,
       insuranceNotes: currentInsuranceNotes,
       doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || memoryClinic.doctorPhoto || ''),
+      googleMapsUrl: body.googleMapsUrl !== undefined ? String(body.googleMapsUrl).trim() : (finalWorkingHours.meta?.googleMapsUrl || ''),
+      wazeUrl: body.wazeUrl !== undefined ? String(body.wazeUrl).trim() : (finalWorkingHours.meta?.wazeUrl || ''),
+      parkingTips: body.parkingTips !== undefined ? String(body.parkingTips).trim() : (finalWorkingHours.meta?.parkingTips || ''),
+      blockedDates: Array.isArray(body.blockedDates) ? body.blockedDates : (finalWorkingHours.meta?.blockedDates || []),
     };
 
     const dataToUpdate: any = {

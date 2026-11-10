@@ -5,6 +5,7 @@ import { MetaEmbeddedSignupButton } from '@/components/whatsapp/MetaEmbeddedSign
 import CareHubDashboard from '@/components/dashboard/CareHubDashboard';
 import ReportsView from '@/components/reports/ReportsView';
 import GoogleCalendarView, { AgendaViewMode } from '@/components/calendar/GoogleCalendarView';
+import ChatLiveInbox from '@/components/whatsapp/ChatLiveInbox';
 import {
   USER_PERMISSIONS,
   generateAutoLogin,
@@ -346,6 +347,10 @@ export default function Dashboard() {
   // Cron
   const [cronRunning, setCronRunning] = useState(false);
   const [cronNotice, setCronNotice] = useState<string | null>(null);
+
+  // Chat Integrado ao Vivo & Central de Atendimento
+  const [chatSelectedPatientId, setChatSelectedPatientId] = useState<string | null>(null);
+  const [whatsappSubTab, setWhatsappSubTab] = useState<'chat' | 'config'>('chat');
 
   // Modal de Agendamento
   const [showModalNewAppt, setShowModalNewAppt] = useState(false);
@@ -3330,68 +3335,108 @@ export default function Dashboard() {
           )}
 
           {/* ---------------------------------------------------------------------
-              ABA: WHATSAPP & LEMBRETES
+              ABA: CENTRAL DE ATENDIMENTO WHATSAPP AO VIVO (CHAT INBOX)
           --------------------------------------------------------------------- */}
           {activeTab === 'whatsapp' && (
-            <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
-              <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-emerald-600" />
-                    WhatsApp e Automação de Lembretes
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Integração Oficial Meta Cloud API (v26.0) • Disparos automáticos e interativos
-                  </p>
+            <div className="flex-1 flex flex-col h-full min-h-[600px] overflow-hidden">
+              {/* SUB-MENU: CHAT AO VIVO VS STATUS / CONFIG */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200/80 gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setWhatsappSubTab('chat')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      whatsappSubTab === 'chat'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Central de Atendimento ao Vivo</span>
+                  </button>
+                  <button
+                    onClick={() => setWhatsappSubTab('config')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      whatsappSubTab === 'config'
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>Lembretes & Meta API</span>
+                  </button>
                 </div>
-                <button
-                  onClick={handleTriggerCronReminders}
-                  disabled={cronRunning}
-                  className="px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
-                >
-                  <Clock className={`w-3.5 h-3.5 ${cronRunning ? 'animate-spin' : ''}`} />
-                  <span>{cronRunning ? 'Disparando...' : 'Testar Disparo 24h'}</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleTriggerCronReminders}
+                    disabled={cronRunning}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+                    title="Disparar manualmente os lembretes D-1 com Como Chegar e Estacionamento"
+                  >
+                    <Clock className={`w-3.5 h-3.5 ${cronRunning ? 'animate-spin' : ''}`} />
+                    <span>{cronRunning ? 'Disparando...' : 'Testar Lembrete D-1 (24h)'}</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="my-4 sm:my-6 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/80">
-                  <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs mb-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Meta WhatsApp Cloud API Ativa
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    Instância conectada com sucesso ao número oficial da clínica. Suporte a botões interativos e IA determinística do POP.
-                  </p>
+              {whatsappSubTab === 'chat' ? (
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <ChatLiveInbox initialPatientId={chatSelectedPatientId || undefined} />
                 </div>
-
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
-                  <span className="text-xs font-bold text-slate-900 block">Lembretes das Próximas 24 Horas</span>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Cron automático configurado para checar a cada 30 minutos e notificar pacientes com antecedência mínima de 24 horas.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-1 p-4 sm:p-6 rounded-2xl bg-slate-50/50 border border-slate-200/60 overflow-y-auto">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-3">
-                  Últimas Notificações Registradas
-                </span>
-                <div className="space-y-2 text-xs">
-                  {appointments.slice(0, 5).map((a) => (
-                    <div key={a.id} className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-bold text-slate-800 truncate">{a.patient?.name}</span>
-                        <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">{formatPhoneBR(a.patient?.phone)}</span>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                        Entregue
-                      </span>
+              ) : (
+                <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/70 shadow-xs p-3.5 sm:p-6 flex flex-col overflow-y-auto">
+                  <div className="pb-3 sm:pb-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5 text-emerald-600" />
+                        WhatsApp e Automação de Lembretes
+                      </h2>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Integração Oficial Meta Cloud API (v26.0) • Disparos automáticos e interativos com Card de Localização e Estacionamento
+                      </p>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="my-4 sm:my-6 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/80">
+                      <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs mb-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Meta WhatsApp Cloud API Ativa
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                        Instância conectada com sucesso ao número oficial da clínica. Suporte a atendimento humanizado da Sofia, transbordo manual e respostas diretas da secretária.
+                      </p>
+                    </div>
+
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/70">
+                      <span className="text-xs font-bold text-slate-900 block">Lembretes das Próximas 24 Horas com Como Chegar</span>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        Notificação enviada com confirmação interativa, endereço completo, links diretos de navegação no Google Maps / Waze e dicas de estacionamento.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 p-4 sm:p-6 rounded-2xl bg-slate-50/50 border border-slate-200/60 overflow-y-auto">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-3">
+                      Últimas Notificações Registradas
+                    </span>
+                    <div className="space-y-2 text-xs">
+                      {appointments.slice(0, 5).map((a) => (
+                        <div key={a.id} className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span className="font-bold text-slate-800 truncate">{a.patient?.name}</span>
+                            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">{formatPhoneBR(a.patient?.phone)}</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                            Entregue
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
