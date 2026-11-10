@@ -267,9 +267,14 @@ export async function executeWhatsAppMessageJob(
       }
     }
 
-    // 6. Carregar histórico recente para a IA (últimas 20 mensagens)
+    // 6. Janela de Memória de 24 horas: a Sofia só mantém no contexto ativo as mensagens das últimas 24 horas.
+    // Conversas anteriores a 24h são preservadas no banco da clínica, mas a Sofia inicia automaticamente como novo atendimento.
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const rawMessages = await prisma.message.findMany({
-      where: { patientId: patient.id },
+      where: {
+        patientId: patient.id,
+        createdAt: { gte: cutoff24h },
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });

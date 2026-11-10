@@ -50,9 +50,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Carregar histórico
+    // 2. Carregar histórico (janela de 24 horas)
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const rawMessages = await prisma.message.findMany({
-      where: { patientId: patient.id },
+      where: {
+        patientId: patient.id,
+        createdAt: { gte: cutoff24h },
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
