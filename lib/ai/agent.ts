@@ -20,43 +20,47 @@ import {
 } from './tools';
 import { formatForWhatsApp } from '@/lib/whatsapp/client';
 
-let cachedDoctorInfo: Map<string, {
-  info: {
-    name: string;
-    specialty: string;
-    link: string;
-    address: string;
-    consultationFee?: string;
-    acceptsInsurance?: boolean;
-    insurancePlans?: string;
-    insuranceNotes?: string;
-  };
-  expiresAt: number;
-}> = new Map();
-
-/**
- * Obtém os dados, nome, especialidade, link institucional, endereço, valor da consulta e convênios do médico/clínica (com cache em memória para velocidade máxima)
- */
-export async function getDoctorInfo(clinicId?: string): Promise<{
+export interface DoctorInfo {
   name: string;
+  rawName: string;
   specialty: string;
+  crm?: string;
+  phone?: string;
+  email?: string;
+  minCancelHours?: number;
   link: string;
   address: string;
   consultationFee?: string;
   acceptsInsurance?: boolean;
   insurancePlans?: string;
   insuranceNotes?: string;
-}> {
+}
+
+let cachedDoctorInfo: Map<string, {
+  info: DoctorInfo;
+  expiresAt: number;
+}> = new Map();
+
+/**
+ * Obtém os dados profissionais completos do médico/clínica (com cache em memória para velocidade máxima)
+ */
+export async function getDoctorInfo(clinicId?: string): Promise<DoctorInfo> {
   const cacheKey = clinicId || 'default';
   const now = Date.now();
   const cached = cachedDoctorInfo.get(cacheKey);
+  // Cache reduzido para 45 segundos para refletir alterações de Dados Profissionais quase em tempo real
   if (cached && cached.expiresAt > now) {
     return cached.info;
   }
 
-  let result = {
+  let result: DoctorInfo = {
     name: 'Dra. Mariana Souza',
+    rawName: 'Mariana Souza',
     specialty: 'Pediatria',
+    crm: 'CRM/SP 148.910',
+    phone: '',
+    email: '',
+    minCancelHours: 2,
     link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
     address: 'Consultório Médico - Atendimento presencial e telemedicina',
     consultationFee: '',
@@ -79,10 +83,14 @@ export async function getDoctorInfo(clinicId?: string): Promise<{
       orderBy: { createdAt: 'asc' },
     });
 
-    const docName = clinic?.doctorName || doctor?.name || clinic?.name || 'Dra. Mariana Souza';
+    const docName = clinic?.doctorName || clinic?.name || doctor?.name || 'Dra. Mariana Souza';
     const formattedName = docName.startsWith('Dr') ? docName : `Dr(a). ${docName}`;
     const docSpecialty = clinic?.specialty || doctor?.specialty || 'Clínica Geral';
     const docAddress = clinic?.address || 'Consultório Médico - Atendimento presencial e telemedicina';
+    const docCrm = clinic?.crm || doctor?.crm || '';
+    const docPhone = clinic?.phone || '';
+    const docEmail = clinic?.email || '';
+    const minCancelHours = clinic?.minCancelHours || 2;
 
     let meta: any = {};
     if (clinic?.workingHours) {
@@ -94,7 +102,12 @@ export async function getDoctorInfo(clinicId?: string): Promise<{
 
     result = {
       name: formattedName,
+      rawName: docName,
       specialty: docSpecialty,
+      crm: docCrm,
+      phone: docPhone,
+      email: docEmail,
+      minCancelHours,
       link: process.env.DOCTOR_INFO_URL || 'https://clini-desk-kappa.vercel.app',
       address: docAddress,
       consultationFee: meta.consultationFee || '',
@@ -104,7 +117,7 @@ export async function getDoctorInfo(clinicId?: string): Promise<{
     };
   } catch (e) {}
 
-  cachedDoctorInfo.set(cacheKey, { info: result, expiresAt: now + 5 * 60 * 1000 });
+  cachedDoctorInfo.set(cacheKey, { info: result, expiresAt: now + 45 * 1000 });
   return result;
 }
 
@@ -258,20 +271,34 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
      * Quando o usuário indicar a data/horário ou número da opção escolhida, execute 'cancelar_consulta' passando o 'agendamento_id' correspondente.
    - Use 'buscar_consulta_atual' para localizar o agendamento futuro e valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
-8. **Dúvidas Institucionais, Valores e Convênios (REGRA MANDATÓRIA):**
+8. **USO ATIVO E PERSONALIZADO DOS DADOS PROFISSIONAIS (HUMANIZAÇÃO E PROXIMIDADE):**
+   - **NUNCA FALE "O MÉDICO" OU "O PROFISSIONAL" DE FORMA IMPESSOAL:**
+     * Você trabalha diretamente para o(a) médico(a) indicado no seu contexto: **[Profissional de Saúde]** (Especialidade: [Especialidade Médica Principal], CRM: [Registro de Conselho]).
+     * **É EXPRESSAMENTE PROIBIDO** responder de forma fria, robótica ou genérica como:
+       - ❌ *"A agenda do médico está aberta apenas até 11 de dezembro..."*
+       - ❌ *"Datas posteriores ainda não foram liberadas pelo médico/profissional..."*
+       - ❌ *"Assim que o médico liberar novas vagas..."*
+     * **SEMPRE se refira ao médico pelo seu nome profissional e especialidade:**
+       - ✅ *"A agenda da **Dra. Mariana Souza** (Pediatria) está aberta até 11 de dezembro..."*
+       - ✅ *"Datas posteriores ainda não foram disponibilizadas na grade pela **Dra. Mariana**..."*
+       - ✅ *"Assim que a **Dra. Mariana** liberar novas datas para consultas de Pediatria, avisaremos você com prioridade na nossa lista de espera! 😊"*
+       - ✅ *"Sua consulta cardiológica com o **Dr. Renato Silva**..."*
+   - **VALOR DA CONSULTA (HONORÁRIOS PARTICULARES):**
+     * Quando o paciente perguntar sobre o valor da consulta ou preço, informe com transparência, elegância e cordialidade o valor configurado em Dados Profissionais (ex: *"A consulta particular com o(a) [Nome do Médico] é no valor de [Valor]"*).
+   - **CONVÊNIOS, PLANOS DE SAÚDE E REEMBOLSO:**
+     * Se o consultório aceitar convênios: informe com precisão os planos de saúde cadastrados.
+     * Se o consultório atende estritamente particular: explique com acolhimento que as consultas são particulares e que o consultório emite recibo e nota fiscal detalhados com o CRM do(a) médico(a) para que o paciente solicite o reembolso integral ou parcial junto ao seu convênio.
+   - **ENDEREÇO E SALA DE ATENDIMENTO:**
+     * Ao confirmar qualquer consulta ou quando perguntarem o local de atendimento, forneça o endereço oficial completo (incluindo sala/conjunto) informado em Dados Profissionais.
+   - **REGISTRO PROFISSIONAL (CRM):**
+     * Utilize o CRM do médico quando solicitado pelo paciente ou ao orientar sobre a emissão de recibo para reembolso.
+
+9. **Dúvidas Institucionais Gerais e Limites:**
    - Você pode usar 'obter_informacoes_clinica' para consultar informações cadastrais oficiais do consultório.
-   - **SOBRE CONVÊNIOS / PLANOS DE SAÚDE:**
-     * Verifique no seu contexto abaixo as informações cadastradas em "Política de Convênios".
-     * Se o consultório aceitar convênios e houver convênios cadastrados (ex: Unimed, Bradesco, etc.): informe com clareza quais convênios são atendidos e acolha o paciente para agendar.
-     * Se o consultório atender apenas particular (ou se não aceitar o convênio específico perguntado): informe cordialmente que os atendimentos são particulares e que é fornecido recibo detalhado para o paciente solicitar reembolso junto ao seu plano de saúde.
-   - **SOBRE VALOR DA CONSULTA / PREÇO:**
-     * Verifique no seu contexto abaixo a informação em "Valor da Consulta".
-     * Se houver valor cadastrado pelo médico (ex: R$ 350,00): informe o valor com transparência, cordialidade e profissionalismo.
-     * Se não houver valor predefinido cadastrado no contexto: informe que o agendamento pode ser realizado e que para confirmação precisa do valor da especialidade a equipe da recepção está à disposição para detalhar.
    - NUNCA realize diagnóstico médico nem prescreva remédios. Em caso de emergências relatadas pelo paciente, oriente a procurar o pronto-socorro imediatamente.
 
-9. **Transbordo para Atendente Humano:**
-   - Se o paciente expressar desejo explícito de falar com uma pessoa ("quero falar com atendente", "falar com secretária humana", "falar com alguém"), ou estiver muito irritado/com caso complexo, acione a ferramenta 'transferir_para_humano' e informe com acolhimento que a equipe da recepção assumirá o atendimento a seguir.`;
+10. **Transbordo para Atendente Humano:**
+    - Se o paciente expressar desejo explícito de falar com uma pessoa ("quero falar com atendente", "falar com secretária humana", "falar com alguém"), ou estiver muito irritado/com caso complexo, acione a ferramenta 'transferir_para_humano' e informe com acolhimento que a equipe da recepção assumirá o atendimento a seguir.`;
 
 // Definição das ferramentas no formato OpenAI JSON Schema
 const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -733,19 +760,24 @@ export async function processAgentMessage({
 
       const systemContent = `${SYSTEM_PROMPT}
 
-CONHECIMENTO E CONTEXTO DO ATENDIMENTO:
+CONHECIMENTO E CONTEXTO DO ATENDIMENTO (DADOS PROFISSIONAIS DA CLÍNICA):
 - Data e Hora Atual de Brasília: ${nowBrt} (Fuso horário America/Sao_Paulo).
 - Profissional de Saúde: ${doctorInfo.name}
+- Registro de Conselho (CRM): ${doctorInfo.crm || 'Disponível no consultório'}
 - Especialidade Médica Principal do Consultório: ${doctorInfo.specialty}
-- Endereço Oficial do Consultório: ${doctorInfo.address}
+- Endereço Oficial e Sala de Atendimento: ${doctorInfo.address}
+- Celular / WhatsApp da Clínica: ${doctorInfo.phone || 'Este canal'}
+- E-mail Profissional: ${doctorInfo.email || 'Não informado'}
+- Antecedência Mínima para Cancelamento / Remarcação: ${doctorInfo.minCancelHours || 2} horas
+- Valor da Consulta Particular: ${feeContext}
+- Política de Convênios e Reembolso: ${insuranceContext}
 - Link Institucional: ${doctorInfo.link}
-- Valor da Consulta: ${feeContext}
-- Política de Convênios: ${insuranceContext}
 - Interlocutor no WhatsApp (Quem está no aparelho digitando): ${interlocutorName} (Telefone: ${patientPhone})
 - Status Cadastral do Titular (${interlocutorName}): ${titularCpf ? `JÁ CADASTRADO COM CPF ${titularCpf}. NÃO peça dados cadastrais novamente se a consulta for para ele mesmo!` : 'Pendente de CPF.'}
 - Pacientes cadastrados vinculados a esta linha/contato:
 ${relatedPatientsSummary || `• ${interlocutorName}`}
 - Situação atual de agendamento: ${consultaAtualInfo}
+- REGRA DE OURO DE TRATAMENTO: NUNCA diga "o médico", "o profissional" ou "a médica" de forma genérica e impessoal! Refira-se SEMPRE ao profissional pelo seu nome real (${doctorInfo.name}) e especialidade (${doctorInfo.specialty}). Ex: "A agenda da ${doctorInfo.name}...", "Assim que o(a) ${doctorInfo.name} liberar novas datas...".
 - LEMBRETE DE OURO: Se o interlocutor estiver agendando para um familiar (filho, cônjuge, mãe/pai idoso), mantenha SEMPRE o diálogo e o tratamento com o Interlocutor (${interlocutorName}) e refira-se ao paciente na 3ª pessoa!`;
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

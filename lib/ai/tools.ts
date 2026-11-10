@@ -524,12 +524,18 @@ export async function buscarHorariosDisponiveis(
     const scheduleStartDate: string = metaAgenda.scheduleStartDate || workingHoursConfig.scheduleStartDate || '';
     const scheduleEndDate: string = metaAgenda.scheduleEndDate || workingHoursConfig.scheduleEndDate || '';
 
+    // Dados profissionais para comunicação humanizada e acolhedora
+    const rawDocName = clinic.doctorName || clinic.name || '';
+    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const docSpecialty = clinic.specialty ? ` (${clinic.specialty})` : '';
+    const docDisplayName = `${formattedDocName}${docSpecialty}`;
+
     // GOVERNANÇA DA AGENDA MÉDICA: Apenas o médico/equipe humana define o período de abertura
     // Se o médico não cadastrou período ou dias de atendimento, a agenda está FECHADA para novos agendamentos
     if (!scheduleStartDate || !scheduleEndDate || selectedDaysList.length === 0) {
       return {
         success: true,
-        message: 'A agenda de consultas deste consultório ainda não foi aberta pelo profissional para este período. Gostaria de entrar na lista de espera para ser avisado(a) assim que o médico liberar novas datas e horários?',
+        message: `A agenda de consultas do(a) ${docDisplayName} ainda não foi aberta para este período. Gostaria de entrar na lista de espera para ser avisado(a) assim que o(a) ${formattedDocName} liberar novas datas e horários?`,
         data: { slots: [] },
       };
     }
@@ -538,7 +544,7 @@ export async function buscarHorariosDisponiveis(
       const [sy, sm, sd] = scheduleStartDate.split('-');
       return {
         success: true,
-        message: `A agenda de atendimentos do profissional para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade.`,
+        message: `A agenda de atendimentos do(a) ${docDisplayName} para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade.`,
         data: { slots: [] },
       };
     }
@@ -549,7 +555,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `O período de agendamentos aberto pelo profissional foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pelo médico no sistema. Gostaria de entrar na lista de espera para ser avisado(a) assim que o profissional liberar novas vagas?`,
+          message: `O período de agendamentos aberto pelo(a) ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pelo(a) ${formattedDocName} no sistema. Gostaria de entrar na lista de espera para ser avisado(a) assim que novas vagas forem liberadas?`,
           data: { slots: [] },
         };
       }
@@ -559,7 +565,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `A agenda deliberada pelo profissional para este período está aberta para atendimentos até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas pelo médico. Se desejar, posso adicionar você à nossa lista de espera prioritária para ser notificado(a) assim que novas datas forem abertas!`,
+          message: `A agenda de atendimentos do(a) ${docDisplayName} para este período está aberta até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas na grade pelo(a) ${formattedDocName}. Se desejar, posso adicionar você à nossa lista de espera prioritária para ser notificado(a) assim que novas datas forem abertas!`,
           data: { slots: [] },
         };
       }
@@ -1090,15 +1096,21 @@ export async function buscarProximosHorariosDisponiveis(
 
     const meta = whConfig?.meta;
 
+    // Dados profissionais para comunicação humanizada e acolhedora
+    const rawDocName = clinic.doctorName || clinic.name || '';
+    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const docSpecialty = clinic.specialty ? ` (${clinic.specialty})` : '';
+    const docDisplayName = `${formattedDocName}${docSpecialty}`;
+
     // Se o médico configurou uma data final e ela já passou, a agenda está aguardando nova liberação pelo profissional
     if (meta?.scheduleEndDate && meta.scheduleEndDate < todayISO) {
       const [ey, em, ed] = meta.scheduleEndDate.split('-');
       return {
         success: true,
-        message: `O período de agendamentos aberto pelo profissional foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas pelo médico.`,
+        message: `O período de agendamentos aberto pelo(a) ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas pelo(a) ${formattedDocName}.`,
         data: {
           days: [],
-          formattedText: `No momento, a agenda de atendimentos do profissional para este período já foi encerrada e novas datas ainda não foram liberadas na grade pelo médico. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir as novas datas!`,
+          formattedText: `No momento, a agenda de atendimentos do(a) ${docDisplayName} para este período já foi encerrada e novas datas ainda não foram liberadas na grade pelo(a) ${formattedDocName}. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir as novas datas!`,
         },
       };
     }
@@ -1158,14 +1170,14 @@ export async function buscarProximosHorariosDisponiveis(
 
     if (daysWithSlots.length === 0) {
       const dataLimiteTexto = meta?.scheduleEndDate
-        ? ` dentro do período aberto pelo médico (até ${meta.scheduleEndDate.split('-').reverse().join('/')})`
+        ? ` dentro do período aberto pelo(a) ${formattedDocName} (até ${meta.scheduleEndDate.split('-').reverse().join('/')})`
         : '';
       return {
         success: true,
         message: `Não há horários disponíveis nos próximos dias úteis${dataLimiteTexto}.`,
         data: {
           days: [],
-          formattedText: `No momento, não localizamos horários livres na agenda${dataLimiteTexto}. Se desejar, posso adicionar você à nossa lista de espera para avisarmos caso surja uma desistência ou assim que novas datas forem abertas!`,
+          formattedText: `No momento, não localizamos horários livres na agenda do(a) ${docDisplayName}${dataLimiteTexto}. Se desejar, posso adicionar você à nossa lista de espera prioritária para avisarmos caso surja uma desistência ou assim que novas datas forem liberadas pelo(a) ${formattedDocName}!`,
         },
       };
     }
@@ -1674,9 +1686,15 @@ export async function adicionarFilaEspera(
       ? ` para o período em torno de ${dataDesejadaFormatada}`
       : '';
 
+    let clinic = clinicId ? await prisma.clinic.findUnique({ where: { id: clinicId } }) : await prisma.clinic.findFirst();
+    const rawDocName = clinic?.doctorName || clinic?.name || '';
+    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const docSpecialty = clinic?.specialty ? ` (${clinic.specialty})` : '';
+    const docDisplayName = `${formattedDocName}${docSpecialty}`;
+
     return {
       success: true,
-      message: `Você foi adicionado à nossa lista de espera com sucesso${confirmComplemento}! Assim que o médico abrir novas datas para este período ou surgir uma desistência, avisaremos você com prioridade aqui no WhatsApp.`,
+      message: `Você foi adicionado(a) à lista de espera prioritária do(a) ${docDisplayName} com sucesso${confirmComplemento}! Assim que o(a) ${formattedDocName} abrir novas datas para este período ou surgir uma desistência, avisaremos você com prioridade aqui no WhatsApp.`,
       data: entry,
     };
   } catch (error: any) {
@@ -1715,9 +1733,9 @@ export async function obterInformacoesClinica(clinicId?: string): Promise<ToolRe
       message: 'Informações do consultório recuperadas com sucesso.',
       data: {
         nomeClinica: clinic.name,
-        medicoNome: doctor?.name || clinic.doctorName || 'Dra. Mariana Souza',
-        especialidade: doctor?.specialty || clinic.specialty || 'Pediatria',
-        crm: doctor?.crm || clinic.crm || 'CRM/SP 148.910',
+        medicoNome: clinic.doctorName || clinic.name || doctor?.name || 'Dr. Renato Silva',
+        especialidade: clinic.specialty || doctor?.specialty || 'Clínica Geral',
+        crm: clinic.crm || doctor?.crm || 'CRM/SP 148.910',
         telefone: clinic.phone,
         email: clinic.email,
         endereco: clinic.address || 'Consultório Iterum - Atendimento presencial e telemedicina',
