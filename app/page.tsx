@@ -4802,7 +4802,10 @@ export default function Dashboard() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-bold text-slate-800 mb-1 text-xs">Nome Completo do Médico</label>
+                      <span className="block text-[11px] text-slate-500 font-medium mb-0.5">
+                        Nome que vai aparecer nas mensagens do WhatsApp
+                      </span>
+                      <label className="block font-bold text-slate-800 mb-1 text-xs">Nome do profissional</label>
                       <input
                         type="text"
                         required
@@ -4814,6 +4817,9 @@ export default function Dashboard() {
                     </div>
 
                     <div>
+                      <span className="block text-[11px] text-transparent select-none mb-0.5 hidden sm:block">
+                        &nbsp;
+                      </span>
                       <label className="block font-bold text-slate-800 mb-1 text-xs">CRM / Registro Profissional</label>
                       <input
                         type="text"
