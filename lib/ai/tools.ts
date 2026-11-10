@@ -2153,17 +2153,13 @@ export async function notifyPatientAppointmentCancelled(params: {
         : '';
     const greeting = rawFirstName ? `Olá, *${rawFirstName}*! Tudo bem?` : 'Olá! Tudo bem?';
 
-    const cleanReason = reason && !reason.includes('via WhatsApp') && !reason.includes('manualmente pelo painel')
-      ? `\nMotivo informado: ${reason}`
-      : '';
-
     const cancellationMessage = `${greeting} 😊
 
 Aqui é a Sofia, secretária virtual do consultório ${docPronoun} *${formattedDocName}*.
 
 Informamos que o seu agendamento para:
 📅 *${dataFormatada}*
-foi desmarcado no nosso sistema.${cleanReason}
+*FOI DESMARCADO*.
 
 Caso deseje reagendar para outra data de sua preferência ou precise de qualquer auxílio, estou à sua inteira disposição por aqui! Basta me enviar uma mensagem. Tenha um ótimo dia! 🩺`;
 
