@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { parseISO, addMinutes } from 'date-fns';
 import { parseBRT } from '@/lib/ai/tools';
 import { notifyFirstInWaitlistForVacatedSlot } from '@/lib/waitlist';
-import { requireAuth } from '@/lib/apiAuth';
+import { requireAuth, getSession, forbiddenResponse } from '@/lib/apiAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -307,8 +307,23 @@ export async function PATCH(req: NextRequest) {
 
     let waitlistNotificationResult: any = null;
 
+    const session = await getSession(req);
+
     // Caso 1: REMARCAÇÃO (Manual pela agenda)
     if (action === 'REMARCAR' || newStartTime) {
+      if (session && session.role === 'SECRETARIA') {
+        const user = await prisma.user.findUnique({ where: { id: session.uid } });
+        if (user) {
+          let perms: string[] = [];
+          try {
+            perms = JSON.parse(user.permissions || '[]');
+          } catch (e) {}
+          if (!perms.includes('remarcacao')) {
+            return forbiddenResponse('Você não possui permissão para remarcar consultas na agenda.');
+          }
+        }
+      }
+
       if (!newStartTime) {
         return NextResponse.json({ error: 'newStartTime é obrigatório para remarcar.' }, { status: 400 });
       }
@@ -352,6 +367,19 @@ export async function PATCH(req: NextRequest) {
 
     // Caso 2: CANCELAMENTO (Manual pela agenda)
     if (action === 'CANCELAR' || status === 'CANCELADO' || status === 'CANCELED') {
+      if (session && session.role === 'SECRETARIA') {
+        const user = await prisma.user.findUnique({ where: { id: session.uid } });
+        if (user) {
+          let perms: string[] = [];
+          try {
+            perms = JSON.parse(user.permissions || '[]');
+          } catch (e) {}
+          if (!perms.includes('desmarcacao')) {
+            return forbiddenResponse('Você não possui permissão para desmarcar consultas na agenda.');
+          }
+        }
+      }
+
       const updatedAppt = await prisma.appointment.update({
         where: { id: appointmentId },
         data: {

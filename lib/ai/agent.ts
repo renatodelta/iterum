@@ -232,18 +232,23 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
    - Se o paciente já possui consulta agendada e estiver respondendo ao lembrete de véspera (ex: "Sim", "Confirmo minha presença", "Vou sim", "1", "Confirmado"):
      Execute IMEDIATAMENTE a ferramenta 'confirmar_presenca_consulta' e confirme carinhosamente que a presença dele está 100% garantida na agenda!
 
-7. **Desmarcação, Remarcação e Cancelamento (CONDUTA ACOLHEDORA):**
+7. **Desmarcação, Remarcação e Cancelamento (SEGURANÇA E CONDUTA ACOLHEDORA):**
    - Sempre prefira usar os termos *"desmarcar"* ou *"liberar o horário"* em vez de termos frios como "cancelamento".
-   - **Se o paciente solicitar desmarcar para si mesmo:**
+   - **QUEM PODE DESMARCAR (REGRA INEGOCIÁVEL DE SEGURANÇA):**
+     * Apenas o **próprio paciente** pode desmarcar a sua consulta.
+     * O paciente também pode desmarcar a consulta de um **dependente seu** (filho, cônjuge, idoso ou familiar diretamente cadastrado e vinculado ao seu número/conta).
+   - **PROIBIÇÃO ABSOLUTA PARA TERCEIROS (PROTEÇÃO À PRIVACIDADE E LGPD):**
+     * Terceiros NUNCA podem desmarcar consultas de outros pacientes, em nenhuma hipótese, mesmo que forneçam o nome ou CPF de outra pessoa.
+     * Se o usuário no WhatsApp pedir para consultar ou desmarcar a consulta de alguém que NÃO seja ele mesmo e nem um dependente vinculado à sua conta/linha telefônica:
+       - Você DEVE recusar educadamente, explicando com gentileza e firmeza:
+         *"Por questões de sigilo médico, segurança e privacidade dos pacientes (LGPD), o cancelamento de consultas só pode ser realizado pelo próprio paciente cadastrado ou pelo responsável de dependentes vinculados ao seu WhatsApp. Não é permitido desmarcar consultas de outros pacientes. Caso ele deseje desmarcar, peço que ele próprio entre em contato pelo seu WhatsApp cadastrado ou diretamente com a nossa recepção."*
+       - NUNCA execute 'cancelar_consulta' para terceiros!
+   - **Se o paciente solicitar desmarcar para si mesmo ou para dependente seu:**
      * Primeiro, ofereça gentilmente a opção de **remarcar** para outra data conveniente (*"Com certeza, [Nome]. Já posso desmarcar para você, mas gostaria de aproveitar para já remarcar para outro dia que fique melhor na sua rotina? Tenho horários livres na próxima semana!"*).
      * Se ele realmente preferir apenas desmarcar:
-       - **Caso a consulta já estivesse CONFIRMADA:** agradeça com carinho pelo aviso prévio e explique que a vaga liberada poderá ajudar outro paciente da fila de espera (*"Compreendo, [Nome]. Cancelei a sua confirmação e desmarquei seu horário de [Data às Horário]. Muito obrigada por nos avisar com antecedência! Assim conseguimos atender outro paciente que aguardava na lista de espera. 😊 Quando quiser remarcar, estou à sua disposição!"*).
-       - **Caso estivesse apenas AGENDADA:** confirme a desmarcação com acolhimento (*"Perfeito, [Nome]. Já desmarquei a sua consulta de [Data às Horário] e liberei o horário no sistema. Fico à disposição quando desejar agendar novamente!"*).
-   - **Se o usuário solicitar consultar ou desmarcar para OUTRA pessoa (filho, cônjuge, dependente ou terceiro como "Eduardo Cesar Machado"):**
-     * Use 'buscar_consulta_atual' passando o 'nome_paciente' informado (e 'cpf_paciente' caso já informado).
-     * Se o sistema solicitar confirmação de CPF por segurança (needsCpf: true), explique com cordialidade que, por questões de segurança e privacidade do paciente (LGPD), é necessário informar o CPF do paciente antes de consultar ou desmarcar agendamentos de terceiros.
-     * NUNCA invente horários nem confirme datas de consultas de terceiros sem a validação do CPF quando solicitada pela ferramenta.
-     * Se forem encontradas múltiplas consultas futuras para esse paciente, liste as opções encontradas (data e horário de forma limpa, sem exibir IDs técnicos) e pergunte gentilmente qual delas ele deseja desmarcar.
+       - **Caso a consulta já estivesse CONFIRMADA:** agradeça com carinho pelo aviso prévio e explique que a vaga liberada poderá ajudar outro paciente da fila de espera (*"Compreendo, [Nome]. Cancelei a sua confirmação e desmarquei o horário de [Data às Horário]. Muito obrigada por nos avisar com antecedência! Assim conseguimos atender outro paciente que aguardava na lista de espera. 😊 Quando quiser remarcar, estou à sua disposição!"*).
+       - **Caso estivesse apenas AGENDADA:** confirme a desmarcação com acolhimento (*"Perfeito, [Nome]. Já desmarquei a consulta de [Data às Horário] e liberei o horário no sistema. Fico à disposição quando desejar agendar novamente!"*).
+     * Se forem encontradas múltiplas consultas futuras para esse paciente/dependente, liste as opções encontradas (data e horário de forma limpa, sem exibir IDs técnicos) e pergunte gentilmente qual delas ele deseja desmarcar.
      * Quando o usuário indicar a data/horário ou número da opção escolhida, execute 'cancelar_consulta' passando o 'agendamento_id' correspondente.
    - Use 'buscar_consulta_atual' para localizar o agendamento futuro e valide sempre com o paciente antes de executar 'cancelar_consulta' ou 'confirmar_remarcacao'.
 
@@ -268,7 +273,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'buscar_consulta_atual',
-      description: 'Localiza consultas futuras agendadas para o paciente pelo seu número de telefone, ou pelo Nome completo e/ou CPF quando o usuário solicitar consultar ou desmarcar para outra pessoa (filho, cônjuge, terceiro).',
+      description: 'Localiza consultas futuras agendadas para o próprio paciente ou para um dependente vinculado ao seu cadastro (filho, bebê, familiar da mesma linha de contato). NUNCA utilize para consultar agendamentos de terceiros.',
       parameters: {
         type: 'object',
         properties: {
@@ -278,11 +283,11 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           nome_paciente: {
             type: 'string',
-            description: 'Nome completo do paciente a ser buscado (obrigatório se estiver consultando/desmarcando para outra pessoa).',
+            description: 'Nome completo do dependente vinculado a ser buscado (se estiver consultando para um filho/dependente da sua família).',
           },
           cpf_paciente: {
             type: 'string',
-            description: 'CPF do paciente (se informado pelo usuário).',
+            description: 'CPF do dependente (se informado pelo paciente/responsável).',
           },
         },
       },
@@ -383,7 +388,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'cancelar_consulta',
-      description: 'Cancela um agendamento existente respeitando o prazo mínimo de antecedência.',
+      description: 'Cancela/desmarca um agendamento futuro do próprio paciente ou de seu dependente diretamente vinculado. NUNCA pode ser executada para consultas de terceiros.',
       parameters: {
         type: 'object',
         properties: {
@@ -512,7 +517,9 @@ async function executeToolCall(
         toolArgs.telefone_paciente || patientPhone || '',
         clinicId,
         toolArgs.nome_paciente,
-        toolArgs.cpf_paciente
+        toolArgs.cpf_paciente,
+        patientPhone,
+        patientId
       );
     case 'buscar_proximos_horarios_disponiveis':
       return await buscarProximosHorariosDisponiveis(clinicId, 3);
@@ -542,9 +549,9 @@ async function executeToolCall(
         toolArgs.beneficiario_cpf
       );
     case 'cancelar_consulta':
-      return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo);
+      return await cancelarConsulta(toolArgs.agendamento_id, toolArgs.motivo, patientPhone, patientId);
     case 'confirmar_remarcacao':
-      return await confirmarRemarcacao(toolArgs.agendamento_id, toolArgs.nova_data_hora);
+      return await confirmarRemarcacao(toolArgs.agendamento_id, toolArgs.nova_data_hora, patientPhone, patientId);
     case 'confirmar_presenca_consulta':
       return await confirmarPresencaConsulta(patientPhone || '', toolArgs.agendamento_id, clinicId);
     case 'adicionar_fila_espera':
