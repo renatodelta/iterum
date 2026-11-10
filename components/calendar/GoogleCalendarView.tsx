@@ -53,6 +53,7 @@ interface GoogleCalendarViewProps {
   onOpenNewAppt: (date: Date, hourStr?: string, isReturn?: boolean, duration?: number) => void;
   onOpenApptDetails: (appt: any) => void;
   onSwitchTab?: (tab: 'agenda' | 'patients' | 'fila' | 'whatsapp' | 'users' | 'settings' | 'profissionais') => void;
+  loading?: boolean;
   activeDoctor?: {
     name: string;
     specialty: string;
@@ -122,6 +123,7 @@ export default function GoogleCalendarView({
   onOpenNewAppt,
   onOpenApptDetails,
   onSwitchTab,
+  loading = false,
   activeDoctor = {
     name: 'Dr. Renato Silveira',
     specialty: 'Cardiologia & Clínica Geral',
@@ -621,7 +623,12 @@ export default function GoogleCalendarView({
       {/* =========================================================================
           1. TOP APP BAR (GOOGLE CALENDAR ESTILO GOOGLE AGENDA DESKTOP & MOBILE)
       ========================================================================= */}
-      <header className="h-14 sm:h-16 border-b border-[#dadce0] bg-white flex items-center justify-between px-2 sm:px-4 z-30 shrink-0">
+      <header className="h-14 sm:h-16 border-b border-[#dadce0] bg-white flex items-center justify-between px-2 sm:px-4 z-30 shrink-0 relative">
+        {loading && (
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-100 overflow-hidden z-40">
+            <div className="h-full bg-blue-600 animate-pulse w-full" />
+          </div>
+        )}
         {/* LADO ESQUERDO: HAMBURGUER + BOTÃO HOJE + SETAS < > + MÊS E ANO */}
         <div className="flex items-center space-x-1 sm:space-x-3">
 

@@ -457,6 +457,16 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Restaurar dados do cache local imediatamente para renderização instantânea (zero delay)
+  useEffect(() => {
+    try {
+      const cachedClinic = sessionStorage.getItem('iterum_cache_clinic');
+      if (cachedClinic) setClinic(JSON.parse(cachedClinic));
+      const cachedAppts = sessionStorage.getItem('iterum_cache_appts');
+      if (cachedAppts) setAppointments(JSON.parse(cachedAppts));
+    } catch (_) {}
+  }, []);
+
   // Carregar dados iniciais
   useEffect(() => {
     fetchData();
@@ -572,8 +582,22 @@ export default function Dashboard() {
   async function fetchData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const resSettings = await fetch('/api/clinic/settings', { cache: 'no-store' });
-      const dataSettings = await resSettings.json();
+
+      let apptUrl = '/api/appointments?';
+      if (filterDate) apptUrl += `date=${filterDate}&`;
+      if (filterStatus && filterStatus !== 'ALL') apptUrl += `status=${filterStatus}`;
+
+      // Executar requisições de clinic settings e appointments em paralelo para máxima velocidade
+      const [resSettings, resAppts] = await Promise.all([
+        fetch('/api/clinic/settings', { cache: 'no-store' }),
+        fetch(apptUrl, { cache: 'no-store' }),
+      ]);
+
+      const [dataSettings, dataAppts] = await Promise.all([
+        resSettings.json(),
+        resAppts.json(),
+      ]);
+
       if (dataSettings.clinic) {
         // Se o usuário estiver na aba de gestão/configurações ou formulário, não sobrescrever estados dos inputs durante a digitação
         setClinic((prev: any) => {
@@ -582,6 +606,10 @@ export default function Dashboard() {
           }
           return dataSettings.clinic;
         });
+
+        try {
+          sessionStorage.setItem('iterum_cache_clinic', JSON.stringify(dataSettings.clinic));
+        } catch (_) {}
 
         const c = dataSettings.clinic;
         // Apenas inicializar ou atualizar os campos de criar agenda se NÃO estiver na aba 'settings' editando
@@ -601,14 +629,11 @@ export default function Dashboard() {
         }
       }
 
-      let apptUrl = '/api/appointments?';
-      if (filterDate) apptUrl += `date=${filterDate}&`;
-      if (filterStatus && filterStatus !== 'ALL') apptUrl += `status=${filterStatus}`;
-
-      const resAppts = await fetch(apptUrl, { cache: 'no-store' });
-      const dataAppts = await resAppts.json();
       if (dataAppts.appointments) {
         setAppointments(dataAppts.appointments);
+        try {
+          sessionStorage.setItem('iterum_cache_appts', JSON.stringify(dataAppts.appointments));
+        } catch (_) {}
       }
     } catch (e) {
       console.error('Erro ao carregar dados:', e);
@@ -2632,6 +2657,7 @@ export default function Dashboard() {
                 onOpenApptDetails={(appt) => setSelectedApptDetails(appt)}
                 onSwitchTab={(tab) => setActiveTab(tab)}
                 activeDoctor={activeDoctor}
+                loading={loading}
               />
             </div>
           )}

@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status');
     const patientId = searchParams.get('patientId');
 
-    const clinic = await prisma.clinic.findFirst();
+    const clinic = await prisma.clinic.findFirst({
+      select: { id: true },
+    });
     if (!clinic) {
       return NextResponse.json({ error: 'Nenhuma clínica cadastrada.' }, { status: 404 });
     }
@@ -65,8 +67,15 @@ export async function GET(req: NextRequest) {
     const appointments = await prisma.appointment.findMany({
       where: whereClause,
       include: {
-        patient: true,
-        clinic: true,
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            cpf: true,
+            birthDate: true,
+          },
+        },
       },
       orderBy: {
         startTime: 'asc',

@@ -188,22 +188,123 @@ export async function findPatientByPhone(telefone: string, clinicId?: string) {
 }
 
 /**
+ * SEGURANÇA E PRIVACIDADE (LGPD):
+ * Verifica se o paciente alvo é o próprio solicitante OU um dependente diretamente vinculado a ele.
+ * Garante que apenas o paciente ou o responsável de seus dependentes possam consultar ou desmarcar consultas.
+ * Bloqueia estritamente qualquer tentativa de terceiros de consultar ou desmarcar consultas alheias.
+ */
+export async function isPatientOrDependentOfCaller(
+  targetPatient: {
+    id: string;
+    name: string;
+    phone: string;
+    notes?: string | null;
+    cpf?: string | null;
+  },
+  callerPhone: string,
+  callerPatientId?: string,
+  clinicId?: string
+): Promise<{ isAllowed: boolean; isSelf: boolean; isDependent: boolean; reason?: string }> {
+  const cleanCaller = (callerPhone || '').replace(/\D/g, '');
+  const last8Caller = cleanCaller.slice(-8);
+
+  const cleanTarget = (targetPatient.phone || '').replace(/\D/g, '');
+  const last8Target = cleanTarget.slice(-8);
+
+  // 1. Caso direto: o paciente alvo é o próprio solicitante por ID
+  if (callerPatientId && targetPatient.id === callerPatientId) {
+    return { isAllowed: true, isSelf: true, isDependent: false };
+  }
+
+  // 2. Caso direto: mesmo telefone exato ou mesmos dígitos principais (sem sufixo de dependente)
+  const targetHasSuffix = targetPatient.phone.includes('-');
+  if (last8Caller && last8Target && last8Caller === last8Target && !targetHasSuffix) {
+    return { isAllowed: true, isSelf: true, isDependent: false };
+  }
+
+  // 3. Caso dependente: telefone com sufixo originado da mesma linha (ex: +5511999999999-2)
+  if (last8Caller && targetHasSuffix && (cleanTarget.includes(last8Caller) || targetPatient.phone.includes(last8Caller))) {
+    return { isAllowed: true, isSelf: false, isDependent: true };
+  }
+
+  // 4. Caso dependente: compartilha o mesmo número de telefone do titular
+  if (last8Caller && last8Target && last8Caller === last8Target) {
+    return { isAllowed: true, isSelf: false, isDependent: true };
+  }
+
+  // 5. Caso dependente: notas do paciente alvo indicam vínculo com o titular
+  const targetNotes = targetPatient.notes || '';
+  if (
+    last8Caller &&
+    (targetNotes.includes(last8Caller) ||
+      targetNotes.includes(cleanCaller) ||
+      targetNotes.toLowerCase().includes('titular:') ||
+      targetNotes.toLowerCase().includes('cadastrado via whatsapp por titular'))
+  ) {
+    return { isAllowed: true, isSelf: false, isDependent: true };
+  }
+
+  // 6. Consultar registro do titular para verificar se há menção ao dependente em suas notas
+  try {
+    let titular = null;
+    if (callerPatientId) {
+      titular = await prisma.patient.findUnique({ where: { id: callerPatientId } });
+    }
+    if (!titular && last8Caller) {
+      titular = await findPatientByPhone(callerPhone, clinicId);
+    }
+
+    if (titular) {
+      if (titular.id === targetPatient.id) {
+        return { isAllowed: true, isSelf: true, isDependent: false };
+      }
+
+      const titularNotes = titular.notes || '';
+      const cleanTargetName = targetPatient.name.trim().toLowerCase();
+
+      if (
+        cleanTargetName &&
+        cleanTargetName !== 'paciente' &&
+        (titularNotes.toLowerCase().includes(cleanTargetName) ||
+          targetNotes.toLowerCase().includes(titular.name.trim().toLowerCase()) ||
+          (titular.cpf && targetNotes.includes(titular.cpf.replace(/\D/g, ''))))
+      ) {
+        return { isAllowed: true, isSelf: false, isDependent: true };
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao verificar relação de dependente:', err);
+  }
+
+  // Se nenhum critério for atendido, trata-se de um TERCEIRO
+  return {
+    isAllowed: false,
+    isSelf: false,
+    isDependent: false,
+    reason: 'Paciente não pertence ao titular nem é dependente vinculado à linha de contato.',
+  };
+}
+
+/**
  * 1. BUSCAR CONSULTA ATUAL DO PACIENTE
  */
 export async function buscarConsultaAtual(
   telefonePaciente: string,
   clinicId?: string,
   nomePaciente?: string,
-  cpfPaciente?: string
+  cpfPaciente?: string,
+  callerPhone?: string,
+  callerPatientId?: string
 ): Promise<ToolResult> {
   try {
     const now = new Date();
-    const cleanPhone = (telefonePaciente || '').replace(/\D/g, '');
+    const effectiveCallerPhone = callerPhone || telefonePaciente || '';
+    const cleanPhone = effectiveCallerPhone.replace(/\D/g, '');
     const last8 = cleanPhone.slice(-8);
 
     let targetPatients: { id: string; name: string; phone: string; cpf?: string | null; notes?: string | null }[] = [];
 
-    // 1. Se foi informado nomePaciente ou cpfPaciente (busca para terceiros/dependentes/outros pacientes)
+    // 1. Se foi informado nomePaciente ou cpfPaciente (busca para dependente vinculado)
     if (nomePaciente || cpfPaciente) {
       const cleanNome = (nomePaciente || '').trim();
       const cleanCpf = (cpfPaciente || '').replace(/\D/g, '');
@@ -232,52 +333,36 @@ export async function buscarConsultaAtual(
       }
 
       // SEGURANÇA E PRIVACIDADE (LGPD):
-      // Verificar se o paciente pertence à mesma linha telefônica (titular ou dependente cadastrado)
-      const unlinkedPatients = found.filter((p) => {
-        const pClean = p.phone.replace(/\D/g, '');
-        const isSameLine = Boolean(last8 && pClean.includes(last8));
-        const isNotedByTitular = Boolean(last8 && (p.notes?.includes(last8) || p.notes?.includes(cleanPhone)));
-        return !isSameLine && !isNotedByTitular;
-      });
-
-      // Se for um terceiro não vinculado à linha do interlocutor, EXIGIR validação estrita por CPF
-      if (unlinkedPatients.length > 0) {
-        const targetToVerify = unlinkedPatients[0];
-
-        if (!cleanCpf) {
-          return {
-            success: false,
-            message: `Por questões de segurança e privacidade do paciente (LGPD), para consultar ou desmarcar agendamentos de terceiros, é necessário confirmar o CPF de ${targetToVerify.name}. Por favor, me informe o CPF do paciente para prosseguir.`,
-            data: { needsCpf: true, patientName: targetToVerify.name },
-          };
+      // Apenas o próprio paciente ou seus dependentes diretamente vinculados podem ser consultados ou desmarcados.
+      // TERCEIROS SÃO ESTRITAMENTE BLOQUEADOS!
+      const allowedPatients: typeof found = [];
+      for (const p of found) {
+        const check = await isPatientOrDependentOfCaller(p, effectiveCallerPhone, callerPatientId, clinicId);
+        if (check.isAllowed) {
+          allowedPatients.push(p);
         }
-
-        // Se informou CPF, validar correspondência
-        const matched = unlinkedPatients.find((p) => {
-          const dbCpf = (p.cpf || '').replace(/\D/g, '');
-          return dbCpf && (dbCpf === cleanCpf || dbCpf.endsWith(cleanCpf));
-        });
-
-        if (!matched) {
-          return {
-            success: false,
-            message: `O CPF informado não confere com o cadastro de ${targetToVerify.name}. Por favor, confira os dados ou entre em contato diretamente com a nossa recepção.`,
-            data: { cpfMismatch: true },
-          };
-        }
-
-        targetPatients = [matched];
-      } else {
-        targetPatients = found;
       }
+
+      if (allowedPatients.length === 0) {
+        console.warn(
+          `🚨 [Segurança] Tentativa de consulta de agendamento de terceiro BLOQUEADA! Solicitante: ${effectiveCallerPhone} (ID: ${callerPatientId}), Busca: Nome="${cleanNome}", CPF="${cleanCpf}"`
+        );
+        return {
+          success: false,
+          message: `Por motivos de segurança, sigilo médico e privacidade (LGPD), você só pode consultar ou desmarcar agendamentos seus ou de dependentes diretamente vinculados ao seu cadastro. Terceiros não têm autorização para consultar nem desmarcar consultas de outros pacientes.`,
+          data: { blockedThirdParty: true },
+        };
+      }
+
+      targetPatients = allowedPatients;
     } else {
       // 2. Busca padrão pelo telefone do interlocutor (titular e seus dependentes vinculados)
-      const patient = await findPatientByPhone(telefonePaciente, clinicId);
+      const patient = await findPatientByPhone(effectiveCallerPhone, clinicId);
 
       if (!patient) {
         return {
           success: false,
-          message: `Nenhum paciente cadastrado encontrado para o telefone ${telefonePaciente}.`,
+          message: `Nenhum paciente cadastrado encontrado para o telefone ${effectiveCallerPhone}.`,
         };
       }
 
@@ -674,8 +759,15 @@ export async function buscarHorariosDisponiveis(
 
 /**
  * 3. CANCELAR CONSULTA
+ * Proteção de Segurança: Apenas o próprio paciente ou seu responsável direto podem desmarcar.
+ * Terceiros NUNCA podem desmarcar consultas de outros pacientes!
  */
-export async function cancelarConsulta(agendamentoId: string, motivo?: string): Promise<ToolResult> {
+export async function cancelarConsulta(
+  agendamentoId: string,
+  motivo?: string,
+  callerPhone?: string,
+  callerPatientId?: string
+): Promise<ToolResult> {
   try {
     const appointment = await prisma.appointment.findUnique({
       where: { id: agendamentoId },
@@ -688,6 +780,29 @@ export async function cancelarConsulta(agendamentoId: string, motivo?: string): 
 
     if (appointment.status === 'CANCELADO' || appointment.status === 'CANCELED') {
       return { success: true, message: 'Esta consulta já estava cancelada.' };
+    }
+
+    // PROTEÇÃO CRÍTICA DE SEGURANÇA:
+    // Apenas o próprio paciente ou o responsável por dependentes diretamente vinculados podem desmarcar a consulta.
+    // Terceiros NUNCA podem desmarcar consultas de outros pacientes!
+    if (callerPhone || callerPatientId) {
+      const authCheck = await isPatientOrDependentOfCaller(
+        appointment.patient,
+        callerPhone || '',
+        callerPatientId,
+        appointment.clinicId
+      );
+
+      if (!authCheck.isAllowed) {
+        console.warn(
+          `🚨 [Segurança] Tentativa de desmarcação de consulta por terceiro BLOQUEADA! Solicitante: ${callerPhone} (ID: ${callerPatientId}), Paciente da consulta: ${appointment.patient.name} (ID: ${appointment.patient.id})`
+        );
+        return {
+          success: false,
+          message: `Ação não permitida: Apenas o próprio paciente (${appointment.patient.name}) ou o responsável por dependentes diretamente vinculados ao seu cadastro podem desmarcar esta consulta. Terceiros não têm autorização para desmarcar consultas de outros pacientes.`,
+          data: { blockedThirdParty: true },
+        };
+      }
     }
 
     // Verificar antecedência mínima
@@ -770,11 +885,14 @@ export async function cancelarConsulta(agendamentoId: string, motivo?: string): 
 
 /**
  * 4. CONFIRMAR REMARCAÇÃO DE CONSULTA
+ * Proteção de Segurança: Apenas o próprio paciente ou seu responsável direto podem remarcar.
+ * Terceiros NUNCA podem remarcar consultas de outros pacientes!
  */
 export async function confirmarRemarcacao(
   agendamentoId: string,
   novaDataHora: string, // YYYY-MM-DD HH:mm ou ISO ou DD/MM/YYYY HH:mm
-  patientPhone?: string
+  callerPhone?: string,
+  callerPatientId?: string
 ): Promise<ToolResult> {
   try {
     let oldAppointment = null;
@@ -789,8 +907,30 @@ export async function confirmarRemarcacao(
 
     if (oldAppointment) {
       patient = oldAppointment.patient;
-    } else if (patientPhone) {
-      patient = await findPatientByPhone(patientPhone);
+
+      // PROTEÇÃO CRÍTICA DE SEGURANÇA:
+      // Apenas o próprio paciente ou responsável por dependente podem remarcar. Terceiros são bloqueados!
+      if (callerPhone || callerPatientId) {
+        const authCheck = await isPatientOrDependentOfCaller(
+          patient,
+          callerPhone || '',
+          callerPatientId,
+          oldAppointment.clinicId
+        );
+
+        if (!authCheck.isAllowed) {
+          console.warn(
+            `🚨 [Segurança] Tentativa de remarcação de terceiro BLOQUEADA! Solicitante: ${callerPhone} (ID: ${callerPatientId}), Paciente da consulta: ${patient.name} (ID: ${patient.id})`
+          );
+          return {
+            success: false,
+            message: `Ação não permitida: Apenas o próprio paciente (${patient.name}) ou o responsável por dependentes diretamente vinculados podem remarcar esta consulta. Terceiros não têm autorização para alterar consultas de outros pacientes.`,
+            data: { blockedThirdParty: true },
+          };
+        }
+      }
+    } else if (callerPhone) {
+      patient = await findPatientByPhone(callerPhone);
     }
 
     if (!patient) {
@@ -1615,6 +1755,20 @@ export async function confirmarPresencaConsulta(
         where: { id: agendamentoId },
         include: { patient: true, clinic: true },
       });
+      if (appointment && telefonePaciente) {
+        const authCheck = await isPatientOrDependentOfCaller(
+          appointment.patient,
+          telefonePaciente,
+          undefined,
+          clinicId
+        );
+        if (!authCheck.isAllowed) {
+          return {
+            success: false,
+            message: 'Ação não permitida: Apenas o próprio paciente ou responsável direto podem confirmar esta consulta.',
+          };
+        }
+      }
     } else {
       const patient = await findPatientByPhone(telefonePaciente, clinicId);
 
