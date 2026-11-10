@@ -1328,7 +1328,7 @@ export default function Dashboard() {
 
     const normDur = Number(slotDurationMinutes) || 45;
     const retDur = Number(returnSlotDurationMinutes) || 25;
-    const count = Math.max(1, Math.min(Number(maxReturnSlotsPerDay) || 4, 10));
+    const count = Math.max(1, Math.min(returnSlotTimes.length || Number(maxReturnSlotsPerDay) || 2, 10));
 
     if (type === 'start') {
       const times: string[] = [];
@@ -4464,6 +4464,106 @@ export default function Dashboard() {
                             {mins} min
                           </button>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* =========================================================================
+                      OPÇÕES ESPECÍFICAS DE CONSULTAS DE RETORNO (HORÁRIOS RESERVADOS)
+                  ========================================================================= */}
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50/60 to-white border border-sky-200/90 space-y-4 shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-100">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-sky-700" />
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                              Consultas de Retorno por Dia & Horários Reservados
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Marque em quais horários da grade essas consultas devam ficar
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="text-xs font-black px-2.5 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                          {returnSlotTimes.length} {returnSlotTimes.length === 1 ? 'horário selecionado' : 'horários selecionados'}
+                        </span>
+                      </div>
+
+                      {/* HORÁRIOS EM QUE ESSAS CONSULTAS DEVAM FICAR */}
+                      <div className="space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="font-extrabold text-slate-800 text-xs">
+                            Horários em que essas consultas devam ficar (Selecione na grade):
+                          </label>
+
+                          {/* ATALHOS RÁPIDOS DE DISTRIBUIÇÃO DOS RETORNOS */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-400">Atalhos:</span>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('end')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Últimos horários
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('start')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Primeiros horários
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('split')}
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-sky-200 text-sky-800 hover:bg-sky-100 transition"
+                            >
+                              Início & Fim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyReturnPresets('clear')}
+                              className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-rose-600 transition"
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500">
+                          Clique diretamente nos horários da grade abaixo para definir quais horários do expediente serão reservados para consultas de retorno:
+                        </p>
+
+                        {/* GRADE CLICÁVEL DE HORÁRIOS PARA RETORNO */}
+                        <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-white border border-sky-200/80 max-h-48 overflow-y-auto">
+                          {generatedPreviewSlots
+                            .filter((s) => !s.isBreak)
+                            .map((slot) => {
+                              const isSelectedReturn = returnSlotTimes.includes(slot.time);
+                              return (
+                                <button
+                                  key={slot.time}
+                                  type="button"
+                                  onClick={() => toggleReturnSlotTime(slot.time)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-black border transition flex items-center gap-1.5 cursor-pointer ${
+                                    isSelectedReturn
+                                      ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-sky-50 hover:border-sky-300'
+                                  }`}
+                                >
+                                  {isSelectedReturn && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                  <span>{slot.time} - {slot.endTime}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                    isSelectedReturn ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-600'
+                                  }`}>
+                                    {isSelectedReturn ? `Retorno (${slot.duration}m)` : `1ª Vez (${slot.duration}m)`}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                        </div>
                       </div>
                     </div>
                   </div>
