@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parseISO, addMinutes } from 'date-fns';
-import { parseBRT } from '@/lib/ai/tools';
+import { parseBRT, notifyPatientAppointmentCancelled } from '@/lib/ai/tools';
 import { notifyFirstInWaitlistForVacatedSlot } from '@/lib/waitlist';
 import { requireAuth, getSession, forbiddenResponse } from '@/lib/apiAuth';
 
@@ -399,10 +399,31 @@ export async function PATCH(req: NextRequest) {
         console.warn('⚠️ [Fila de Espera] Falha ao notificar fila no cancelamento:', wErr);
       }
 
+      // ITEM PÉTREO: Notificar o paciente imediatamente via WhatsApp (pela Sofia)
+      let patientNotified = false;
+      if (currentAppt.patient?.phone) {
+        try {
+          const notifyRes = await notifyPatientAppointmentCancelled({
+            appointmentId: currentAppt.id,
+            patientId: currentAppt.patient.id,
+            patientName: currentAppt.patient.name,
+            patientPhone: currentAppt.patient.phone,
+            startTime: oldStart,
+            clinicId: clinic?.id,
+            reason: notes || 'Desmarcação realizada no painel da agenda',
+            origin: 'PAINEL',
+          });
+          patientNotified = Boolean(notifyRes.success);
+        } catch (pErr) {
+          console.warn('⚠️ [Aviso Desmarcação] Falha ao notificar paciente via WhatsApp:', pErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         action: 'CANCELADO',
         appointment: updatedAppt,
+        patientNotified,
         vacatedSlot: {
           startTime: oldStart,
           endTime: oldEnd,

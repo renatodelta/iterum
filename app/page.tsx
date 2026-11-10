@@ -1763,8 +1763,8 @@ export default function Dashboard() {
   async function handleManualCancel(apptId: string) {
     const isConfirmed = selectedApptDetails?.status === 'CONFIRMADO' || selectedApptDetails?.status === 'CONFIRMED';
     const confirmMessage = isConfirmed
-      ? 'Atenção: O paciente já havia confirmado presença nesta consulta.\n\nDeseja realmente desmarcar este horário e cancelar a confirmação?\nA vaga ficará disponível e o 1º paciente da Fila de Espera será notificado automaticamente via WhatsApp.'
-      : 'Deseja realmente desmarcar esta consulta?\n\nO horário ficará vago e será oferecido automaticamente ao 1º paciente da Fila de Espera via WhatsApp.';
+      ? 'Atenção: O paciente já havia confirmado presença nesta consulta.\n\nDeseja realmente desmarcar este horário e cancelar a confirmação?\n\n• O paciente será avisado pela Sofia via WhatsApp;\n• A vaga ficará disponível e o 1º paciente da Fila de Espera será notificado automaticamente.'
+      : 'Deseja realmente desmarcar esta consulta?\n\n• O paciente será avisado pela Sofia via WhatsApp;\n• O horário ficará vago e será oferecido automaticamente ao 1º paciente da Fila de Espera.';
 
     if (!confirm(confirmMessage)) {
       return;
@@ -1783,9 +1783,15 @@ export default function Dashboard() {
         setSelectedApptDetails(null);
         fetchData();
         fetchWaitlist();
-        if (data.waitlistNotification?.contacted) {
+        if (data.patientNotified && data.waitlistNotification?.contacted) {
           setWaitlistNotice(
-            `Consulta desmarcada! O horário foi liberado e o 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
+            `Consulta desmarcada! O paciente foi avisado pela Sofia via WhatsApp e o 1º da fila (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente!`
+          );
+        } else if (data.patientNotified) {
+          setWaitlistNotice('Consulta desmarcada! O paciente foi avisado pela Sofia via WhatsApp.');
+        } else if (data.waitlistNotification?.contacted) {
+          setWaitlistNotice(
+            `Consulta desmarcada! O 1º paciente da Fila de Espera (${data.waitlistNotification.patient.patientName}) foi contactado automaticamente pelo WhatsApp!`
           );
         } else {
           setWaitlistNotice('Consulta desmarcada com sucesso.');

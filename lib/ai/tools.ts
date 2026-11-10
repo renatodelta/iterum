@@ -884,18 +884,22 @@ export async function cancelarConsulta(
       origin: 'WHATSAPP_SOFIA',
     }).catch(() => {});
 
-    // Notificação de segurança para o WhatsApp original do paciente (se diferente do solicitante)
+    // ITEM PÉTREO: Notificação formal de desmarcação enviada pela Sofia para o WhatsApp do paciente
     try {
       if (appointment.patient?.phone) {
-        const destPhone = appointment.patient.phone.split('-')[0].replace(/\D/g, '');
-        if (destPhone.length >= 10 && destPhone.length <= 13) {
-          const doctorName = appointment.clinic.doctorName || appointment.clinic.name;
-          const noticeText = `Olá ${appointment.patient.name}! Informamos que a sua consulta do dia ${dataFormatada} com ${doctorName} foi desmarcada. Caso não tenha sido você ou um familiar responsável que solicitou esta desmarcação, por favor entre em contato imediatamente com o consultório.`;
-          sendWhatsAppMessage(appointment.patient.phone, noticeText).catch(() => {});
-        }
+        await notifyPatientAppointmentCancelled({
+          appointmentId: appointment.id,
+          patientId: appointment.patient.id,
+          patientName: appointment.patient.name,
+          patientPhone: appointment.patient.phone,
+          startTime: appointment.startTime,
+          clinicId: appointment.clinicId,
+          reason: motivo || 'Aviso prévio do paciente',
+          origin: 'WHATSAPP_SOFIA',
+        });
       }
     } catch (noticeErr) {
-      // Ignora erro no disparo de segurança secundário
+      console.warn('⚠️ [Aviso Desmarcação] Falha ao disparar notificação formal de cancelamento:', noticeErr);
     }
 
     return {
@@ -2108,5 +2112,95 @@ export async function cadastrarPaciente({
     };
   }
 }
+
+/**
+ * ITEM PÉTREO: Notifica o paciente via WhatsApp (pela Sofia) sempre que uma consulta for desmarcada
+ * Funciona para qualquer status anterior (mesmo sem confirmação, agendado ou confirmado).
+ */
+export async function notifyPatientAppointmentCancelled(params: {
+  appointmentId?: string;
+  patientId: string;
+  patientName: string;
+  patientPhone: string;
+  startTime: Date | string;
+  clinicId?: string;
+  reason?: string;
+  origin?: 'PAINEL' | 'WHATSAPP_SOFIA' | 'SISTEMA_AUTO';
+}): Promise<{ success: boolean; message?: string }> {
+  try {
+    const { patientId, patientName, patientPhone, startTime, clinicId, reason, origin = 'PAINEL' } = params;
+
+    const cleanPhone = (patientPhone || '').split('-')[0].replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      console.warn('⚠️ [Aviso Desmarcação] Telefone do paciente inválido para WhatsApp:', patientPhone);
+      return { success: false, message: 'Telefone inválido' };
+    }
+
+    const clinic = clinicId
+      ? await prisma.clinic.findUnique({ where: { id: clinicId } })
+      : await prisma.clinic.findFirst();
+
+    const rawDocName = clinic?.doctorName || clinic?.name || '';
+    const formattedDocName = formatDoctorHonorific(rawDocName);
+    const docPronoun = formattedDocName.startsWith('Dra') ? 'da' : 'do';
+
+    const startDate = typeof startTime === 'string' ? new Date(startTime) : startTime;
+    const dataFormatada = formatBRT(startDate, true);
+
+    const rawFirstName =
+      patientName && patientName !== 'Paciente' && patientName !== 'Titular WhatsApp'
+        ? patientName.trim().split(/\s+/)[0]
+        : '';
+    const greeting = rawFirstName ? `Olá, *${rawFirstName}*! Tudo bem?` : 'Olá! Tudo bem?';
+
+    const cleanReason = reason && !reason.includes('via WhatsApp') && !reason.includes('manualmente pelo painel')
+      ? `\nMotivo informado: ${reason}`
+      : '';
+
+    const cancellationMessage = `${greeting} 😊
+
+Aqui é a Sofia, secretária virtual do consultório ${docPronoun} *${formattedDocName}*.
+
+Informamos que o seu agendamento para:
+📅 *${dataFormatada}*
+foi desmarcado no nosso sistema.${cleanReason}
+
+Caso deseje reagendar para outra data de sua preferência ou precise de qualquer auxílio, estou à sua inteira disposição por aqui! Basta me enviar uma mensagem. Tenha um ótimo dia! 🩺`;
+
+    // 1. Enviar mensagem de WhatsApp diretamente para o paciente
+    await sendWhatsAppMessage(patientPhone, cancellationMessage);
+
+    // 2. Salvar no histórico de mensagens do paciente para constar na conversa
+    if (clinic) {
+      await prisma.message.create({
+        data: {
+          clinicId: clinic.id,
+          patientId,
+          role: 'assistant',
+          content: cancellationMessage,
+        },
+      }).catch((e) => console.warn('Aviso ao registrar mensagem de cancelamento no banco:', e));
+    }
+
+    // 3. Registrar no log de ações de automação
+    logAutomationAction({
+      type: 'CANCELAMENTO',
+      title: 'Aviso de Desmarcação Enviado',
+      description: `Sofia avisou ${patientName} via WhatsApp sobre a desmarcação da consulta de ${dataFormatada}.`,
+      patientName,
+      patientPhone,
+      appointmentDate: formatBRTShort(startDate).split(' às')[0]?.trim(),
+      slotTime: formatBRTShort(startDate).split(' às')[1]?.trim(),
+      origin,
+    }).catch(() => {});
+
+    console.log(`📢 [Aviso Desmarcação] Paciente ${patientName} (${patientPhone}) notificado com sucesso via WhatsApp pela Sofia.`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ [Aviso Desmarcação] Erro ao notificar paciente sobre desmarcação:', error);
+    return { success: false, message: error.message };
+  }
+}
+
 
 
