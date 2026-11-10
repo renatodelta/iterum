@@ -92,14 +92,14 @@ export async function POST(req: NextRequest) {
       const isAudio = msg.type === 'audio' && msg.audio?.id;
       audioId = isAudio ? msg.audio.id : undefined;
 
-      // Captura reações com emojis na bolha da mensagem (ex: joinha 👍, coração, check)
+      // Captura reações com emojis na bolha da mensagem (ex: joinha 👍, coração, check - qualquer tom de pele)
       const isReaction = msg.type === 'reaction' && msg.reaction?.emoji;
       let reactionText = '';
       if (isReaction) {
         const emoji = msg.reaction.emoji;
-        if (emoji === '👍' || emoji === '👌' || emoji === '👏' || emoji === '❤️' || emoji === '✅') {
-          reactionText = 'Sim, confirmo! 👍';
-        } else if (emoji === '👎' || emoji === '❌') {
+        if (/👍|👌|👏|❤️|✅|🆗|🆒/u.test(emoji)) {
+          reactionText = 'Sim, confirmar';
+        } else if (/👎|❌/u.test(emoji)) {
           reactionText = 'Não, quero alterar';
         } else {
           reactionText = emoji;
@@ -189,11 +189,22 @@ export async function POST(req: NextRequest) {
         const rawJid = msgData.key?.remoteJid || msgData.key?.participant || '';
         senderPhone = rawJid.replace('@s.whatsapp.net', '').replace('@g.us', '').replace(/\D/g, '');
 
+        const reactionText = msgData.message?.reactionMessage?.text;
+        let evoReaction = '';
+        if (reactionText) {
+          if (/👍|👌|👏|❤️|✅|🆗|🆒/u.test(reactionText)) {
+            evoReaction = 'Sim, confirmar';
+          } else if (/👎|❌/u.test(reactionText)) {
+            evoReaction = 'Não, quero alterar';
+          }
+        }
+
         userText =
           msgData.message?.conversation ||
           msgData.message?.extendedTextMessage?.text ||
           msgData.message?.buttonsResponseMessage?.selectedButtonId ||
           msgData.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+          evoReaction ||
           '';
 
         pushName = msgData.pushName || body.senderName || 'Paciente';

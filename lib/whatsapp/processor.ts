@@ -200,7 +200,8 @@ export async function executeWhatsAppMessageJob(
           lowerText === 'sim quero' ||
           lowerText === 'pode agendar' ||
           lowerText === 'pode marcar' ||
-          lowerText === 'sim, pode agendar';
+          lowerText === 'sim, pode agendar' ||
+          /👍|👌|👏|❤️|✅|🆗/u.test(text);
 
         const isDeclineReply =
           lowerText === 'btn_waitlist_nao' ||
@@ -279,10 +280,31 @@ export async function executeWhatsAppMessageJob(
       content: m.content,
     }));
 
+    // 6.1 Tratamento inteligente de confirmação direta (Joinha 👍, botão 'Sim, confirmar', '1', 'Sim')
+    const isThumbsUpOrPositive =
+      /^(👍|👍🏻|👍🏼|👍🏽|👍🏾|👍🏿|sim|1|sim, confirmar|confirmar|confirmo|pode confirmar|ok|fechado|com certeza|btn_confirmar_sim)$/i.test(lowerText) ||
+      /^[👍👌👏❤️✅🆗\s]+$/u.test(text);
+
+    let processedUserText = text;
+    if (isThumbsUpOrPositive) {
+      // Verifica se a última mensagem da assistente foi pedindo confirmação de agendamento
+      const lastAssistantMsg = recentMessages
+        .slice()
+        .reverse()
+        .find((m) => m.role === 'assistant');
+
+      if (lastAssistantMsg && /posso confirmar|deseja confirmar|vou confirmar seu agendamento/i.test(lastAssistantMsg.content)) {
+        processedUserText = 'Sim, confirmo o agendamento! Pode efetivar a gravação agora.';
+        console.log(`👍 [Confirmação Automática] Resposta positiva/joinha detectada para o resumo anterior. Prosseguindo com efetivação.`);
+      }
+    } else if (lowerText === 'btn_confirmar_nao' || lowerText === '2' || lowerText === 'não, alterar') {
+      processedUserText = 'Não, quero alterar o agendamento.';
+    }
+
     // 7. Processar com o motor de IA Sofia (OpenAI Function Calling)
     const agentResult = await processAgentMessage({
       patientPhone: formattedPhone,
-      userMessage: text,
+      userMessage: processedUserText,
       conversationHistory: history,
       clinicId: clinic.id,
       pushName: patientName || undefined,
@@ -294,12 +316,18 @@ export async function executeWhatsAppMessageJob(
 
     // 9. Detectar se a resposta é um pedido de confirmação de agendamento ou presença
     // para anexar botões interativos nativos da Meta no WhatsApp ("Sim, confirmar" e "Não, alterar")
+    // e adicionar opções numeradas no texto para garantir compatibilidade total (WhatsApp Web e mobile)
     const isConfirmationQuestion =
       /posso confirmar/i.test(formattedReply) ||
       /deseja confirmar/i.test(formattedReply) ||
       /confirma seu agendamento/i.test(formattedReply) ||
       /confirma para você/i.test(formattedReply) ||
       /confirmo para você/i.test(formattedReply);
+
+    let finalReply = formattedReply;
+    if (isConfirmationQuestion && !/\[1\]/i.test(finalReply)) {
+      finalReply += '\n\n*Responda com:*\n[1] Sim, confirmar (ou envie 👍)\n[2] Não, alterar';
+    }
 
     const confirmationButtons = isConfirmationQuestion
       ? [
@@ -310,19 +338,19 @@ export async function executeWhatsAppMessageJob(
 
     // 10. Disparo imediato da resposta no WhatsApp e persistência no banco em paralelo
     await Promise.all([
-      sendWhatsAppMessage(formattedPhone, formattedReply, confirmationButtons, customCreds),
+      sendWhatsAppMessage(formattedPhone, finalReply, confirmationButtons, customCreds),
       prisma.message.create({
         data: {
           clinicId: clinic.id,
           patientId: patient.id,
           role: 'assistant',
-          content: formattedReply,
+          content: finalReply,
         },
       }),
     ]);
 
     console.log(`✅ [Processador WhatsApp] Resposta entregue com sucesso (paciente ${patient.id})`);
-    return { success: true, reply: formattedReply };
+    return { success: true, reply: finalReply };
   } catch (error: any) {
     console.error('❌ [Processador WhatsApp] Erro crítico no atendimento:', error);
 

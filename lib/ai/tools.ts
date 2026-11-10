@@ -556,10 +556,13 @@ export async function buscarHorariosDisponiveis(
 
     // GOVERNANÇA DA AGENDA MÉDICA: Apenas o médico/equipe humana define o período de abertura
     // Se o médico não cadastrou período ou dias de atendimento, a agenda está FECHADA para novos agendamentos
+    const docArticle = formattedDocName.startsWith('Dra') ? 'da' : 'do';
+    const docBy = formattedDocName.startsWith('Dra') ? 'pela' : 'pelo';
+
     if (!scheduleStartDate || !scheduleEndDate || selectedDaysList.length === 0) {
       return {
         success: true,
-        message: `A agenda de consultas da ${docDisplayName} ainda não foi aberta para este período. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir novas vagas na grade?`,
+        message: `A agenda de consultas ${docArticle} ${docDisplayName} ainda não foi aberta para este período. Vamos adicionar você à nossa lista de espera prioritária para avisarmos assim que o responsável abrir novas vagas na grade!`,
         data: { slots: [] },
       };
     }
@@ -568,7 +571,7 @@ export async function buscarHorariosDisponiveis(
       const [sy, sm, sd] = scheduleStartDate.split('-');
       return {
         success: true,
-        message: `A agenda de atendimentos da ${docDisplayName} para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade. Posso colocar você na nossa lista de espera prioritária para avisarmos assim que novas vagas forem liberadas?`,
+        message: `A agenda de atendimentos ${docArticle} ${docDisplayName} para este período tem início em ${sd}/${sm}/${sy}. A data solicitada (${cleanDateStr}) é anterior à abertura da grade. Vamos colocar você na nossa lista de espera prioritária para avisá-lo assim que novas vagas forem liberadas!`,
         data: { slots: [] },
       };
     }
@@ -579,7 +582,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `O período de agendamentos aberto pela ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas pela ${formattedDocName} no sistema. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que novas vagas forem abertas pelo consultório?`,
+          message: `O período de agendamentos aberto ${docBy} ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram liberadas ${docBy} ${formattedDocName} no sistema. Vamos adicionar seu nome à nossa lista de espera prioritária para avisá-lo assim que o responsável abrir novas vagas no sistema!`,
           data: { slots: [] },
         };
       }
@@ -589,7 +592,7 @@ export async function buscarHorariosDisponiveis(
         const [ey, em, ed] = scheduleEndDate.split('-');
         return {
           success: true,
-          message: `A agenda de atendimentos da ${docDisplayName} para este período está aberta até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas na grade pela ${formattedDocName}. Posso adicionar você à nossa lista de espera prioritária para avisarmos assim que novas datas forem abertas pelo consultório?`,
+          message: `A agenda de atendimentos ${docArticle} ${docDisplayName} para este período está aberta até ${ed}/${em}/${ey}. Datas posteriores ainda não foram liberadas na grade ${docBy} ${formattedDocName}. Vamos adicionar você à nossa lista de espera prioritária para avisá-lo por aqui assim que novas vagas forem abertas pelo responsável!`,
           data: { slots: [] },
         };
       }
@@ -1122,19 +1125,21 @@ export async function buscarProximosHorariosDisponiveis(
 
     // Dados profissionais para comunicação humanizada e acolhedora
     const rawDocName = clinic.doctorName || clinic.name || '';
-    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const formattedDocName = formatDoctorHonorific(rawDocName);
     const docSpecialty = clinic.specialty ? ` (${clinic.specialty})` : '';
     const docDisplayName = `${formattedDocName}${docSpecialty}`;
+    const docArticle = formattedDocName.startsWith('Dra') ? 'da' : 'do';
+    const docBy = formattedDocName.startsWith('Dra') ? 'pela' : 'pelo';
 
     // Se o médico configurou uma data final e ela já passou, a agenda está aguardando nova liberação pelo profissional
     if (meta?.scheduleEndDate && meta.scheduleEndDate < todayISO) {
       const [ey, em, ed] = meta.scheduleEndDate.split('-');
       return {
         success: true,
-        message: `O período de agendamentos aberto pelo(a) ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas pelo(a) ${formattedDocName}.`,
+        message: `O período de agendamentos aberto ${docBy} ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas ${docBy} ${formattedDocName}. Encaminhe obrigatoriamente para a Lista de Espera prioritária.`,
         data: {
           days: [],
-          formattedText: `No momento, a agenda de atendimentos do(a) ${docDisplayName} para este período já foi encerrada e novas datas ainda não foram liberadas na grade pelo(a) ${formattedDocName}. Posso adicionar seu nome à nossa lista de espera prioritária para avisarmos assim que o consultório abrir as novas datas!`,
+          formattedText: `No momento, a agenda de atendimentos ${docArticle} ${docDisplayName} para este período já foi encerrada e novas datas ainda não foram liberadas na grade ${docBy} ${formattedDocName}. Vamos incluir seu nome na nossa lista de espera prioritária para avisá-lo assim que o responsável abrir novas vagas no sistema!`,
         },
       };
     }
@@ -1194,14 +1199,14 @@ export async function buscarProximosHorariosDisponiveis(
 
     if (daysWithSlots.length === 0) {
       const dataLimiteTexto = meta?.scheduleEndDate
-        ? ` dentro do período aberto pelo(a) ${formattedDocName} (até ${meta.scheduleEndDate.split('-').reverse().join('/')})`
+        ? ` até ${meta.scheduleEndDate.split('-').reverse().join('/')}`
         : '';
       return {
         success: true,
-        message: `Não há horários disponíveis nos próximos dias úteis${dataLimiteTexto}.`,
+        message: `Não há horários disponíveis nos próximos dias úteis${dataLimiteTexto}. Apenas a Lista de Espera prioritária deve ser oferecida (nunca sugira outras opções).`,
         data: {
           days: [],
-          formattedText: `No momento, não localizamos horários livres na agenda do(a) ${docDisplayName}${dataLimiteTexto}. Se desejar, posso adicionar você à nossa lista de espera prioritária para avisarmos caso surja uma desistência ou assim que novas datas forem liberadas pelo(a) ${formattedDocName}!`,
+          formattedText: `No momento, não há horários disponíveis na agenda ${docArticle} ${docDisplayName}${dataLimiteTexto}. Vou adicionar você à nossa lista de espera prioritária para avisá-lo caso surja uma desistência ou assim que novas datas forem liberadas!`,
         },
       };
     }
@@ -1718,7 +1723,7 @@ export async function adicionarFilaEspera(
 
     let clinic = clinicId ? await prisma.clinic.findUnique({ where: { id: clinicId } }) : await prisma.clinic.findFirst();
     const rawDocName = clinic?.doctorName || clinic?.name || '';
-    const formattedDocName = rawDocName ? (rawDocName.startsWith('Dr') ? rawDocName : `Dr(a). ${rawDocName}`) : 'médico(a)';
+    const formattedDocName = formatDoctorHonorific(rawDocName);
     const docSpecialty = clinic?.specialty ? ` (${clinic.specialty})` : '';
     const docDisplayName = `${formattedDocName}${docSpecialty}`;
 
