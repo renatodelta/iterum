@@ -315,8 +315,7 @@ export async function executeWhatsAppMessageJob(
     const formattedReply = formatForWhatsApp(agentResult.reply);
 
     // 9. Detectar se a resposta é um pedido de confirmação de agendamento ou presença
-    // para anexar botões interativos nativos da Meta no WhatsApp ("Sim, confirmar" e "Não, alterar")
-    // e adicionar opções numeradas no texto para garantir compatibilidade total (WhatsApp Web e mobile)
+    // para anexar os botões interativos nativos ("Sim, confirmar" e "Não, alterar") de forma limpa e elegante
     const isConfirmationQuestion =
       /posso confirmar/i.test(formattedReply) ||
       /deseja confirmar/i.test(formattedReply) ||
@@ -324,10 +323,7 @@ export async function executeWhatsAppMessageJob(
       /confirma para você/i.test(formattedReply) ||
       /confirmo para você/i.test(formattedReply);
 
-    let finalReply = formattedReply;
-    if (isConfirmationQuestion && !/\[1\]/i.test(finalReply)) {
-      finalReply += '\n\n*Responda com:*\n[1] Sim, confirmar (ou envie 👍)\n[2] Não, alterar';
-    }
+    const finalReply = formattedReply;
 
     const confirmationButtons = isConfirmationQuestion
       ? [

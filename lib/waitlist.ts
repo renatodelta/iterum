@@ -3,6 +3,7 @@ import path from 'path';
 import { prisma } from './prisma';
 import { sendWhatsAppMessage } from './whatsapp/client';
 import { logAutomationAction } from './automation-log';
+import { formatDoctorHonorific } from './ai/tools';
 
 export interface WaitlistEntry {
   id: string;
@@ -439,8 +440,8 @@ export async function removeFromWaitlist(id: string): Promise<boolean> {
 async function getDoctorName(): Promise<string> {
   try {
     const clinic = await prisma.clinic.findFirst();
-    if (clinic?.doctorName) return clinic.doctorName;
-    if (clinic?.name) return clinic.name;
+    if (clinic?.doctorName) return formatDoctorHonorific(clinic.doctorName);
+    if (clinic?.name) return formatDoctorHonorific(clinic.name);
   } catch (e) {
     // fallback
   }
@@ -829,24 +830,20 @@ export async function notifyWaitlistOnScheduleExpansion(params: {
 
       // 2. Montar mensagem empática e personalizada
       let messageText = '';
+      const docPronoun = doctorName.startsWith('Dra') ? 'da' : 'do';
       const shiftMention = patient.preferredShift && patient.preferredShift !== 'Qualquer Horário'
         ? ` no período da *${patient.preferredShift.toLowerCase()}*`
         : '';
 
       if (patientDateDisplay) {
-        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório de *${doctorName}* acabou de liberar a agenda para o período que você aguardava!\n\nVocê havia manifestado interesse para o dia *${patientDateDisplay}*${shiftMention}.\n\nComo você estava na nossa *Fila de Espera*, gostaríamos de dar prioridade para você agendar. Deseja que eu verifique os horários disponíveis para você?`;
+        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de liberar a agenda para o período que você aguardava!\n\nVocê havia manifestado interesse para o dia *${patientDateDisplay}*${shiftMention}.\n\nComo você estava na nossa *Fila de Espera*, gostaríamos de dar prioridade para você agendar. Deseja que eu verifique os horários disponíveis para você?`;
       } else {
-        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório de *${doctorName}* acabou de abrir a agenda de atendimentos até *${endDateDisplay}*!\n\nComo você estava aguardando na nossa *Fila de Espera*, gostaríamos de priorizar o seu agendamento.\n\nQual dia ou turno${shiftMention} seria melhor para a sua consulta?`;
+        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de abrir a agenda de atendimentos até *${endDateDisplay}*!\n\nComo você estava aguardando na nossa *Fila de Espera*, gostaríamos de priorizar o seu agendamento.\n\nQual dia ou turno${shiftMention} seria melhor para a sua consulta?`;
       }
 
-      // 3. Enviar via WhatsApp com botões interativos
+      // 3. Enviar via WhatsApp como mensagem conversacional limpa (sem botões genéricos de sim/não, permitindo ao paciente responder qual dia/turno prefere)
       console.log(`🚀 [Fila de Espera] Notificando paciente ${patient.patientName} (${patient.patientPhone}) sobre expansão da agenda`);
-      const buttons = [
-        { id: 'btn_waitlist_agendar', title: 'Sim, quero agendar!' },
-        { id: 'btn_waitlist_nao', title: 'Agora não' },
-      ];
-
-      await sendWhatsAppMessage(patient.patientPhone, messageText, buttons);
+      await sendWhatsAppMessage(patient.patientPhone, messageText);
 
       // 4. Atualizar status na fila para NOTIFICADO
       await updateWaitlistEntry(patient.id, {
