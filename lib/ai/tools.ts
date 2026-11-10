@@ -2014,6 +2014,8 @@ export async function cadastrarPaciente({
         phoneToUse = candidatePhone;
       }
 
+      const depNotes = `Cadastrado via WhatsApp por titular: ${titular.name} (${titular.phone}${titular.cpf ? ` - CPF Resp: ${titular.cpf}` : ''})${!formattedCpf ? ' [Dependente sem CPF próprio - apresentar certidão de nascimento na recepção]' : ''}`;
+
       beneficiary = await prisma.patient.create({
         data: {
           clinicId: clinic.id,
@@ -2022,18 +2024,23 @@ export async function cadastrarPaciente({
           cpf: formattedCpf || null,
           birthDate: dataNascimento ? dataNascimento.trim() : null,
           cep: cep ? cep.trim() : null,
-          notes: `Cadastrado via WhatsApp por titular: ${titular.name} (${titular.phone})`,
+          notes: depNotes,
         },
       });
     }
 
+    const cpfDisplay = formattedCpf || (titular.cpf ? `Resp: ${titular.cpf}` : 'Certidão na recepção');
+    const docReminder = !formattedCpf
+      ? '\nℹ️ ATENÇÃO SOFIA: O dependente foi registrado sem CPF próprio. Lembre com carinho o(a) responsável de levar a certidão de nascimento ou documento com foto no dia da consulta para finalizar o cadastro na recepção.'
+      : '';
+
     return {
       success: true,
-      message: `✅ Paciente ${beneficiary.name} CADASTRADO como paciente beneficiário da consulta (CPF: ${formattedCpf || 'Registrado'})!\n⚠️ ALERTA DE TRATAMENTO PARA A SOFIA: Você está conversando no WhatsApp com o(a) responsável (${titular.name || 'titular do WhatsApp'}). NUNCA passe a chamar o(a) responsável pelo nome do paciente cadastrado (${beneficiary.name}). NÃO chame criar_novo_agendamento agora! Apresente o resumo do agendamento destacando Paciente (${beneficiary.name}) e Responsável (${titular.name}), e pergunte: "Posso confirmar para você?". Aguarde a confirmação do paciente.`,
+      message: `✅ Paciente ${beneficiary.name} CADASTRADO como paciente beneficiário da consulta (CPF: ${cpfDisplay})!${docReminder}\n⚠️ ALERTA DE TRATAMENTO PARA A SOFIA: Você está conversando no WhatsApp com o(a) responsável (${titular.name || 'titular do WhatsApp'}). NUNCA passe a chamar o(a) responsável pelo nome do paciente cadastrado (${beneficiary.name}). NÃO chame criar_novo_agendamento agora! Apresente o resumo do agendamento destacando Paciente (${beneficiary.name}) e Responsável (${titular.name}), e pergunte: "Posso confirmar para você?". Aguarde a confirmação do paciente.`,
       data: {
         patientId: beneficiary.id,
         patientName: beneficiary.name,
-        cpf: formattedCpf,
+        cpf: formattedCpf || titular.cpf || null,
         phone: beneficiary.phone,
         titularName: titular.name,
         titularPhone: titular.phone,

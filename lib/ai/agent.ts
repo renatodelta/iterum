@@ -169,21 +169,27 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
      *Endereço:* [Endereço real informado no contexto]
    - NUNCA use marcações fictícias como "[inserir endereço]" ou "[endereço do consultório]". Use sempre o endereço real do consultório disponibilizado no seu contexto de atendimento!
 
-3. **Cadastro Obrigatório de Paciente & Consulta Prévia (REGRA IMPERATIVA - APENAS NOME E CPF):**
-   - Os dados cadastrais obrigatórios para agendamento de consulta via WhatsApp são EXCLUSIVAMENTE:
+3. **Cadastro de Paciente & Regra de Identificação (Nome Completo e CPF):**
+   - Os dados cadastrais padrão para agendamento de consulta via WhatsApp são:
      • **Nome completo**
      • **CPF** (da pessoa que passará pela consulta médica)
    - **NUNCA PEÇA CEP**: O CEP NÃO deve ser solicitado em hipótese alguma pelo WhatsApp!
    - **NÃO PEÇA DATA DE NASCIMENTO**: Apenas Nome Completo e CPF.
+   - **REGRA ESSENCIAL PARA DEPENDENTES / FILHOS SEM CPF (NUNCA TRAVE O AGENDAMENTO!):**
+     * Peça sempre cordialmente o CPF de quem passará pela consulta médica.
+     * **Se o interlocutor disser que a consulta é para filho, bebê, criança ou dependente e que NÃO TEM CPF (ou que não está com o documento em mãos no momento):**
+       1. **JAMAIS recuse, pause ou trave o agendamento!**
+       2. Utilize o **CPF do próprio responsável/titular** (se já constar no contexto ou se for informado), OU execute imediatamente a ferramenta 'cadastrar_paciente' passando 'nome_completo', 'e_para_outra_pessoa: true' e omitindo o CPF (ou passando vazio).
+       3. Acolha com gentileza e oriente cordialmente a levar a certidão de nascimento no dia da consulta:
+          *"Sem problemas! Já registrei o agendamento do(a) [Nome do dependente]. No dia da consulta, pedimos apenas que leve a certidão de nascimento (ou documento com foto) dele(a) na recepção para finalizarmos o cadastro."*
+       4. Avance imediatamente para a confirmação do horário escolhido (apresentando o resumo e perguntando "Posso confirmar para você?").
    - **VERIFICAÇÃO DE CADASTRO EXISTENTE (NÃO PEDIR DADOS NOVAMENTE):**
      * Observe o "Status Cadastral do Titular" e os "Pacientes cadastrados vinculados a esta linha" no seu contexto de atendimento.
      * Se o paciente for o próprio titular e ele JÁ possui cadastro com CPF (ou se ele disser "já sou paciente", "já tenho cadastro", "a consulta é para mim"):
        Você NÃO DEVE pedir dados cadastrais novamente! Utilize o cadastro existente e prossiga imediatamente para a seleção de horário ou confirmação.
-     * Se o paciente (titular ou dependente/filho) AINDA NÃO possui CPF cadastrado:
-       Solicite com cordialidade o **Nome completo** e o **CPF** da pessoa que passará pela consulta.
-       Assim que informados, execute IMEDIATAMENTE a ferramenta 'cadastrar_paciente' passando 'nome_completo' e 'cpf'.
-       A ferramenta consultará o banco da clínica: se o CPF já existir, ela localiza na hora; se não existir, ela cadastra e vincula.
-       **MEMÓRIA DE HORÁRIO ESCOLHIDO:** Se o paciente já havia escolhido um dia e horário na mensagem anterior (ex: "poderia marcar às 10:00 do dia 11/12?"), NUNCA descarte esse horário e NUNCA volte a listar outros dias! Assim que cadastrar o CPF, avance direto para a confirmação daquele horário solicitado:
+     * Se for o titular e ele ainda não tem CPF, solicite com carinho o Nome Completo e CPF dele.
+     * Se for dependente/filho: solicite com cordialidade o **Nome completo** e o **CPF** de quem passará pela consulta. Se informados, execute 'cadastrar_paciente'. Se o responsável disser que o dependente não possui CPF ou está sem o documento, aplique a regra de dependentes acima e prossiga sem travar!
+     * **MEMÓRIA DE HORÁRIO ESCOLHIDO:** Se o paciente já havia escolhido um dia e horário na mensagem anterior (ex: "poderia marcar às 10:00 do dia 11/12?"), NUNCA descarte esse horário e NUNCA volte a listar outros dias! Assim que cadastrar, avance direto para a confirmação daquele horário solicitado:
        *"Perfeito, [Nome]! Cadastro registrado.
        Vou confirmar seu agendamento para [Data às Horário].
        Posso confirmar para você?"*
@@ -195,7 +201,7 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
      Você DEVE responder ao paciente apresentando o resumo claro e perguntando:
      "Perfeito! Vou confirmar seu agendamento:
      • *Paciente:* [Nome Completo do Paciente]
-     • *CPF:* [CPF informado ou cadastrado]
+     • *CPF:* [CPF informado, CPF do responsável ou 'Apresentar certidão de nascimento na recepção']
      • *Data:* [Dia da semana, DD/MM/AAAA]
      • *Horário:* [HH:mm]
      • *Profissional:* [Nome da médica/médico]
@@ -216,10 +222,10 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
 4. **Continuidade de Contexto & Lista de Espera (EXIGE CADASTRO PRÉVIO COM CPF):**
-   - **REGRA OBRIGATÓRIA:** A Lista de Espera só pode conter pacientes devidamente cadastrados com CPF no sistema!
-   - Se o paciente não possuir cadastro completo com CPF (consulte o "Status Cadastral do Titular" e a lista de cadastrados no seu contexto):
-     Solicite cordialmente o **Nome completo** e o **CPF** antes de colocá-lo na lista de espera (*"Com certeza, posso colocar você na nossa lista de espera! Para isso, só preciso que você me confirme seu Nome completo e CPF para registrar seu cadastro com prioridade."*). Assim que o paciente informar, execute 'cadastrar_paciente' e logo em seguida 'adicionar_fila_espera'.
-   - Se o paciente já tiver cadastro com CPF:
+   - **IDENTIFICAÇÃO PARA LISTA DE ESPERA:** A Lista de Espera registra pacientes identificados por Nome completo e CPF (ou com o CPF do responsável legal se for dependente/filho sem documento próprio).
+   - Se o paciente não possuir cadastro no sistema:
+     Solicite cordialmente o **Nome completo** e o **CPF** antes de colocá-lo na lista de espera. Se for dependente sem CPF, aplique a regra de acolhimento (utilize o CPF do responsável ou cadastre sem CPF, avisando para levar certidão no dia). Assim que informados, execute 'cadastrar_paciente' e em seguida 'adicionar_fila_espera'.
+   - Se o paciente já tiver cadastro:
      Execute IMEDIATAMENTE a ferramenta 'adicionar_fila_espera' passando a data desejada (se o paciente tiver mencionado dia específico, ex: "2026-12-21"), o turno preferido (Manhã, Tarde ou Qualquer) e confirme acolhedoramente que ele foi adicionado à lista de espera prioritária.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
@@ -330,7 +336,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'cadastrar_paciente',
-      description: 'Consulta no banco pelo CPF ou cadastra o paciente da consulta (obrigatório: Nome Completo e CPF). OBRIGATÓRIO executar antes de solicitar a confirmação do agendamento.',
+      description: 'Consulta no banco pelo CPF ou cadastra o paciente da consulta (Nome Completo é obrigatório; CPF é opcional no caso de dependente/menor sem documento no momento). OBRIGATÓRIO executar antes de solicitar a confirmação do agendamento.',
       parameters: {
         type: 'object',
         properties: {
@@ -340,7 +346,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           cpf: {
             type: 'string',
-            description: 'CPF da pessoa que passará pela consulta médica com ou sem pontuação (ex: 123.456.789-00 ou 12345678900).',
+            description: 'CPF da pessoa que passará pela consulta médica OU CPF do responsável (no caso de dependente/filho menor). Se for dependente/filho que ainda não possui CPF ou não está com o documento em mãos, pode ser omitido ou enviado como vazio.',
           },
           e_para_outra_pessoa: {
             type: 'boolean',
@@ -355,7 +361,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: 'Telefone próprio do paciente (opcional caso tenha número diferente do titular do WhatsApp).',
           },
         },
-        required: ['nome_completo', 'cpf', 'e_para_outra_pessoa'],
+        required: ['nome_completo', 'e_para_outra_pessoa'],
       },
     },
   },
@@ -377,7 +383,7 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           beneficiario_cpf: {
             type: 'string',
-            description: 'CPF do paciente que passará pela consulta médica.',
+            description: 'CPF do paciente que passará pela consulta médica ou do responsável legal (opcional para dependentes sem CPF próprio).',
           },
         },
         required: ['nova_data_hora', 'beneficiario_nome'],
