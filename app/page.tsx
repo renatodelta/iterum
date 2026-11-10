@@ -1497,7 +1497,13 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        setClinic(data.clinic);
+        setClinic((prev: any) => ({
+          ...prev,
+          ...data.clinic,
+          googleMapsUrl: data.clinic?.googleMapsUrl !== undefined ? data.clinic.googleMapsUrl : (prev?.googleMapsUrl || ''),
+          wazeUrl: data.clinic?.wazeUrl !== undefined ? data.clinic.wazeUrl : (prev?.wazeUrl || ''),
+          parkingTips: data.clinic?.parkingTips !== undefined ? data.clinic.parkingTips : (prev?.parkingTips || ''),
+        }));
         setSaveProfissionaisMsg('Dados profissionais do médico titular salvos com sucesso!');
         setTimeout(() => setSaveProfissionaisMsg(null), 6000);
         fetchUsers();

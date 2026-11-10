@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Shield,
   Zap,
+  ArrowDown,
 } from 'lucide-react';
 
 interface ChatConversation {
@@ -61,9 +62,37 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [togglingHandoff, setTogglingHandoff] = useState(false);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  // Rolar suavemente ou diretamente para o final
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior,
+      });
+      isAtBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+  };
+
+  // Detectar posição do scroll do usuário na conversa
+  const handleScrollMessages = () => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    // Se a distância até o fim for menor que 80px, consideramos que o usuário está no final
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+    const isAtBottom = distanceToBottom < 80;
+    isAtBottomRef.current = isAtBottom;
+    setShowScrollBottomBtn(!isAtBottom);
+  };
 
   // Formatar telefone para padrão BR
   const formatPhoneBR = (phone?: string | null) => {
@@ -106,7 +135,18 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
       const data = await res.json();
       if (data.success) {
         setSelectedPatient(data.patient);
-        setMessages(data.messages || []);
+        const newMsgs = data.messages || [];
+        setMessages((prev) => {
+          // Se for idêntico ao anterior (mesma quantidade e último ID igual), não altera a referência para não disparar scroll
+          if (prev.length === newMsgs.length && prev.length > 0) {
+            const lastPrev = prev[prev.length - 1];
+            const lastNew = newMsgs[newMsgs.length - 1];
+            if (lastPrev.id === lastNew.id && lastPrev.content === lastNew.content) {
+              return prev;
+            }
+          }
+          return newMsgs;
+        });
       }
     } catch (err) {
       console.error('Erro ao carregar mensagens:', err);
@@ -121,7 +161,11 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
 
   useEffect(() => {
     if (selectedPatientId) {
-      fetchMessages(selectedPatientId);
+      isAtBottomRef.current = true;
+      setShowScrollBottomBtn(false);
+      fetchMessages(selectedPatientId).then(() => {
+        setTimeout(() => scrollToBottom('auto'), 50);
+      });
     }
   }, [selectedPatientId]);
 
@@ -136,9 +180,11 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
     return () => clearInterval(timer);
   }, [selectedPatientId]);
 
-  // Scroll automático para a última mensagem
+  // Scroll automático para a última mensagem apenas se o usuário estiver no final
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isAtBottomRef.current) {
+      scrollToBottom('smooth');
+    }
   }, [messages]);
 
   // Filtragem de conversas
@@ -177,6 +223,9 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
       const data = await res.json();
       if (data.success && data.message) {
         setMessages((prev) => [...prev, data.message]);
+        isAtBottomRef.current = true;
+        setShowScrollBottomBtn(false);
+        setTimeout(() => scrollToBottom('smooth'), 40);
         if (selectedPatient) {
           setSelectedPatient({ ...selectedPatient, humanHandoff: true });
         }
@@ -494,7 +543,11 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
             )}
 
             {/* ÁREA DE MENSAGENS (ESTILO WHATSAPP) */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#efeae2]/30 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px]">
+            <div
+              ref={messagesContainerRef}
+              onScroll={handleScrollMessages}
+              className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#efeae2]/30 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] relative"
+            >
               {loadingMessages && messages.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-xs text-slate-400">
                   <RefreshCw className="w-4 h-4 animate-spin mr-1.5 text-emerald-600" />
@@ -549,6 +602,21 @@ export default function ChatLiveInbox({ initialPatientId, onClose }: ChatLiveInb
                 })
               )}
               <div ref={messagesEndRef} />
+
+              {/* BOTÃO FLUTUANTE PARA ROLAR ATÉ A ÚLTIMA MENSAGEM */}
+              {showScrollBottomBtn && (
+                <div className="sticky bottom-2 flex justify-end pointer-events-none z-20">
+                  <button
+                    type="button"
+                    onClick={() => scrollToBottom('smooth')}
+                    className="pointer-events-auto px-3 py-1.5 rounded-full bg-white text-slate-700 shadow-md border border-slate-200 hover:bg-slate-50 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 animate-in fade-in slide-in-from-bottom-2"
+                    title="Rolar para a mensagem mais recente"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Última mensagem</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* RESPOSTAS RÁPIDAS DA SECRETÁRIA */}

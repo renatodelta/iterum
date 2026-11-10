@@ -20,6 +20,10 @@ let memoryClinic: any = {
   acceptsInsurance: false, // Atende convênio?
   insurancePlans: '', // Lista de convênios atendidos (ex: "Unimed, Bradesco Saúde, SulAmérica")
   insuranceNotes: '', // Observações (ex: "Emite recibo para reembolso em outros convênios")
+  googleMapsUrl: '', // Link do Google Maps
+  wazeUrl: '', // Link do Waze
+  parkingTips: '', // Dicas de estacionamento
+  blockedDates: [], // Datas e turnos bloqueados
   slotDurationMinutes: 30,
   returnSlotDurationMinutes: 20,
   scheduleStartDate: '',
@@ -56,6 +60,10 @@ let memoryClinic: any = {
       acceptsInsurance: false,
       insurancePlans: '',
       insuranceNotes: '',
+      googleMapsUrl: '',
+      wazeUrl: '',
+      parkingTips: '',
+      blockedDates: [],
     },
   },
   createdAt: new Date().toISOString(),
@@ -162,37 +170,58 @@ export async function POST(req: NextRequest) {
       doctorPhoto,
     } = body;
 
+    // 1. Carregar clínica e workingHours existentes do banco para não perder nenhum parâmetro
+    let existingClinic: any = null;
+    let existingWorkingHours: any = {};
+    try {
+      existingClinic = await prisma.clinic.findFirst();
+      if (existingClinic?.workingHours) {
+        existingWorkingHours = typeof existingClinic.workingHours === 'string'
+          ? JSON.parse(existingClinic.workingHours)
+          : existingClinic.workingHours;
+      }
+    } catch (_) {}
+
+    const existingMeta = existingWorkingHours?.meta || memoryClinic.workingHours?.meta || {};
+
     // Montar o objeto completo de workingHours com a grade de dias e meta-parâmetros da agenda
     let finalWorkingHours: any = {};
     if (workingHours && typeof workingHours === 'object' && !Array.isArray(workingHours)) {
       finalWorkingHours = { ...workingHours };
+    } else if (existingWorkingHours && Object.keys(existingWorkingHours).length > 0) {
+      finalWorkingHours = { ...existingWorkingHours };
     }
 
     const currentSelectedDays: string[] = selectedDays !== undefined
       ? (Array.isArray(selectedDays) ? selectedDays.map(String) : [])
-      : (finalWorkingHours.meta?.selectedDays || memoryClinic.selectedDays || []);
+      : (finalWorkingHours.meta?.selectedDays || existingMeta.selectedDays || memoryClinic.selectedDays || []);
 
-    const currentWorkStart: string = workStartTime || finalWorkingHours.meta?.workStartTime || memoryClinic.workStartTime || '08:00';
-    const currentWorkEnd: string = workEndTime || finalWorkingHours.meta?.workEndTime || memoryClinic.workEndTime || '17:00';
+    const currentWorkStart: string = workStartTime || finalWorkingHours.meta?.workStartTime || existingMeta.workStartTime || memoryClinic.workStartTime || '08:00';
+    const currentWorkEnd: string = workEndTime || finalWorkingHours.meta?.workEndTime || existingMeta.workEndTime || memoryClinic.workEndTime || '17:00';
     const currentBreakEnabled: boolean = breakEnabled !== undefined
       ? Boolean(breakEnabled)
-      : (finalWorkingHours.meta?.breakEnabled !== undefined ? finalWorkingHours.meta.breakEnabled : memoryClinic.breakEnabled);
-    const currentBreakStart: string = breakStartTime || finalWorkingHours.meta?.breakStartTime || memoryClinic.breakStartTime || '12:00';
-    const currentBreakEnd: string = breakEndTime || finalWorkingHours.meta?.breakEndTime || memoryClinic.breakEndTime || '13:00';
-    const currentScheduleStart: string = scheduleStartDate !== undefined ? scheduleStartDate : (finalWorkingHours.meta?.scheduleStartDate || memoryClinic.scheduleStartDate || '');
-    const currentScheduleEnd: string = scheduleEndDate !== undefined ? scheduleEndDate : (finalWorkingHours.meta?.scheduleEndDate || memoryClinic.scheduleEndDate || '');
-    const currentSlotDuration: number = slotDurationMinutes ? parseInt(slotDurationMinutes, 10) : (memoryClinic.slotDurationMinutes || 30);
-    const currentReturnDuration: number = returnSlotDurationMinutes ? parseInt(returnSlotDurationMinutes, 10) : (memoryClinic.returnSlotDurationMinutes || 20);
-    const currentMaxReturnSlots: number = maxReturnSlotsPerDay !== undefined ? parseInt(maxReturnSlotsPerDay, 10) : (finalWorkingHours.meta?.maxReturnSlotsPerDay ?? 4);
+      : (finalWorkingHours.meta?.breakEnabled !== undefined ? finalWorkingHours.meta.breakEnabled : (existingMeta.breakEnabled !== undefined ? existingMeta.breakEnabled : memoryClinic.breakEnabled));
+    const currentBreakStart: string = breakStartTime || finalWorkingHours.meta?.breakStartTime || existingMeta.breakStartTime || memoryClinic.breakStartTime || '12:00';
+    const currentBreakEnd: string = breakEndTime || finalWorkingHours.meta?.breakEndTime || existingMeta.breakEndTime || memoryClinic.breakEndTime || '13:00';
+    const currentScheduleStart: string = scheduleStartDate !== undefined ? scheduleStartDate : (finalWorkingHours.meta?.scheduleStartDate || existingMeta.scheduleStartDate || memoryClinic.scheduleStartDate || '');
+    const currentScheduleEnd: string = scheduleEndDate !== undefined ? scheduleEndDate : (finalWorkingHours.meta?.scheduleEndDate || existingMeta.scheduleEndDate || memoryClinic.scheduleEndDate || '');
+    const currentSlotDuration: number = slotDurationMinutes ? parseInt(slotDurationMinutes, 10) : (existingClinic?.slotDurationMinutes || memoryClinic.slotDurationMinutes || 30);
+    const currentReturnDuration: number = returnSlotDurationMinutes ? parseInt(returnSlotDurationMinutes, 10) : (existingMeta.returnSlotDurationMinutes || memoryClinic.returnSlotDurationMinutes || 20);
+    const currentMaxReturnSlots: number = maxReturnSlotsPerDay !== undefined ? parseInt(maxReturnSlotsPerDay, 10) : (finalWorkingHours.meta?.maxReturnSlotsPerDay ?? (existingMeta.maxReturnSlotsPerDay ?? 4));
     const currentReturnSlotTimes: string[] = Array.isArray(returnSlotTimes)
       ? returnSlotTimes
-      : (finalWorkingHours.meta?.returnSlotTimes || []);
-    const currentConsultationFee: string = consultationFee !== undefined ? String(consultationFee) : (finalWorkingHours.meta?.consultationFee || memoryClinic.consultationFee || '');
-    const currentAcceptsInsurance: boolean = acceptsInsurance !== undefined ? Boolean(acceptsInsurance) : (finalWorkingHours.meta?.acceptsInsurance !== undefined ? finalWorkingHours.meta.acceptsInsurance : memoryClinic.acceptsInsurance || false);
-    const currentInsurancePlans: string = insurancePlans !== undefined ? String(insurancePlans) : (finalWorkingHours.meta?.insurancePlans || memoryClinic.insurancePlans || '');
-    const currentInsuranceNotes: string = insuranceNotes !== undefined ? String(insuranceNotes) : (finalWorkingHours.meta?.insuranceNotes || memoryClinic.insuranceNotes || '');
+      : (finalWorkingHours.meta?.returnSlotTimes || existingMeta.returnSlotTimes || memoryClinic.workingHours?.meta?.returnSlotTimes || []);
+    const currentConsultationFee: string = consultationFee !== undefined ? String(consultationFee) : (finalWorkingHours.meta?.consultationFee || existingMeta.consultationFee || memoryClinic.consultationFee || '');
+    const currentAcceptsInsurance: boolean = acceptsInsurance !== undefined ? Boolean(acceptsInsurance) : (finalWorkingHours.meta?.acceptsInsurance !== undefined ? finalWorkingHours.meta.acceptsInsurance : (existingMeta.acceptsInsurance !== undefined ? existingMeta.acceptsInsurance : memoryClinic.acceptsInsurance || false));
+    const currentInsurancePlans: string = insurancePlans !== undefined ? String(insurancePlans) : (finalWorkingHours.meta?.insurancePlans || existingMeta.insurancePlans || memoryClinic.insurancePlans || '');
+    const currentInsuranceNotes: string = insuranceNotes !== undefined ? String(insuranceNotes) : (finalWorkingHours.meta?.insuranceNotes || existingMeta.insuranceNotes || memoryClinic.insuranceNotes || '');
+    const currentDoctorPhoto: string = doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || existingMeta.doctorPhoto || memoryClinic.doctorPhoto || '');
+    const currentGoogleMapsUrl: string = body.googleMapsUrl !== undefined ? String(body.googleMapsUrl).trim() : (finalWorkingHours.meta?.googleMapsUrl || existingMeta.googleMapsUrl || memoryClinic.googleMapsUrl || '');
+    const currentWazeUrl: string = body.wazeUrl !== undefined ? String(body.wazeUrl).trim() : (finalWorkingHours.meta?.wazeUrl || existingMeta.wazeUrl || memoryClinic.wazeUrl || '');
+    const currentParkingTips: string = body.parkingTips !== undefined ? String(body.parkingTips).trim() : (finalWorkingHours.meta?.parkingTips || existingMeta.parkingTips || memoryClinic.parkingTips || '');
+    const currentBlockedDates: any[] = Array.isArray(body.blockedDates) ? body.blockedDates : (finalWorkingHours.meta?.blockedDates || existingMeta.blockedDates || memoryClinic.blockedDates || []);
 
-    // Gerar horários para os 7 dias da semana (0 = Domingo a 6 = Sábado)
+    // Gerar horários para os 7 dias da semana (0 = Domingo a 6 = Sábado) se selectedDays tiver sido informado ou já existir
     ['0', '1', '2', '3', '4', '5', '6'].forEach((day) => {
       const isActive = currentSelectedDays.includes(day);
       finalWorkingHours[day] = {
@@ -221,11 +250,11 @@ export async function POST(req: NextRequest) {
       acceptsInsurance: currentAcceptsInsurance,
       insurancePlans: currentInsurancePlans,
       insuranceNotes: currentInsuranceNotes,
-      doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || memoryClinic.doctorPhoto || ''),
-      googleMapsUrl: body.googleMapsUrl !== undefined ? String(body.googleMapsUrl).trim() : (finalWorkingHours.meta?.googleMapsUrl || ''),
-      wazeUrl: body.wazeUrl !== undefined ? String(body.wazeUrl).trim() : (finalWorkingHours.meta?.wazeUrl || ''),
-      parkingTips: body.parkingTips !== undefined ? String(body.parkingTips).trim() : (finalWorkingHours.meta?.parkingTips || ''),
-      blockedDates: Array.isArray(body.blockedDates) ? body.blockedDates : (finalWorkingHours.meta?.blockedDates || []),
+      doctorPhoto: currentDoctorPhoto,
+      googleMapsUrl: currentGoogleMapsUrl,
+      wazeUrl: currentWazeUrl,
+      parkingTips: currentParkingTips,
+      blockedDates: currentBlockedDates,
     };
 
     const dataToUpdate: any = {
@@ -268,14 +297,18 @@ export async function POST(req: NextRequest) {
       acceptsInsurance: currentAcceptsInsurance,
       insurancePlans: currentInsurancePlans,
       insuranceNotes: currentInsuranceNotes,
-      doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (memoryClinic.doctorPhoto || ''),
+      doctorPhoto: currentDoctorPhoto,
+      googleMapsUrl: currentGoogleMapsUrl,
+      wazeUrl: currentWazeUrl,
+      parkingTips: currentParkingTips,
+      blockedDates: currentBlockedDates,
       minCancelHours: minCancelHours ? parseInt(minCancelHours, 10) : memoryClinic.minCancelHours,
       workingHours: finalWorkingHours,
       updatedAt: new Date().toISOString(),
     };
 
     try {
-      let clinic = await prisma.clinic.findFirst();
+      let clinic = existingClinic || await prisma.clinic.findFirst();
 
       if (!clinic) {
         clinic = await prisma.clinic.create({
@@ -339,7 +372,11 @@ export async function POST(req: NextRequest) {
           acceptsInsurance: currentAcceptsInsurance,
           insurancePlans: currentInsurancePlans,
           insuranceNotes: currentInsuranceNotes,
-          doctorPhoto: doctorPhoto !== undefined ? doctorPhoto : (finalWorkingHours.meta?.doctorPhoto || memoryClinic.doctorPhoto || ''),
+          doctorPhoto: currentDoctorPhoto,
+          googleMapsUrl: currentGoogleMapsUrl,
+          wazeUrl: currentWazeUrl,
+          parkingTips: currentParkingTips,
+          blockedDates: currentBlockedDates,
           workingHours: finalWorkingHours,
         },
       });
