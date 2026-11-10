@@ -1484,6 +1484,9 @@ export default function Dashboard() {
           email: clinic?.email,
           phone: clinic?.phone,
           address: clinic?.address,
+          googleMapsUrl: clinic?.googleMapsUrl || '',
+          wazeUrl: clinic?.wazeUrl || '',
+          parkingTips: clinic?.parkingTips || '',
           minCancelHours: Number(clinic?.minCancelHours) || 2,
           consultationFee: clinic?.consultationFee || '',
           acceptsInsurance: Boolean(clinic?.acceptsInsurance),
@@ -2785,6 +2788,17 @@ export default function Dashboard() {
 
                         <div className="flex items-center space-x-1.5">
                           <button
+                            onClick={() => {
+                              setChatSelectedPatientId(p.id);
+                              setWhatsappSubTab('chat');
+                              setActiveTab('whatsapp');
+                            }}
+                            className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-2xs hover:bg-emerald-100"
+                            title="Conversar no WhatsApp (Chat ao Vivo)"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleOpenPatientModal(p)}
                             className="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 shadow-2xs hover:bg-slate-100"
                             title="Editar"
@@ -2930,6 +2944,17 @@ export default function Dashboard() {
                         </td>
                         <td className="p-3.5 text-slate-600 text-xs max-w-xs truncate">{p.notes || '—'}</td>
                         <td className="p-3.5 text-right space-x-2">
+                          <button
+                            onClick={() => {
+                              setChatSelectedPatientId(p.id);
+                              setWhatsappSubTab('chat');
+                              setActiveTab('whatsapp');
+                            }}
+                            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition"
+                            title="Conversar no WhatsApp (Chat ao Vivo)"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleOpenPatientModal(p)}
                             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
@@ -4946,6 +4971,59 @@ export default function Dashboard() {
                       placeholder="Ex: Av. Paulista, 1000 - Conjunto 402 - Bela Vista, São Paulo - SP"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
                     />
+                  </div>
+
+                  {/* COMO CHEGAR, MAPAS E ESTACIONAMENTO */}
+                  <div className="pt-2 border-t border-slate-100 space-y-3">
+                    <div>
+                      <span className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                        Card de Como Chegar, Navegação GPS & Estacionamento
+                      </span>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        Enviados automaticamente no lembrete D-1 (24h antes) e nas mensagens de confirmação do WhatsApp
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                          🗺️ Link do Google Maps
+                        </label>
+                        <input
+                          type="url"
+                          value={clinic.googleMapsUrl || ''}
+                          onChange={(e) => setClinic({ ...clinic, googleMapsUrl: e.target.value })}
+                          placeholder="https://maps.app.goo.gl/..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                          🚗 Link do Waze
+                        </label>
+                        <input
+                          type="url"
+                          value={clinic.wazeUrl || ''}
+                          onChange={(e) => setClinic({ ...clinic, wazeUrl: e.target.value })}
+                          placeholder="https://waze.com/ul?q=..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                        🅿️ Dicas de Onde Estacionar & Acesso ao Prédio
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={clinic.parkingTips || ''}
+                        onChange={(e) => setClinic({ ...clinic, parkingTips: e.target.value })}
+                        placeholder="Ex: Estacionamento conveniado com manobrista no subsolo do edifício (Edifício Medical Center). Entrada pela Rua lateral."
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-[#005a43]/20 focus:border-[#005a43] bg-white shadow-2xs resize-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="pt-2">

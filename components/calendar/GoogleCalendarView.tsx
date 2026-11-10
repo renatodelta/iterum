@@ -42,6 +42,7 @@ export interface DaySlotItem {
   endTime: string;
   duration: number;
   isReturn: boolean;
+  isBlocked?: boolean;
 }
 
 interface GoogleCalendarViewProps {
@@ -502,15 +503,31 @@ export default function GoogleCalendarView({
       curMinutes += dur;
     }
 
-    // Identificar quais slots estão ocupados por consultas
+    // Verificar se a data possui bloqueio de folga/feriado/congresso
+    const curIso = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    const dateBlock = blockedDates.find((b) => b.date === curIso);
+
+    // Identificar quais slots estão ocupados por consultas ou bloqueados
     const vacantSlots: DaySlotItem[] = [];
     slots.forEach((slotItem) => {
+      let isSlotBlocked = false;
+      if (dateBlock) {
+        if (!dateBlock.shift || dateBlock.shift === 'ALL') {
+          isSlotBlocked = true;
+        } else if (dateBlock.shift === 'MANHA' && slotItem.time < '12:00') {
+          isSlotBlocked = true;
+        } else if (dateBlock.shift === 'TARDE' && slotItem.time >= '12:00') {
+          isSlotBlocked = true;
+        }
+      }
+      slotItem.isBlocked = isSlotBlocked;
+
       const isOccupied = dayAppts.some((a) => {
         const d = new Date(a.startTime);
         const apptTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         return apptTime === slotItem.time;
       });
-      if (!isOccupied) {
+      if (!isOccupied && !isSlotBlocked) {
         vacantSlots.push(slotItem);
       }
     });
@@ -523,6 +540,7 @@ export default function GoogleCalendarView({
       bookedCount: dayAppts.length,
       vacantCount: vacantSlots.length,
       encaixeCount: encaixeAppts.length,
+      blockInfo: dateBlock || null,
     };
   };
 
@@ -629,12 +647,12 @@ export default function GoogleCalendarView({
     }
 
     return days;
-  }, [viewMonthDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic]);
+  }, [viewMonthDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic, blockedDates]);
 
   // Informações do dia atualmente selecionado
   const currentDayInfo = useMemo(() => {
     return getDaySlotsInfo(selectedDate);
-  }, [selectedDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic]);
+  }, [selectedDate, appointments, clinicWorkingHours, slotDuration, searchQuery, clinic, blockedDates]);
 
   // Estilo de status das consultas (estilo Google Calendar + Saúde)
   const getAppointmentBadge = (appt: any) => {
@@ -1199,29 +1217,83 @@ export default function GoogleCalendarView({
         {agendaViewMode === 'dia' && (
           <div className="flex-1 flex flex-col h-full bg-white overflow-hidden">
             {/* CABEÇALHO DO DIA (EX: SEX 23) */}
-            <div className="flex border-b border-[#dadce0] bg-white sticky top-0 z-20 py-2.5">
+            <div
+              onDoubleClick={() => handleOpenBlockModal(selectedDate)}
+              title="Clique duas vezes para bloquear dia ou turno avulso"
+              className="flex border-b border-[#dadce0] bg-white sticky top-0 z-20 py-2.5 cursor-pointer hover:bg-slate-50/50 transition"
+            >
               {/* ESPAÇO DO EIXO DE HORAS (54px) */}
               <div className="w-14 sm:w-16 shrink-0 text-center"></div>
 
               {/* COLUNA DO DIA */}
-              <div className="flex-1 flex flex-col items-start pl-2">
-                <span className={`text-[11px] font-bold tracking-wider uppercase ${isToday(selectedDate) ? 'text-[#1a73e8]' : 'text-[#70757a]'}`}>
-                  {WEEKDAYS_SHORT[selectedDate.getDay()]}
-                </span>
-                <span
-                  className={`text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center mt-0.5 ${
-                    isToday(selectedDate)
-                      ? 'bg-[#1a73e8] text-white shadow-xs'
-                      : 'text-[#3c4043]'
-                  }`}
-                >
-                  {selectedDate.getDate()}
-                </span>
+              <div className="flex-1 flex items-center justify-between pr-4">
+                <div className="flex flex-col items-start pl-2">
+                  <span className={`text-[11px] font-bold tracking-wider uppercase ${isToday(selectedDate) ? 'text-[#1a73e8]' : 'text-[#70757a]'}`}>
+                    {WEEKDAYS_SHORT[selectedDate.getDay()]}
+                  </span>
+                  <span
+                    className={`text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center mt-0.5 ${
+                      isToday(selectedDate)
+                        ? 'bg-[#1a73e8] text-white shadow-xs'
+                        : 'text-[#3c4043]'
+                    }`}
+                  >
+                    {selectedDate.getDate()}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenBlockModal(selectedDate);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shadow-2xs"
+                    title="Bloqueio rápido de dia ou turno (Congresso, Folga ou Feriado)"
+                  >
+                    <Ban className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Bloquear Dia / Turno</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* GRADE DA TIMELINE COM HORÁRIOS VAGOS E AGENDADOS */}
             <div className="flex-1 overflow-y-auto relative bg-white">
+              {/* AVISO SE HOUVER BLOQUEIO ATIVO (FOLGA / FERIADO / CONGRESSO) */}
+              {currentDayInfo.blockInfo && (
+                <div className="mx-4 my-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                      <Ban className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-rose-950">
+                        Bloqueio Ativo ({currentDayInfo.blockInfo.shift === 'MANHA' ? 'Turno da Manhã' : currentDayInfo.blockInfo.shift === 'TARDE' ? 'Turno da Tarde' : 'Dia Inteiro'}):
+                      </span>
+                      <span className="ml-1 text-rose-800">{currentDayInfo.blockInfo.reason || 'Compromisso / Folga'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBlockModal(selectedDate)}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 font-bold text-xs transition"
+                    >
+                      Alterar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBlock(currentDayInfo.blockInfo!.date, currentDayInfo.blockInfo!.shift)}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 text-white hover:bg-rose-700 font-bold text-xs transition"
+                    >
+                      Desbloquear
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* AVISO SE A AGENDA ESTIVER FECHADA / SEM ATENDIMENTO NO DIA */}
               {!currentDayInfo.isActive && (
                 <div className="mx-4 my-2.5 p-3 rounded-xl bg-slate-100/90 border border-slate-200 text-slate-600 text-xs flex items-center gap-2.5">
@@ -1416,11 +1488,20 @@ export default function GoogleCalendarView({
               <div className="flex-1 grid grid-cols-3 divide-x divide-[#dadce0]">
                 {threeDaysList.map((d, idx) => {
                   const curToday = isToday(d);
+                  const dIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  const dBlock = blockedDates.find((b) => b.date === dIso);
                   return (
                     <button
                       key={idx}
                       onClick={() => setSelectedDate(d)}
-                      className="flex flex-col items-center justify-center py-1 hover:bg-slate-50 transition"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenBlockModal(d);
+                      }}
+                      title={dBlock ? `Bloqueado: ${dBlock.reason || 'Compromisso'} (Clique duplo para gerenciar)` : 'Clique duplo para bloquear'}
+                      className={`flex flex-col items-center justify-center py-1 hover:bg-slate-50 transition relative ${
+                        dBlock ? 'bg-rose-50/50' : ''
+                      }`}
                     >
                       <span className={`text-[11px] font-bold tracking-wider uppercase ${curToday ? 'text-[#1a73e8]' : 'text-[#70757a]'}`}>
                         {WEEKDAYS_SHORT[d.getDay()]}
@@ -1432,6 +1513,12 @@ export default function GoogleCalendarView({
                       >
                         {d.getDate()}
                       </span>
+                      {dBlock && (
+                        <span className="mt-0.5 px-1 rounded bg-rose-100 text-rose-700 text-[9px] font-extrabold flex items-center gap-0.5">
+                          <Ban className="w-2.5 h-2.5" />
+                          <span>Bloq.</span>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1557,11 +1644,20 @@ export default function GoogleCalendarView({
               <div className="flex-1 grid grid-cols-7 divide-x divide-[#dadce0]">
                 {weekDaysList.map((d, idx) => {
                   const curToday = isToday(d);
+                  const dIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  const dBlock = blockedDates.find((b) => b.date === dIso);
                   return (
                     <button
                       key={idx}
                       onClick={() => setSelectedDate(d)}
-                      className="flex flex-col items-center justify-center py-0.5 hover:bg-slate-50 transition"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenBlockModal(d);
+                      }}
+                      title={dBlock ? `Bloqueado: ${dBlock.reason || 'Compromisso'} (Clique duplo para gerenciar)` : 'Clique duplo para bloquear'}
+                      className={`flex flex-col items-center justify-center py-0.5 hover:bg-slate-50 transition relative ${
+                        dBlock ? 'bg-rose-50/50' : ''
+                      }`}
                     >
                       <span className={`text-[10px] font-bold tracking-wider uppercase ${curToday ? 'text-[#1a73e8]' : 'text-[#70757a]'}`}>
                         {WEEKDAYS_SINGLE[d.getDay()]}
@@ -1573,6 +1669,11 @@ export default function GoogleCalendarView({
                       >
                         {d.getDate()}
                       </span>
+                      {dBlock && (
+                        <span className="mt-0.5 px-0.5 rounded bg-rose-100 text-rose-700 text-[8px] font-black leading-none py-0.5">
+                          🚫
+                        </span>
+                      )}
                     </button>
                   );
                 })}
