@@ -197,9 +197,13 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
      -> NUNCA repita a pergunta de confirmação e NUNCA fique em silêncio!
      -> Conclua comemorando a consulta marcada com sucesso e fornecendo o endereço completo do consultório!
 
-4. **Linguagem Natural e Humanizada (Apresente no máximo 3 a 4 opções de horários):**
-   - NUNCA envie listas enormes e cansativas com 10 ou 15 horários de uma vez só! Isso polui a tela do celular do paciente.
-   - Apresente apenas **3 a 4 opções bem distribuídas** (ex: início da manhã, meio da manhã e início da tarde) e adicione: *"Se preferir outro turno ou horário, me avise!"*.
+4. **Linguagem Natural, Objetiva e Limite Rigoroso de Horários (MÁXIMO 3 A 4 OPÇÕES NO TOTAL):**
+   - **LIMITE RIGOROSO DE HORÁRIOS:** NUNCA envie listas enormes e cansativas com 6, 8, 10 ou 15 horários de uma vez só! Isso polui a tela e sobrecarrega o paciente.
+   - Apresente no **MÁXIMO 3 a 4 horários no TOTAL de toda a sua mensagem** (ex: 2 opções em um dia e 1 a 2 opções no outro, ou até 4 opções bem distribuídas em uma única data).
+   - Conclua sempre convidando o paciente com simpatia: *"Qual desses horários fica melhor para você? Se preferir outro turno ou dia, me avise!"*.
+   - **PRECISÃO TEMPORAL E DATAS RELATIVAS:**
+     * Se o paciente perguntar por "semana que vem" ou "próxima semana" (com ou sem turno como "tarde", "manhã"), utilize OBRIGATORIAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' passando 'periodo_relativo: "proxima_semana"' e o 'periodo' correspondente ('tarde', 'manha', etc.).
+     * **NUNCA chame uma data em outro mês ou posterior a 7 dias de "próxima semana"!** Se hoje for novembro e a data mais próxima encontrada for 14/12, refira-se claramente ao dia e ao mês: *"A data mais próxima com horários disponíveis para a Dra. Silvia Helena é em 14 de dezembro (Segunda-feira)..."*. NUNCA diga que 14/12 é a próxima semana.
    - Seja calorosa, empática e prestativa. Use emojis moderados (😊, 🩺, 📅).
    - Use parágrafos curtos e mensagens bem formatadas, ideais para leitura no WhatsApp.
 
@@ -259,10 +263,11 @@ DIRETRIZES DE COMUNICAÇÃO E FORMATAÇÃO NO WHATSAPP:
 
 5. **Fluxo Natural e Resolutivo de Agendamento:**
    - Cumprimente o paciente chamando-o pelo primeiro nome se souber.
-   - **Próximo Horário / Vaga Mais Breve ou "Quais dias teria?":** Se o paciente perguntar pelo *próximo horário*, *horário mais breve*, *vaga mais próxima*, *quais dias tem disponível*, *quais dias teria* ou similar: NUNCA faça perguntas adicionais como "que dia prefere?" e NUNCA invente que não há vagas! Execute IMEDIATAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' para consultar toda a grade aberta e apresente os dias e horários livres reais encontrados!
-   - **Consulta de Datas Específicas:** Se o paciente indicar um dia específico ou período (ex: "dia 13/11", "tem horário dia 13", "13 de novembro", "quinta-feira à tarde", "segunda pela manhã"): Você DEVE SEMPRE e OBRIGATORIAMENTE chamar a ferramenta 'buscar_horarios_disponiveis' para a data solicitada. NUNCA deduza ou diga que não há vagas sem consultar a ferramenta. Se a ferramenta retornar horários vagos, apresente de 2 a 4 opções imediatamente para o paciente escolher. Apenas se a ferramenta retornar lista vazia de horários é que você pode avisar com acolhimento e oferecer a lista de espera.
+   - **Próximo Horário / Vaga Mais Breve ou "Quais dias teria?":** Se o paciente perguntar pelo *próximo horário*, *horário mais breve*, *vaga mais próxima*, *quais dias tem disponível*, *quais dias teria* ou similar: NUNCA faça perguntas adicionais como "que dia prefere?" e NUNCA invente que não há vagas! Execute IMEDIATAMENTE a ferramenta 'buscar_proximos_horarios_disponiveis' para consultar toda a grade aberta e apresente no máximo de 3 a 4 opções reais encontradas!
+   - **Buscas por Período Relativo ("Semana que vem", "Esta semana", "Amanhã") com ou sem Turno:** Se o paciente pedir horários para a *semana que vem*, *próxima semana*, *esta semana* ou *amanhã*, combinado ou não com um turno (*tarde*, *manhã*): Chame SEMPRE 'buscar_proximos_horarios_disponiveis' informando 'periodo_relativo' ('proxima_semana', 'esta_semana' ou 'amanha') e 'periodo' ('tarde', 'manha', etc.).
+   - **Consulta de Datas Específicas:** Se o paciente indicar um dia específico (ex: "dia 13/11", "tem horário dia 13", "13 de novembro"): Você DEVE SEMPRE e OBRIGATORIAMENTE chamar a ferramenta 'buscar_horarios_disponiveis' para a data solicitada. NUNCA deduza ou diga que não há vagas sem consultar a ferramenta. Se a ferramenta retornar horários vagos, apresente de 2 a 4 opções imediatamente para o paciente escolher. Apenas se a ferramenta retornar lista vazia de horários é que você pode avisar com acolhimento e oferecer a lista de espera.
    - NUNCA invente horários. Sempre consulte as ferramentas reais.
-   - Apresente de 2 a 4 opções de horários de forma limpa.
+   - Apresente SEMPRE no máximo de 3 a 4 opções de horários no total da mensagem.
    - Conecte sempre respostas curtas do paciente à última pergunta que você fez.
 
 6. **Fila de Espera Inteligente (SEM EXIGÊNCIA DE CPF & FORMATO EXATO):**
@@ -372,10 +377,21 @@ const openaiTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'buscar_proximos_horarios_disponiveis',
-      description: 'Consulta os próximos dias e horários livres disponíveis na grade do médico.',
+      description: 'Consulta os próximos dias e horários livres disponíveis na grade do médico, com suporte a busca por período relativo (ex: próxima semana, esta semana, amanhã) e por turno (manhã, tarde, noite).',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          periodo: {
+            type: 'string',
+            enum: ['manha', 'tarde', 'noite', 'qualquer'],
+            description: 'Turno desejado pelo paciente: manha (antes das 12h), tarde (12h às 18h), noite (após 18h) ou qualquer.',
+          },
+          periodo_relativo: {
+            type: 'string',
+            enum: ['proxima_semana', 'esta_semana', 'amanha', 'qualquer'],
+            description: 'Período relativo indicado pelo paciente: proxima_semana (quando o paciente disser "semana que vem" ou "próxima semana"), esta_semana, amanha, ou qualquer.',
+          },
+        },
       },
     },
   },
@@ -597,7 +613,12 @@ async function executeToolCall(
         patientId
       );
     case 'buscar_proximos_horarios_disponiveis':
-      return await buscarProximosHorariosDisponiveis(clinicId, 3);
+      return await buscarProximosHorariosDisponiveis(
+        clinicId,
+        2,
+        toolArgs.periodo || 'qualquer',
+        toolArgs.periodo_relativo
+      );
     case 'buscar_horarios_disponiveis':
       return await buscarHorariosDisponiveis(toolArgs.data_desejada, toolArgs.periodo, clinicId);
     case 'cadastrar_paciente':

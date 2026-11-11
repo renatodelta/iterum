@@ -828,17 +828,18 @@ export async function notifyWaitlistOnScheduleExpansion(params: {
 
       if (!isEligible) continue;
 
-      // 2. Montar mensagem empática e personalizada
+      // 2. Montar mensagem empática e personalizada (sempre saudando pelo primeiro nome)
       let messageText = '';
       const docPronoun = doctorName.startsWith('Dra') ? 'da' : 'do';
       const shiftMention = patient.preferredShift && patient.preferredShift !== 'Qualquer Horário'
         ? ` no período da *${patient.preferredShift.toLowerCase()}*`
         : '';
+      const firstName = (patient.patientName || '').trim().split(/\s+/)[0] || patient.patientName;
 
       if (patientDateDisplay) {
-        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de liberar a agenda para o período que você aguardava!\n\nVocê havia manifestado interesse para o dia *${patientDateDisplay}*${shiftMention}.\n\nComo você estava na nossa *Fila de Espera*, gostaríamos de dar prioridade para você agendar. Deseja que eu verifique os horários disponíveis para você?`;
+        messageText = `Olá, *${firstName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de liberar a agenda para o período que você aguardava!\n\nVocê havia manifestado interesse para o dia *${patientDateDisplay}*${shiftMention}.\n\nComo você estava na nossa *Fila de Espera*, gostaríamos de dar prioridade para você agendar. Deseja que eu verifique os horários disponíveis para você?`;
       } else {
-        messageText = `Olá, *${patient.patientName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de abrir a agenda de atendimentos até *${endDateDisplay}*!\n\nComo você estava aguardando na nossa *Fila de Espera*, gostaríamos de priorizar o seu agendamento.\n\nQual dia ou turno${shiftMention} seria melhor para a sua consulta?`;
+        messageText = `Olá, *${firstName}*! Tudo bem? 😊\n\nBoas notícias: o consultório ${docPronoun} *${doctorName}* acabou de abrir a agenda de atendimentos até *${endDateDisplay}*!\n\nComo você estava aguardando na nossa *Fila de Espera*, gostaríamos de priorizar o seu agendamento.\n\nQual dia ou turno${shiftMention} seria melhor para a sua consulta?`;
       }
 
       // 3. Enviar via WhatsApp como mensagem conversacional limpa (sem botões genéricos de sim/não, permitindo ao paciente responder qual dia/turno prefere)

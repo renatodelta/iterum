@@ -32,6 +32,16 @@ export function parseBRT(dateInput: string): Date {
   }
 
   const now = new Date();
+  const lowerStr = str.toLowerCase();
+  if (lowerStr === 'hoje') {
+    return now;
+  }
+  if (lowerStr === 'amanha' || lowerStr === 'amanhã') {
+    const tmrw = new Date(now);
+    tmrw.setDate(tmrw.getDate() + 1);
+    return tmrw;
+  }
+
   const currentYear = now.getFullYear();
 
   let year = currentYear;
@@ -123,6 +133,27 @@ export function formatBRT(date: Date, includeDayOfWeek: boolean = true): string 
     hour12: false,
   });
   return formatter.format(date);
+}
+
+/**
+ * Seleciona até `maxCount` horários distribuídos de forma equilibrada ao longo da lista
+ */
+export function pickRepresentativeSlots(slots: string[], maxCount: number): string[] {
+  if (!slots || slots.length <= maxCount) return slots || [];
+  if (maxCount <= 0) return [];
+  if (maxCount === 1) return [slots[0]];
+  if (maxCount === 2) {
+    return [slots[0], slots[slots.length - 1]];
+  }
+  const step = (slots.length - 1) / (maxCount - 1);
+  const result: string[] = [];
+  for (let i = 0; i < maxCount; i++) {
+    const idx = Math.round(i * step);
+    if (!result.includes(slots[idx])) {
+      result.push(slots[idx]);
+    }
+  }
+  return result;
 }
 
 export function formatBRTShort(date: Date): string {
@@ -502,6 +533,23 @@ export async function buscarHorariosDisponiveis(
       return { success: false, message: 'Consultório não encontrado no sistema.' };
     }
 
+    // Interceptação e resolução de consultas por período relativo (ex: "semana que vem", "próxima semana")
+    const lowerInput = (dataDesejada || '').toLowerCase().trim();
+    if (
+      lowerInput.includes('semana que vem') ||
+      lowerInput.includes('proxima semana') ||
+      lowerInput.includes('próxima semana') ||
+      lowerInput.includes('esta semana')
+    ) {
+      const rel = lowerInput.includes('esta semana') ? 'esta_semana' : 'proxima_semana';
+      const prox = await buscarProximosHorariosDisponiveis(clinicId, 2, periodo, rel);
+      return {
+        success: prox.success,
+        message: prox.message,
+        data: prox.data,
+      };
+    }
+
     // Data no fuso BRT
     const targetDateStart = parseBRT(dataDesejada.includes('T') ? dataDesejada : `${dataDesejada.trim()}T00:00:00`);
     if (isNaN(targetDateStart.getTime())) {
@@ -793,13 +841,19 @@ export async function buscarHorariosDisponiveis(
       };
     }
 
+    // Limitar sugestão inicial a no máximo 4 opções bem distribuídas para não poluir a tela do paciente
+    const suggestedSlots = pickRepresentativeSlots(slots, 4);
+    const extraCount = slots.length - suggestedSlots.length;
+    const extraMsg = extraCount > 0 ? ` (e mais ${extraCount} horários disponíveis neste dia)` : '';
+
     return {
       success: true,
-      message: `Horários disponíveis em ${dataExtenso}:\n${slots.join(', ')}`,
+      message: `Horários disponíveis em ${dataExtenso} (${suggestedSlots.length} opções sugeridas):\n${suggestedSlots.join(', ')}${extraMsg}`,
       data: {
         date: dataDesejada,
         periodo,
-        slots,
+        slots: suggestedSlots,
+        allSlots: slots,
       },
     };
   } catch (error: any) {
@@ -1107,11 +1161,13 @@ export async function confirmarRemarcacao(
 }
 
 /**
- * 5. BUSCAR PRÓXIMOS DIAS E HORÁRIOS DISPONÍVEIS NA GRADE (ALTA VELOCIDADE)
+ * 5. BUSCAR PRÓXIMOS DIAS E HORÁRIOS DISPONÍVEIS NA GRADE COM SUPORTE A PERÍODO RELATIVO E TURNO
  */
 export async function buscarProximosHorariosDisponiveis(
   clinicId?: string,
-  diasDesejados: number = 3
+  diasDesejados: number = 2,
+  periodo: 'manha' | 'tarde' | 'noite' | 'qualquer' = 'qualquer',
+  periodoRelativo?: 'proxima_semana' | 'esta_semana' | 'amanha' | 'qualquer' | string
 ): Promise<{
   success: boolean;
   message: string;
@@ -1137,7 +1193,6 @@ export async function buscarProximosHorariosDisponiveis(
       };
     }
 
-    // UMA ÚNICA QUERY PARA O INTERVALO DOS PRÓXIMOS DIAS RESPEITANDO A AGENDA DO MÉDICO:
     const now = new Date();
     const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
@@ -1156,27 +1211,53 @@ export async function buscarProximosHorariosDisponiveis(
     const docArticle = formattedDocName.startsWith('Dra') ? 'da' : 'do';
     const docBy = formattedDocName.startsWith('Dra') ? 'pela' : 'pelo';
 
-    // Se o médico configurou uma data final e ela já passou, a agenda está aguardando nova liberação pelo profissional
-    if (meta?.scheduleEndDate && meta.scheduleEndDate < todayISO) {
+    // Determinar data inicial e limite de dias a varrer com base no período relativo
+    let checkDate = new Date(now);
+    let maxLookaheadDays = 60;
+    const relLower = (periodoRelativo || '').toLowerCase().trim();
+
+    if (relLower === 'proxima_semana' || relLower.includes('proxima') || relLower.includes('próxima')) {
+      const dow = now.getDay(); // 0 domingo, 1 segunda, ..., 6 sábado
+      const daysUntilNextMonday = ((1 - dow + 7) % 7) || 7;
+      checkDate.setDate(now.getDate() + daysUntilNextMonday);
+      // Próxima semana: varre segunda a domingo (7 dias)
+      maxLookaheadDays = 7;
+    } else if (relLower === 'esta_semana' || relLower.includes('esta_semana') || relLower.includes('esta semana')) {
+      const dow = now.getDay();
+      const daysRemaining = dow === 0 ? 0 : 7 - dow;
+      maxLookaheadDays = Math.max(1, daysRemaining);
+    } else if (relLower === 'amanha' || relLower.includes('amanha') || relLower.includes('amanhã')) {
+      checkDate.setDate(now.getDate() + 1);
+      maxLookaheadDays = 1;
+    }
+
+    const checkDateISO = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+
+    // Se o médico configurou uma data final e ela é anterior à data em que a busca começa
+    if (meta?.scheduleEndDate && meta.scheduleEndDate < checkDateISO) {
       const [ey, em, ed] = meta.scheduleEndDate.split('-');
+      const shiftDesc = periodo !== 'qualquer' ? ` no período da ${periodo}` : '';
+      const relDesc = relLower.includes('proxima') || relLower.includes('próxima')
+        ? ' para a próxima semana'
+        : (relLower.includes('esta') ? ' para esta semana' : '');
       return {
         success: true,
-        message: `O período de agendamentos aberto ${docBy} ${docDisplayName} foi encerrado em ${ed}/${em}/${ey} e novas datas ainda não foram disponibilizadas ${docBy} ${formattedDocName}. Encaminhe obrigatoriamente para a Lista de Espera prioritária.`,
+        message: `A agenda ${docArticle} ${docDisplayName} está aberta apenas até ${ed}/${em}/${ey}. As datas posteriores${relDesc}${shiftDesc} ainda não foram liberadas ${docBy} ${formattedDocName}. Encaminhe obrigatoriamente para a Lista de Espera prioritária (sem sugerir opções alternativas).`,
         data: {
           days: [],
-          formattedText: `No momento, a agenda de atendimentos ${docArticle} ${docDisplayName} para este período já foi encerrada e novas datas ainda não foram liberadas na grade ${docBy} ${formattedDocName}. Vamos incluir seu nome na nossa lista de espera prioritária para avisá-lo assim que o responsável abrir novas vagas no sistema!`,
+          formattedText: `No momento, a agenda ${docArticle} ${docDisplayName} está aberta até ${ed}/${em}/${ey}, e as datas posteriores${relDesc}${shiftDesc} ainda não foram liberadas. Vou adicionar você à nossa lista de espera prioritária para avisá-lo assim que novas datas forem abertas!`,
         },
       };
     }
 
     const futureLimit = meta?.scheduleEndDate
       ? new Date(parseBRT(`${meta.scheduleEndDate}T23:59:59`))
-      : new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+      : new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
 
     const allAppointments = await prisma.appointment.findMany({
       where: {
         clinicId: clinic.id,
-        startTime: { gte: now, lte: futureLimit },
+        startTime: { gte: checkDate, lte: futureLimit },
         status: { notIn: ['CANCELADO', 'CANCELED'] },
       },
     });
@@ -1186,10 +1267,6 @@ export async function buscarProximosHorariosDisponiveis(
       formattedDate: string;
       slots: string[];
     }> = [];
-
-    const checkDate = new Date(now);
-    // Verificar até 60 dias à frente para cobrir com precisão todo o período aberto na agenda do médico
-    const maxLookaheadDays = 60;
 
     for (let i = 0; i < maxLookaheadDays; i++) {
       if (daysWithSlots.length >= diasDesejados) break;
@@ -1203,8 +1280,12 @@ export async function buscarProximosHorariosDisponiveis(
         break; // Respeita estritamente o limite de data deliberado pelo médico
       }
 
-      const res = await buscarHorariosDisponiveis(dateISO, 'qualquer', clinic.id, allAppointments);
-      if (res.success && res.data?.slots && res.data.slots.length > 0) {
+      const res = await buscarHorariosDisponiveis(dateISO, periodo, clinic.id, allAppointments);
+      const rawSlots = (res.data?.allSlots && Array.isArray(res.data.allSlots) && res.data.allSlots.length > 0)
+        ? res.data.allSlots
+        : (res.data?.slots || []);
+
+      if (res.success && rawSlots.length > 0) {
         const formattedDate = checkDate.toLocaleDateString('pt-BR', {
           weekday: 'long',
           day: '2-digit',
@@ -1215,7 +1296,7 @@ export async function buscarProximosHorariosDisponiveis(
         daysWithSlots.push({
           dateISO,
           formattedDate: capFormattedDate,
-          slots: res.data.slots,
+          slots: rawSlots,
         });
       }
 
@@ -1223,31 +1304,68 @@ export async function buscarProximosHorariosDisponiveis(
     }
 
     if (daysWithSlots.length === 0) {
+      const shiftDesc = periodo !== 'qualquer' ? ` no período da ${periodo}` : '';
+      const relDesc = relLower.includes('proxima') || relLower.includes('próxima')
+        ? ' para a próxima semana'
+        : (relLower.includes('esta') ? ' para esta semana' : ' nos próximos dias');
       const dataLimiteTexto = meta?.scheduleEndDate
         ? ` até ${meta.scheduleEndDate.split('-').reverse().join('/')}`
         : '';
+
       return {
         success: true,
-        message: `Não há horários disponíveis nos próximos dias úteis${dataLimiteTexto}. Apenas a Lista de Espera prioritária deve ser oferecida (nunca sugira outras opções).`,
+        message: `Não há horários disponíveis${relDesc}${shiftDesc}${dataLimiteTexto}. Encaminhe obrigatoriamente para a Lista de Espera prioritária (sem sugerir opções alternativas).`,
         data: {
           days: [],
-          formattedText: `No momento, não há horários disponíveis na agenda ${docArticle} ${docDisplayName}${dataLimiteTexto}. Vou adicionar você à nossa lista de espera prioritária para avisá-lo caso surja uma desistência ou assim que novas datas forem liberadas!`,
+          formattedText: `No momento, não há horários disponíveis na agenda ${docArticle} ${docDisplayName}${relDesc}${shiftDesc}${dataLimiteTexto}. Vou adicionar você à nossa lista de espera prioritária para avisá-lo caso surja uma desistência ou assim que novas datas forem liberadas!`,
         },
       };
     }
 
+    // REGRA DE OURO: LIMITAR RIGOROSAMENTE A NO MÁXIMO 3 A 4 HORÁRIOS NO TOTAL GERAL
+    const cappedDays: Array<{
+      dateISO: string;
+      formattedDate: string;
+      slots: string[];
+    }> = [];
+
+    let remainingQuota = 4;
+    const numDays = daysWithSlots.length;
+    for (let idx = 0; idx < numDays; idx++) {
+      const d = daysWithSlots[idx];
+      const daysLeft = numDays - idx;
+      const maxForThisDay = Math.min(d.slots.length, Math.max(1, Math.floor(remainingQuota / daysLeft)));
+      const selected = pickRepresentativeSlots(d.slots, maxForThisDay);
+      remainingQuota -= selected.length;
+      cappedDays.push({
+        dateISO: d.dateISO,
+        formattedDate: d.formattedDate,
+        slots: selected,
+      });
+      if (remainingQuota <= 0) break;
+    }
+
+    // Alerta de contexto temporal para a IA não chamar datas distantes de "próxima semana"
+    const firstDayISO = cappedDays[0].dateISO;
+    const firstDateObj = parseBRT(`${firstDayISO}T00:00:00`);
+    const diffDays = Math.round((firstDateObj.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    let temporalWarning = '';
+    if (diffDays > 7 || firstDateObj.getMonth() !== now.getMonth()) {
+      const monthNames = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+      const mName = monthNames[firstDateObj.getMonth()];
+      temporalWarning = ` IMPORTANTE: A primeira data localizada é ${cappedDays[0].formattedDate} (${mName}), que é posterior à semana que vem. Ao falar com o paciente, informe com clareza o dia e mês (${mName}), NUNCA chame essa data de "próxima semana".`;
+    }
+
     const lines: string[] = [];
-    for (const d of daysWithSlots) {
-      const displaySlots = d.slots.slice(0, 4).join(', ');
-      const maisSlots = d.slots.length > 4 ? ` (e mais ${d.slots.length - 4} opções)` : '';
-      lines.push(`📅 *${d.formattedDate}:*\n• ${displaySlots}${maisSlots}`);
+    for (const d of cappedDays) {
+      lines.push(`📅 *${d.formattedDate}:*\n• ${d.slots.join(', ')}`);
     }
 
     return {
       success: true,
-      message: 'Próximos horários localizados com sucesso.',
+      message: `Próximos horários localizados com sucesso. Apresente no máximo estes ${cappedDays.reduce((acc, c) => acc + c.slots.length, 0)} horários selecionados.${temporalWarning}`,
       data: {
-        days: daysWithSlots,
+        days: cappedDays,
         formattedText: lines.join('\n\n'),
       },
     };
